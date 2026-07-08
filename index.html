@@ -11,12 +11,29 @@
 <body>
   <!-- 상단 툴바 -->
   <div id="toolbar">
+    <!-- 1행: 문서 레벨 (파일 관리 · 내보내기 · 설정) -->
     <div class="tb-row">
       <span class="brand">🔌 이지케이블<span class="beta-badge">BETA</span></span>
       <input type="text" id="projName" title="프로젝트 이름 (저장 파일명·PDF 제목)" />
       <div class="tb-spacer"></div>
-      <span id="hint" class="hint">부품(이미지)을 추가해 시작하세요.</span>
+      <div class="tb-group">
+        <button id="btnNew" title="새 프로젝트 (현재 작업 비움)">새로</button>
+        <button id="btnSave" title="프로젝트를 JSON 파일로 저장">저장</button>
+        <button id="btnOpen" title="JSON 파일 열기">열기</button>
+        <input type="file" id="fileOpen" accept=".ezc,.json,application/json" hidden />
+      </div>
+      <div class="tb-divider"></div>
+      <div class="tb-group">
+        <button id="btnShare" title="프로젝트 + 사용된 부품을 한 파일로 내보내기 (받는 사람은 파일 하나로 열림)">🔗 공유</button>
+        <button id="btnPdf" title="PDF로 인쇄">PDF</button>
+      </div>
+      <div class="tb-divider"></div>
+      <div class="tb-group">
+        <button id="btnSettings" title="설정">⚙</button>
+        <button id="btnFeedback" title="의견·버그 제보 보내기">💬 피드백</button>
+      </div>
     </div>
+    <!-- 2행: 편집 레벨 (그리기 도구) -->
     <div class="tb-row">
       <div class="tb-group modes">
         <button id="modeSelect" class="mode active" title="선택/이동">▣ 선택</button>
@@ -43,26 +60,8 @@
         <label class="chk"><input type="checkbox" id="chkSnap" checked /> 스냅</label>
         <label class="chk" title="배선마다 W1, W2… 번호를 도면에 표시"><input type="checkbox" id="chkWireNums" checked /> 배선번호</label>
       </div>
-      <div class="tb-group" title="Ctrl+휠 확대/축소 · 스페이스 또는 휠클릭 드래그로 이동">
-        <button id="btnZoomOut">－</button>
-        <button id="btnZoomLevel" title="100%로">100%</button>
-        <button id="btnZoomIn">＋</button>
-        <button id="btnZoomFit" class="small">맞춤</button>
-      </div>
       <div class="tb-spacer"></div>
-      <div class="tb-group">
-        <button id="btnUndo" title="실행 취소 (Ctrl+Z)" disabled>↶</button>
-        <button id="btnRedo" title="다시 실행 (Ctrl+Shift+Z)" disabled>↷</button>
-      </div>
-      <div class="tb-group">
-        <button id="btnNew" title="새 프로젝트 (현재 작업 비움)">새로</button>
-        <button id="btnSave" title="프로젝트를 JSON 파일로 저장">저장</button>
-        <button id="btnOpen" title="JSON 파일 열기">열기</button>
-        <input type="file" id="fileOpen" accept=".json,application/json" hidden />
-        <button id="btnPdf" title="PDF로 인쇄">PDF</button>
-        <button id="btnSettings" title="설정">⚙</button>
-        <button id="btnFeedback" title="의견·버그 제보 보내기">💬 피드백</button>
-      </div>
+      <span id="hint" class="hint">부품을 추가해 시작하세요.</span>
     </div>
   </div>
 
@@ -71,17 +70,17 @@
     <aside id="leftPanel">
       <div class="lib-head">
         <h3>부품 라이브러리</h3>
-        <span>
-          <button id="btnLibExport" class="icon" title="라이브러리 전체를 .json 파일로 백업 저장 (다른 PC·브라우저로 옮길 때)">⤓ 백업</button>
-          <button id="btnLibImport" class="icon" title="백업한 .json 라이브러리 파일을 불러와 추가">⤒ 불러오기</button>
-        </span>
       </div>
-      <button id="btnLibAdd" style="width:100%">＋ 부품 추가 (이미지)</button>
+      <button id="btnLibAdd" class="lib-add-btn">＋ 부품 추가 (이미지)</button>
       <input type="file" id="fileLibAdd" accept="image/*" hidden />
-      <input type="file" id="fileLibImport" accept=".json,application/json" hidden />
+      <input type="file" id="fileLibImport" accept=".ezclib,.json,application/json" hidden />
       <input type="search" id="libSearch" placeholder="🔍 부품 검색 (이름·스펙)" autocomplete="off" />
       <p class="muted lib-tip">부품 클릭 → 캔버스에 배치. 캔버스 부품의 ⋯메뉴 “라이브러리에 저장”으로 단자까지 등록.</p>
       <div id="libList" class="lib-list"></div>
+      <div class="lib-footer">
+        <button id="btnLibExport" class="lib-io-btn" title="라이브러리 전체를 .json 파일로 저장 (다른 PC·브라우저로 옮길 때)">⤓ 저장</button>
+        <button id="btnLibImport" class="lib-io-btn" title=".json 라이브러리 파일을 불러와 추가">⤒ 불러오기</button>
+      </div>
     </aside>
     <div class="resizer" id="resizerLeft" title="드래그로 너비 조절"></div>
 
@@ -142,6 +141,20 @@
       </div>
 
     </section>
+
+      <!-- 우하단 플로팅 컨트롤: 실행취소/다시실행 + 확대/축소 (Excalidraw 참고)
+           centerCol 기준 배치라 창 크기와 무관하게 캔버스 우하단에 고정. 배율 숫자 클릭 = 화면 맞춤. -->
+      <div class="canvas-corner-tools">
+        <div class="canvas-float-controls" title="실행 취소 (Ctrl+Z) / 다시 실행 (Ctrl+Shift+Z)">
+          <button id="btnUndo" title="실행 취소 (Ctrl+Z)" disabled>↶</button>
+          <button id="btnRedo" title="다시 실행 (Ctrl+Shift+Z)" disabled>↷</button>
+        </div>
+        <div class="canvas-float-controls" title="Ctrl+휠로 확대/축소 · 스페이스/휠클릭 드래그로 이동">
+          <button id="btnZoomOut" title="축소">－</button>
+          <button id="btnZoomLevel" title="화면에 맞춤">100%</button>
+          <button id="btnZoomIn" title="확대">＋</button>
+        </div>
+      </div>
 
       <!-- 하단 뷰 탭 (캔버스 영역 밖, 항상 하단 고정) -->
       <div id="viewTabs">
@@ -300,6 +313,7 @@
         <h3>전력 / 배터리 요약</h3>
         <div id="powerSummary"></div>
       </div>
+      <button id="btnHelp" class="panel-help-btn" title="단축키 도움말">? 단축키 도움말</button>
     </aside>
   </div>
 
@@ -551,8 +565,33 @@
         <li><b>╱ 배선</b> 모드로 단자끼리 클릭 연결 — <b>BOM·배선 리스트·PDF는 자동</b></li>
       </ol>
       <p class="muted" style="margin:10px 0 0">베타 기간에는 <b>모든 기능이 무료</b>입니다. 작업물은 이 브라우저에 자동 저장됩니다.</p>
+      <p class="muted" style="margin:6px 0 0;font-size:11px">이용 시 <a href="/privacy.html" target="_blank" rel="noopener" style="color:inherit">개인정보처리방침</a>에 동의한 것으로 간주됩니다.</p>
       <div class="modal-actions">
         <button id="welcomeStart" class="primary" style="width:100%">시작하기</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 단축키 도움말 모달 -->
+  <div id="helpModal" class="modal" hidden>
+    <div class="modal-box" style="width:min(420px,92vw)">
+      <h3>단축키</h3>
+      <div class="sc-list" id="helpShortcutList"></div>
+      <p class="muted" style="margin:14px 0 0">계속 추가될 예정입니다. 단축키는 ⚙ 설정에서 변경할 수 있습니다.</p>
+      <div class="modal-actions"><button id="helpClose" class="primary">확인</button></div>
+    </div>
+  </div>
+
+  <!-- 피드백 모달 -->
+  <div id="feedbackModal" class="modal" hidden>
+    <div class="modal-box" style="width:min(420px,92vw)">
+      <h3>💬 피드백</h3>
+      <p class="muted" style="margin:0 0 10px">의견이나 버그를 자유롭게 적어주세요. 바로 전달됩니다.</p>
+      <textarea id="feedbackText" rows="6" placeholder="예: 이런 기능이 있으면 좋겠어요 / 이 부분이 잘 안 돼요…" style="width:100%;resize:vertical;padding:8px;border:1px solid var(--bd);border-radius:var(--r);font:inherit;font-size:var(--fs)"></textarea>
+      <p id="feedbackStatus" class="muted" style="margin:8px 0 0;min-height:16px"></p>
+      <div class="modal-actions">
+        <button id="feedbackClose">취소</button>
+        <button id="feedbackSend" class="primary">보내기</button>
       </div>
     </div>
   </div>

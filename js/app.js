@@ -29,7 +29,9 @@ WE.app = (function () {
     bindSettings();
     bindModalBackdrops();
     bindWelcome();
+    bindFeedback();
     bindQuickColorPicker();
+    bindHelp();
     bindBOMView();
     loadSettings();
     loadShortcuts();
@@ -376,7 +378,7 @@ WE.app = (function () {
     document.getElementById("btnLibExport").addEventListener("click", function () {
       var blob = new Blob([WE.library.exportJson()], { type: "application/json" });
       var a = document.createElement("a");
-      a.href = URL.createObjectURL(blob); a.download = "부품라이브러리.json";
+      a.href = URL.createObjectURL(blob); a.download = "부품라이브러리.ezclib";
       document.body.appendChild(a); a.click(); document.body.removeChild(a);
       setTimeout(function () { URL.revokeObjectURL(a.href); }, 1000);
     });
@@ -1355,8 +1357,7 @@ WE.app = (function () {
   function bindZoom() {
     document.getElementById("btnZoomIn").addEventListener("click", function () { zoomBy(1.2); });
     document.getElementById("btnZoomOut").addEventListener("click", function () { zoomBy(1 / 1.2); });
-    document.getElementById("btnZoomLevel").addEventListener("click", function () { setZoom(1); });
-    document.getElementById("btnZoomFit").addEventListener("click", fitZoom);
+    document.getElementById("btnZoomLevel").addEventListener("click", fitZoom);   // 배율 숫자 클릭 = 화면 맞춤
     var wrap = document.getElementById("canvasWrap");
     wrap.addEventListener("wheel", function (e) {
       if (e.ctrlKey || e.metaKey) {   // Ctrl/⌘ + 휠 = 확대/축소 (그냥 휠은 스크롤 유지)
@@ -1466,8 +1467,7 @@ WE.app = (function () {
     }).catch(function () { cb(false); });
   }
 
-  // ---- 첫 방문 환영 모달 + 피드백 ----
-  var FEEDBACK_MAIL = "qksekftkd@gmail.com";   // 피드백 수신 주소
+  // ---- 첫 방문 환영 모달 ----
   function bindWelcome() {
     var modal = document.getElementById("welcomeModal");
     try {
@@ -1477,10 +1477,51 @@ WE.app = (function () {
       modal.hidden = true;
       try { localStorage.setItem("we_welcomed", "1"); } catch (e) { /* 무시 */ }
     });
+  }
+
+  // ---- 피드백 모달 (Web3Forms로 전송 — 앱 안에서 바로, 메일앱 안 열림) ----
+  var WEB3FORMS_KEY = "0ee9df7c-fd3e-44a6-9411-b107885b62ee";
+  function bindFeedback() {
+    var modal = document.getElementById("feedbackModal");
     document.getElementById("btnFeedback").addEventListener("click", function () {
-      var subject = encodeURIComponent("[이지케이블] 피드백");
-      var body = encodeURIComponent("의견/버그 내용:\n\n\n---\n브라우저: " + navigator.userAgent);
-      window.open("mailto:" + FEEDBACK_MAIL + "?subject=" + subject + "&body=" + body);
+      document.getElementById("feedbackText").value = "";
+      document.getElementById("feedbackStatus").textContent = "";
+      modal.hidden = false;
+      document.getElementById("feedbackText").focus();
+    });
+    document.getElementById("feedbackClose").addEventListener("click", function () {
+      modal.hidden = true;
+    });
+    document.getElementById("feedbackSend").addEventListener("click", sendFeedback);
+  }
+  function sendFeedback() {
+    var text = document.getElementById("feedbackText").value.trim();
+    var statusEl = document.getElementById("feedbackStatus");
+    if (!text) { statusEl.textContent = "내용을 입력해주세요."; return; }
+    var btn = document.getElementById("feedbackSend");
+    btn.disabled = true;
+    statusEl.textContent = "보내는 중…";
+    fetch("https://api.web3forms.com/submit", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      body: JSON.stringify({
+        access_key: WEB3FORMS_KEY,
+        subject: "[이지케이블] 피드백",
+        from_name: "이지케이블 피드백",
+        message: text,
+        브라우저: navigator.userAgent
+      })
+    }).then(function (r) { return r.json(); }).then(function (res) {
+      btn.disabled = false;
+      if (res.success) {
+        statusEl.textContent = "전달됐습니다. 감사합니다!";
+        setTimeout(function () { document.getElementById("feedbackModal").hidden = true; }, 900);
+      } else {
+        statusEl.textContent = "전송 실패: " + (res.message || "다시 시도해주세요.");
+      }
+    }).catch(function () {
+      btn.disabled = false;
+      statusEl.textContent = "네트워크 오류로 전송하지 못했습니다.";
     });
   }
 
@@ -1494,7 +1535,9 @@ WE.app = (function () {
     termModal: "teDone",
     libEditModal: "libEditCancel",
     bgModal: "bgCancel",
-    welcomeModal: "welcomeStart"
+    welcomeModal: "welcomeStart",
+    helpModal: "helpClose",
+    feedbackModal: "feedbackClose"
   };
   function bindModalBackdrops() {
     Object.keys(MODAL_CLOSE_MAP).forEach(function (mid) {
@@ -1648,6 +1691,33 @@ WE.app = (function () {
     document.addEventListener("keydown", function (e) {
       if (e.key === "Escape") closeQuickColorPicker();
     });
+  }
+
+  // ---- 단축키 도움말 (우하단 ? 버튼) ----
+  function bindHelp() {
+    document.getElementById("btnHelp").addEventListener("click", function () {
+      renderHelpShortcuts();
+      document.getElementById("helpModal").hidden = false;
+    });
+    document.getElementById("helpClose").addEventListener("click", function () {
+      document.getElementById("helpModal").hidden = true;
+    });
+  }
+  function renderHelpShortcuts() {
+    var rows = [
+      ["선택 모드", scLabel(_shortcuts["mode-select"])],
+      ["배선 모드 (진입 시 배선색 팝업 자동 표시)", scLabel(_shortcuts["mode-wire"])],
+      ["텍스트 모드", scLabel(_shortcuts["mode-text"])],
+      ["실행 취소 / 다시 실행", "Ctrl+Z / Ctrl+Shift+Z"],
+      ["부품 복제", "Ctrl+D"],
+      ["화면 이동(팬)", "Space 드래그 · 휠클릭 드래그"],
+      ["확대 / 축소", "Ctrl+휠"],
+      ["선택 항목 삭제", "Delete / Backspace"],
+      ["즉시 저장", "Ctrl+S"]
+    ];
+    document.getElementById("helpShortcutList").innerHTML = rows.map(function (r) {
+      return "<div class='sc-row'><span>" + esc(r[0]) + "</span><b>" + esc(r[1]) + "</b></div>";
+    }).join("");
   }
 
   // 배선 기본값(색·두께) 마지막 설정 기억
@@ -2459,6 +2529,7 @@ WE.app = (function () {
 
   return {
     init: init, refreshProps: refreshProps, setHint: setHint, setSavedHint: setSavedHint, reloadUI: reloadUI,
+    renderLibrary: renderLibrary,
     openComponentMenu: openComponentMenu,
     openPresetModal: openPresetModal,
     focusAnnoText: focusAnnoText,

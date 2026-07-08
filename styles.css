@@ -73,6 +73,7 @@ body { display: flex; flex-direction: column; }
 #projName:focus { outline: 1px solid #1e88e5; }
 .tb-group { display: flex; align-items: center; gap: 6px; flex: none; }
 .tb-spacer { flex: 1 1 auto; min-width: 12px; }
+.tb-divider { flex: none; width: 1px; align-self: stretch; margin: 2px 4px; background: #454b55; }
 .hint { color: #9fb4c9; font-size: 12px; }
 .hint.hint-save { font-size: 10px; color: #4a8a5a; }
 #toolbar button {
@@ -97,6 +98,35 @@ body { display: flex; flex-direction: column; }
   position: fixed; z-index: 500; background: #fff; border: 1px solid #ccc;
   border-radius: 8px; box-shadow: 0 6px 20px rgba(0,0,0,.18); padding: 8px;
 }
+
+/* 캔버스 우하단 플로팅 컨트롤(실행취소·다시실행 + 확대/축소) — Excalidraw 참고
+   #centerCol(캔버스 영역 실제 박스) 기준 절대배치라 창 크기·패널 폭과 무관하게 항상 정확한 위치에 붙음. */
+.canvas-corner-tools {
+  position: absolute; right: 28px; bottom: 40px; z-index: 40;
+  display: flex; align-items: center; gap: 6px;
+}
+.canvas-float-controls {
+  display: flex; align-items: center; gap: 1px;
+  background: #fff; border: 1px solid #d3d9e0; border-radius: 8px;
+  box-shadow: 0 3px 12px rgba(0,0,0,.12); padding: 2px;
+}
+.canvas-float-controls button {
+  background: none; border: none; border-radius: 5px; padding: 3px 7px;
+  font-size: 12px; font-family: inherit; cursor: pointer; color: #333;
+}
+.canvas-float-controls button:hover { background: #f0f3f6; }
+.canvas-float-controls button:disabled { color: #c3c9d2; cursor: default; }
+.canvas-float-controls button:disabled:hover { background: none; }
+.canvas-float-controls #btnZoomLevel { min-width: 42px; font-variant-numeric: tabular-nums; }
+
+/* 속성 패널 가장 하단 도움말 버튼 — 패널 안에서 항상 맨 아래로 밀림 */
+.panel-help-btn {
+  margin-top: auto; width: 100%;
+  background: var(--bg, #fff); border: 1px solid var(--bd, #cfd6de); border-radius: var(--r, 5px);
+  padding: 8px; font-size: var(--fs-sm, 12px); color: var(--tx2, #555);
+  font-family: inherit; cursor: pointer;
+}
+.panel-help-btn:hover { background: var(--bg3, #f2f5f8); }
 .qcp-swatches { display: flex; flex-wrap: wrap; gap: 6px; max-width: 180px; }
 .qcp-swatches .swatch { width: 28px; height: 28px; border-radius: 6px; }
 #wireWidthSel, #wireRoutingSel { background: #3d434d; color: #eee; border: 1px solid #555; border-radius: 4px; padding: 3px; }
@@ -160,19 +190,33 @@ body.wire-mode #canvasWrap { box-shadow: inset 0 0 0 3px #1e88e5; }
   background: #f4f5f7; border-left: 1px solid #ddd; border-right: 1px solid #ddd;
   padding: 10px; overflow: auto; flex: none;
 }
-#leftPanel { width: 200px; }
+/* 좌측 라이브러리 패널: 세로 flex — 목록만 스크롤, 저장/불러오기는 하단 고정 */
+#leftPanel { width: 200px; display: flex; flex-direction: column; overflow: hidden; }
 #rightPanel { width: 260px; display: flex; flex-direction: column; gap: 12px; }
 #leftPanel h3, #rightPanel h3 { margin: 0 0 8px; font-size: 13px; }
 
 /* 라이브러리 */
-.lib-head { display: flex; justify-content: space-between; align-items: center; }
-.lib-head button.icon { background: #e7e9ee; border: 1px solid #ccc; border-radius: 4px; cursor: pointer; padding: 2px 7px; }
-.lib-head button.icon:hover { background: #dcdfe6; }
-#leftPanel #btnLibAdd { margin: 6px 0; padding: 6px; border: 1px solid #bbb; border-radius: 4px; background: #fff; cursor: pointer; }
-#leftPanel #btnLibAdd:hover { background: #eee; }
-.lib-tip { margin: 2px 0 8px; line-height: 1.4; }
+.lib-head { flex: none; }
+.lib-add-btn {
+  flex: none; margin: 0 0 6px; padding: 7px; width: 100%;
+  border: 1px solid var(--bd); border-radius: var(--r); background: var(--bg);
+  font-size: var(--fs); font-family: inherit; color: var(--tx); cursor: pointer;
+}
+.lib-add-btn:hover { background: var(--bg3); }
+.lib-tip { flex: none; margin: 2px 0 8px; line-height: 1.4; }
+/* 하단 저장/불러오기 */
+.lib-footer {
+  flex: none; display: flex; gap: 6px; margin-top: 8px; padding-top: 8px;
+  border-top: 1px solid var(--bd2);
+}
+.lib-io-btn {
+  flex: 1; padding: 6px; background: var(--bg); border: 1px solid var(--bd);
+  border-radius: var(--r); font-size: var(--fs-sm); color: var(--tx2);
+  font-family: inherit; cursor: pointer;
+}
+.lib-io-btn:hover { background: var(--bg3); }
 #libSearch {
-  width: 100%; margin: 0 0 6px; padding: 6px 8px;
+  flex: none; width: 100%; margin: 0 0 6px; padding: 6px 8px;
   border: 1px solid var(--bd); border-radius: var(--r);
   font-size: var(--fs); font-family: inherit; background: var(--bg);
 }
@@ -190,7 +234,7 @@ body.wire-mode #canvasWrap { box-shadow: inset 0 0 0 3px #1e88e5; }
 }
 .lib-fav:hover { color: #f6b100; background: #fff7e0; }
 .lib-fav.on { color: #f6b100; }
-.lib-list { display: flex; flex-direction: column; gap: 6px; }
+.lib-list { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; }
 .lib-item {
   display: flex; align-items: center; gap: 8px; padding: 5px;
   border: 1px solid #ddd; border-radius: 6px; background: #fff; cursor: pointer;
@@ -243,7 +287,7 @@ body.wire-mode #canvasWrap { box-shadow: inset 0 0 0 3px #1e88e5; }
 
 /* 캔버스 */
 /* 중앙 컬럼: 캔버스(스크롤) + 하단 탭 바 세로 배치 */
-#centerCol { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+#centerCol { flex: 1; display: flex; flex-direction: column; min-width: 0; position: relative; }
 #canvasWrap { flex: 1; min-height: 0; position: relative; overflow: auto; background: #dfe3e9; padding: 28px; }
 #canvas {
   width: 1600px; height: 900px; display: block; background: #fff;
@@ -610,7 +654,8 @@ body.term-mode #canvas { cursor: crosshair; }
 /* ===== 인쇄(PDF) ===== */
 @media print {
   @page { size: landscape; margin: 8mm; }
-  #toolbar, #leftPanel, #rightPanel, .modal, #cmpMenu, #viewTabs, #bomView { display: none !important; }
+  #toolbar, #leftPanel, #rightPanel, .modal, #cmpMenu, #viewTabs, #bomView,
+  .canvas-corner-tools { display: none !important; }
   html, body { height: auto; display: block; background: #fff; }
   #main, #centerCol { display: block; }
   #canvasWrap {
