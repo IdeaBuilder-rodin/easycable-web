@@ -1,0 +1,8 @@
+# 배포 폴더에는 순수 앱 파일만 둡니다.
+# 혹시 실수로 들어와도 커밋되지 않도록 내부/임시 파일 차단.
+_backup/
+*.md
+!README.md
+sample.src.json
+.DS_Store
+Thumbs.db

@@ -1,0 +1,581 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>이지케이블 — 쉬운 배선도 에디터 (EasyCable)</title>
+  <meta name="description" content="이미지로 부품을 올리고 단자를 이어 배선도를 그리는 웹 에디터. BOM·배선 리스트·PDF 자동 생성. 베타 기간 무료." />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔌</text></svg>" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <!-- 상단 툴바 -->
+  <div id="toolbar">
+    <div class="tb-row">
+      <span class="brand">🔌 이지케이블<span class="beta-badge">BETA</span></span>
+      <input type="text" id="projName" title="프로젝트 이름 (저장 파일명·PDF 제목)" />
+      <div class="tb-spacer"></div>
+      <span id="hint" class="hint">부품(이미지)을 추가해 시작하세요.</span>
+    </div>
+    <div class="tb-row">
+      <div class="tb-group modes">
+        <button id="modeSelect" class="mode active" title="선택/이동">▣ 선택</button>
+        <button id="modeWire" class="mode" title="단자끼리 배선">╱ 배선</button>
+        <button id="modeText" class="mode" title="주석 텍스트 추가">T 텍스트</button>
+      </div>
+      <div class="tb-group" id="paletteGroup" title="새 배선 색상">
+        <span class="tb-label">배선색</span>
+        <div id="paletteSwatches"></div>
+        <select id="wireWidthSel" title="선 두께">
+          <option value="2" selected>2</option>
+          <option value="4">4</option>
+          <option value="6">6</option>
+          <option value="8">8</option>
+        </select>
+        <select id="wireRoutingSel" title="배선 모양">
+          <option value="ortho">직각</option>
+          <option value="straight">직선</option>
+        </select>
+        <button id="btnPaletteManage" class="small" title="팔레트 관리">⋯</button>
+      </div>
+      <div class="tb-group">
+        <label class="chk"><input type="checkbox" id="chkGrid" checked /> 그리드</label>
+        <label class="chk"><input type="checkbox" id="chkSnap" checked /> 스냅</label>
+        <label class="chk" title="배선마다 W1, W2… 번호를 도면에 표시"><input type="checkbox" id="chkWireNums" checked /> 배선번호</label>
+      </div>
+      <div class="tb-group" title="Ctrl+휠 확대/축소 · 스페이스 또는 휠클릭 드래그로 이동">
+        <button id="btnZoomOut">－</button>
+        <button id="btnZoomLevel" title="100%로">100%</button>
+        <button id="btnZoomIn">＋</button>
+        <button id="btnZoomFit" class="small">맞춤</button>
+      </div>
+      <div class="tb-spacer"></div>
+      <div class="tb-group">
+        <button id="btnUndo" title="실행 취소 (Ctrl+Z)" disabled>↶</button>
+        <button id="btnRedo" title="다시 실행 (Ctrl+Shift+Z)" disabled>↷</button>
+      </div>
+      <div class="tb-group">
+        <button id="btnNew" title="새 프로젝트 (현재 작업 비움)">새로</button>
+        <button id="btnSave" title="프로젝트를 JSON 파일로 저장">저장</button>
+        <button id="btnOpen" title="JSON 파일 열기">열기</button>
+        <input type="file" id="fileOpen" accept=".json,application/json" hidden />
+        <button id="btnPdf" title="PDF로 인쇄">PDF</button>
+        <button id="btnSettings" title="설정">⚙</button>
+        <button id="btnFeedback" title="의견·버그 제보 보내기">💬 피드백</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="main">
+    <!-- 좌측 라이브러리 패널 (Phase 5에서 채움) -->
+    <aside id="leftPanel">
+      <div class="lib-head">
+        <h3>부품 라이브러리</h3>
+        <span>
+          <button id="btnLibExport" class="icon" title="라이브러리 전체를 .json 파일로 백업 저장 (다른 PC·브라우저로 옮길 때)">⤓ 백업</button>
+          <button id="btnLibImport" class="icon" title="백업한 .json 라이브러리 파일을 불러와 추가">⤒ 불러오기</button>
+        </span>
+      </div>
+      <button id="btnLibAdd" style="width:100%">＋ 부품 추가 (이미지)</button>
+      <input type="file" id="fileLibAdd" accept="image/*" hidden />
+      <input type="file" id="fileLibImport" accept=".json,application/json" hidden />
+      <input type="search" id="libSearch" placeholder="🔍 부품 검색 (이름·스펙)" autocomplete="off" />
+      <p class="muted lib-tip">부품 클릭 → 캔버스에 배치. 캔버스 부품의 ⋯메뉴 “라이브러리에 저장”으로 단자까지 등록.</p>
+      <div id="libList" class="lib-list"></div>
+    </aside>
+    <div class="resizer" id="resizerLeft" title="드래그로 너비 조절"></div>
+
+    <!-- 인쇄용 제목 (화면에선 숨김) -->
+    <div id="printTitle" class="print-only"></div>
+
+    <!-- 중앙 영역: 캔버스(스크롤) + 하단 탭 바 -->
+    <div id="centerCol">
+    <!-- 중앙 캔버스 -->
+    <section id="canvasWrap">
+      <svg id="canvas" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 900">
+        <defs>
+          <pattern id="gridPattern" width="10" height="10" patternUnits="userSpaceOnUse">
+            <path d="M 10 0 L 0 0 0 10" fill="none" stroke="#e6e6e6" stroke-width="1" />
+          </pattern>
+        </defs>
+        <rect id="gridBg" x="0" y="0" width="100%" height="100%" fill="url(#gridPattern)" />
+        <g id="layerComponents"></g>
+        <g id="layerLabels"></g>
+        <g id="layerWires"></g>
+        <g id="layerWireLabels"></g>
+        <g id="layerTermLabels"></g>
+        <g id="layerAnnotations"></g>
+        <g id="layerOverlay"></g>
+      </svg>
+
+      <!-- BOM(자재명세서) 표 뷰 — BOM 탭 누르면 배선도 아래에 추가 표시 -->
+      <div id="bomView" hidden>
+        <div class="bom-tools">
+          <span class="bom-layout">
+            <select id="bomLayoutSel" title="저장된 레이아웃 불러오기"><option value="">레이아웃…</option></select>
+            <button id="bomLayoutSave" class="btn-sm2">저장</button>
+            <button id="bomLayoutDel" class="btn-sm2" title="선택한 레이아웃 삭제">삭제</button>
+          </span>
+          <button id="bomExportCsv" class="btn-sm">⤓ CSV</button>
+          <button id="bomExportWires" class="btn-sm" title="배선 리스트(번호·색·AWG·출발→도착) CSV">⤓ 배선 리스트</button>
+          <details class="bom-colcfg" id="bomColCfg">
+            <summary>열 표시</summary>
+            <div class="bom-colcfg-body">
+              <label><input type="checkbox" data-col="spec" /> 스펙</label>
+              <label><input type="checkbox" data-col="price" /> 단가</label>
+              <label><input type="checkbox" data-col="sum" /> 합계</label>
+              <label><input type="checkbox" data-col="link" /> 구매링크</label>
+              <label><input type="checkbox" data-col="ds" /> 데이터시트</label>
+            </div>
+          </details>
+        </div>
+        <div class="bom-head">
+          <h2>자재 명세서 (BOM)</h2>
+        </div>
+        <div class="bom-table-wrap">
+          <div class="bom-grid">
+            <table id="bomTable"></table>
+            <div class="add-col-zone" id="bomAddColZone" title="열 추가">＋</div>
+            <div class="add-row-zone" id="bomAddRowZone" title="행 추가">＋</div>
+          </div>
+        </div>
+      </div>
+
+    </section>
+
+      <!-- 하단 뷰 탭 (캔버스 영역 밖, 항상 하단 고정) -->
+      <div id="viewTabs">
+        <button class="view-tab active" data-view="wiring">📐 배선도</button>
+        <button class="view-tab" data-view="bom">📋 BOM</button>
+      </div>
+    </div><!-- /centerCol -->
+
+    <!-- 인쇄용 범례 (화면에선 숨김) -->
+    <div id="printLegend" class="print-only"></div>
+    <!-- 인쇄용 BOM (화면에선 숨김) -->
+    <div id="printBOM" class="print-only"></div>
+
+    <div class="resizer" id="resizerRight" title="드래그로 너비 조절"></div>
+    <!-- 우측 속성 패널 -->
+    <aside id="rightPanel">
+      <div id="propPanel">
+        <h3>속성</h3>
+        <div id="propEmpty" class="muted">선택된 대상이 없습니다.</div>
+
+        <!-- 다중 선택 정렬 -->
+        <div id="alignProps" hidden>
+          <div id="alignCount" class="muted"></div>
+          <div class="align-grid">
+            <button class="align-btn" data-align="top" title="맨 위 정렬">
+              <svg viewBox="0 0 24 24"><line x1="4" y1="5" x2="20" y2="5"/><rect x="7" y="5" width="4" height="12"/><rect x="14" y="5" width="4" height="7"/></svg><span>맨 위</span>
+            </button>
+            <button class="align-btn" data-align="left" title="왼쪽 정렬">
+              <svg viewBox="0 0 24 24"><line x1="5" y1="4" x2="5" y2="20"/><rect x="5" y="7" width="12" height="4"/><rect x="5" y="14" width="7" height="4"/></svg><span>왼쪽</span>
+            </button>
+            <button class="align-btn" data-align="centerY" title="세로 가운데 정렬">
+              <svg viewBox="0 0 24 24"><line x1="4" y1="12" x2="20" y2="12"/><rect x="7" y="6" width="4" height="12"/><rect x="14" y="8" width="4" height="8"/></svg><span>가운데</span>
+            </button>
+            <button class="align-btn" data-align="centerX" title="가로 가운데 정렬">
+              <svg viewBox="0 0 24 24"><line x1="12" y1="4" x2="12" y2="20"/><rect x="6" y="7" width="12" height="4"/><rect x="8" y="14" width="8" height="4"/></svg><span>가운데</span>
+            </button>
+            <button class="align-btn" data-align="bottom" title="맨 아래 정렬">
+              <svg viewBox="0 0 24 24"><line x1="4" y1="19" x2="20" y2="19"/><rect x="7" y="7" width="4" height="12"/><rect x="14" y="12" width="4" height="7"/></svg><span>맨 아래</span>
+            </button>
+            <button class="align-btn" data-align="right" title="오른쪽 정렬">
+              <svg viewBox="0 0 24 24"><line x1="19" y1="4" x2="19" y2="20"/><rect x="7" y="7" width="12" height="4"/><rect x="12" y="14" width="7" height="4"/></svg><span>오른쪽</span>
+            </button>
+            <button class="align-btn" data-align="distH" title="가로 균등 간격">
+              <svg viewBox="0 0 24 24"><rect x="3" y="6" width="3" height="12"/><rect x="10.5" y="6" width="3" height="12"/><rect x="18" y="6" width="3" height="12"/></svg><span>가로 균등</span>
+            </button>
+            <button class="align-btn" data-align="distV" title="세로 균등 간격">
+              <svg viewBox="0 0 24 24"><rect x="6" y="3" width="12" height="3"/><rect x="6" y="10.5" width="12" height="3"/><rect x="6" y="18" width="12" height="3"/></svg><span>세로 균등</span>
+            </button>
+          </div>
+          <p class="muted" style="margin-top:8px">Ctrl+클릭으로 부품 추가 선택. 빈 곳 클릭으로 해제.</p>
+        </div>
+
+        <!-- 주석 속성 -->
+        <div id="annoProps" hidden>
+          <label>텍스트
+            <textarea id="annoText" rows="3"></textarea>
+          </label>
+          <div class="row2">
+            <label>색상 <input type="color" id="annoColor" /></label>
+            <label>크기 <input type="number" id="annoSize" min="8" max="120" /></label>
+          </div>
+          <label class="chk"><input type="checkbox" id="annoBold" /> 굵게</label>
+          <button id="annoDelete" class="danger" style="width:100%">주석 삭제</button>
+        </div>
+
+        <!-- 배선 속성 -->
+        <div id="wireProps" hidden>
+          <div id="wireConn" class="wp-conn muted"></div>
+
+          <!-- 스타일 -->
+          <div class="wp-row2">
+            <label>색상 <input type="color" id="wireColor" /></label>
+            <label>두께 <input type="number" id="wireWidth" min="1" max="30" /></label>
+          </div>
+          <label class="chk"><input type="checkbox" id="wireAllowOverlap" /> 겹침 허용(회피 안 함)</label>
+
+          <div class="wp-row2">
+            <label>번호 표시 <input type="text" id="wireLabelText" placeholder="예: W17 (비우면 자동)" /></label>
+            <button id="wireLabelReset" class="small" title="드래그로 옮긴 라벨 위치를 자동 배치로 되돌림">위치 초기화</button>
+          </div>
+          <p class="muted wp-hint">번호 라벨을 드래그하면 위치를 직접 옮길 수 있습니다.</p>
+
+          <!-- 규격(AWG) -->
+          <div id="wireGauge" class="wp-section">
+            <div class="wp-sec-title">배선 규격 (AWG)</div>
+            <label>전류(A) <input type="number" id="wireCurrent" step="any" min="0" placeholder="비우면 신호선" /></label>
+            <div id="wireAwgOut" class="muted"></div>
+            <details id="wireLoadCalc">
+              <summary>부하로 계산</summary>
+              <div class="wg-calc">
+                <label>구간 전압 V <input type="number" id="wireCalcV" step="any" min="0" placeholder="예: 6, 12" /></label>
+                <div id="wireLoadList" class="wg-loads"></div>
+                <div id="wireCalcOut" class="muted"></div>
+                <button id="wireCalcApply" class="btn btn-block">합산 → 전류 적용</button>
+              </div>
+            </details>
+          </div>
+
+          <!-- 정렬(다중선택 시) -->
+          <div id="wireAlign" class="wp-section" hidden>
+            <div class="wp-sec-title">정렬 (다중 선택)</div>
+            <div class="wire-align-row">
+              <button data-walign="align" title="처음 클릭한 배선의 클릭한 구간에 맞춤(세로/가로 자동)">⌈ 구간 정렬</button>
+              <label class="wgap">간격 <input id="wireGap" type="number" value="0" step="1" /> px</label>
+            </div>
+            <div class="wire-align-row">
+              <button data-walign="distH" title="세로 구간들을 가로로 균등 간격">▦ 가로 균등</button>
+              <button data-walign="distV" title="가로 구간들을 세로로 균등 간격">▤ 세로 균등</button>
+            </div>
+            <p class="muted wp-hint">기준=처음 클릭한 배선. 각 배선에서 <b>맞출 구간을 클릭</b>해 선택(굵게 표시). 균등은 3개↑.</p>
+          </div>
+
+          <button id="wireDelete" class="btn btn-danger btn-block">배선 삭제</button>
+        </div>
+
+        <div id="propBody" hidden>
+          <label>이름
+            <input type="text" id="propName" />
+          </label>
+          <div class="row2">
+            <label>X <input type="number" id="propX" /></label>
+            <label>Y <input type="number" id="propY" /></label>
+          </div>
+          <div class="row2">
+            <label>너비 <input type="number" id="propW" min="10" /></label>
+            <label>높이 <input type="number" id="propH" min="10" /></label>
+          </div>
+          <label class="chk"><input type="checkbox" id="propLockAspect" /> 비율 고정(가로세로)</label>
+          <div class="row2">
+            <label>회전° <input type="number" id="propRot" min="0" max="359" /></label>
+            <button id="propRot90" title="90° 회전">↻ 90°</button>
+          </div>
+
+          <div class="term-section">
+            <div class="term-head">
+              <span>단자</span>
+              <button id="btnTermEdit" class="small">🔍 단자 배치 편집…</button>
+            </div>
+            <div id="termList"></div>
+          </div>
+
+          <button id="propBgRemove" style="width:100%">배경 제거 편집…</button>
+          <div class="row2">
+            <button id="propDelete" class="danger">삭제</button>
+            <button id="propDuplicate">복제</button>
+          </div>
+
+          <!-- 전기 정보(라이브러리 값, 읽기전용) -->
+          <div id="compElec" class="wp-section" hidden>
+            <div class="wp-sec-title">전기 정보 <span class="muted" style="font-weight:400">· 라이브러리</span></div>
+            <div id="compElecBody" class="ce-body"></div>
+          </div>
+        </div>
+      </div>
+      <div id="powerPanel">
+        <h3>전력 / 배터리 요약</h3>
+        <div id="powerSummary"></div>
+      </div>
+    </aside>
+  </div>
+
+  <!-- 부품 옵션 컨텍스트 메뉴 -->
+  <div id="cmpMenu" hidden>
+    <button data-act="terminals">단자 배치 편집…</button>
+    <button data-act="bg">배경 제거 편집…</button>
+    <button data-act="tolib">라이브러리에 저장</button>
+    <button data-act="duplicate">복제 (Ctrl+D)</button>
+    <hr />
+    <button data-act="delete" class="danger">삭제</button>
+  </div>
+
+  <!-- 라이브러리 부품 정보 편집 모달 -->
+  <div id="libEditModal" class="modal" hidden>
+    <div class="modal-box" style="width:min(460px,92vw)">
+      <h3>부품 정보 (BOM · 전력)</h3>
+      <div class="set-row"><label>이름<input type="text" id="libName" style="width:100%" /></label></div>
+      <div class="set-row"><label>스펙/설명<input type="text" id="libSpec" style="width:100%" placeholder="예: 2.1채널 D급 앰프" /></label></div>
+      <div class="set-row"><label>구매 링크<input type="text" id="libLink" style="width:100%" placeholder="https://..." /></label></div>
+      <div class="set-row"><label>단가(원)<input type="number" id="libPrice" step="any" min="0" style="width:150px" placeholder="예: 12000" /></label></div>
+
+      <hr style="border:none;border-top:1px solid #eee;margin:10px 0" />
+      <div class="set-row"><label>역할
+        <select id="libRole" style="width:100%">
+          <option value="load">부하(소비)</option>
+          <option value="battery">배터리(소스)</option>
+          <option value="converter">변환기</option>
+        </select>
+      </label></div>
+      <div class="elec-grid" id="libElecGrid">
+        <label id="libVoltWrap">전압 V<input type="number" id="libVolt" step="any" /></label>
+        <label id="libCurrentWrap">전류 A<input type="number" id="libCurrent" step="any" /></label>
+        <label id="libPowerWrap">전력 W<input type="number" id="libPower" step="any" /></label>
+      </div>
+      <p class="muted" id="libVipHint">V·A·W 중 2개만 넣으면 나머지는 자동 계산됩니다.</p>
+
+      <div class="elec-grid" id="libBattRow" hidden>
+        <label>용량 Ah<input type="number" id="libAh" step="any" /></label>
+        <label>가용용량 DoD %<input type="number" id="libDod" step="any" placeholder="80" /></label>
+        <span></span>
+      </div>
+      <div class="set-row" id="libDutyRow" hidden><label>시간당 가동시간 (분/시간, 최대 60)<input type="number" id="libMin" step="any" min="0" max="60" placeholder="60 = 상시" style="width:150px" /></label></div>
+      <div class="set-row" id="libEffRow" hidden><label>효율 %<input type="number" id="libEff" step="any" placeholder="87" style="width:120px" /></label></div>
+
+      <hr style="border:none;border-top:1px solid #eee;margin:10px 0" />
+      <div class="ds-section">
+        <div class="ds-head">
+          <span>데이터시트 (PDF·이미지)</span>
+          <button type="button" id="libDsAdd" class="small">＋ 파일 추가</button>
+          <input type="file" id="libDsInput" accept="application/pdf,image/*" multiple hidden />
+        </div>
+        <div id="libDsList" class="ds-list"></div>
+      </div>
+
+      <div class="modal-actions">
+        <button id="libEditCancel">취소</button>
+        <button id="libEditSave" class="primary">저장</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 데이터시트 미리보기 모달 -->
+  <div id="dsViewerModal" class="modal" hidden>
+    <div class="modal-box ds-viewer-box">
+      <div class="ds-viewer-head">
+        <strong id="dsViewerTitle">데이터시트</strong>
+        <div class="ds-viewer-actions">
+          <span id="dsZoomBtns" class="ds-zoom">
+            <button id="dsZoomOut" class="small" title="축소">－</button>
+            <button id="dsZoomFit" class="small" title="맞춤">맞춤</button>
+            <button id="dsZoomIn" class="small" title="확대">＋</button>
+          </span>
+          <button id="dsDownload" class="small">⤓ 다운로드</button>
+          <button id="dsOpenTab" class="small">↗ 새 탭</button>
+          <button id="dsMax" class="small" title="최대화/복원">⛶ 최대화</button>
+          <button id="dsViewerClose" class="primary">닫기</button>
+        </div>
+      </div>
+      <div class="ds-viewer-body">
+        <div id="dsViewerTabs" class="ds-viewer-tabs"></div>
+        <div id="dsViewerPreview" class="ds-viewer-preview"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 설정 모달 -->
+  <div id="settingsModal" class="modal" hidden>
+    <div class="modal-box" style="width:min(440px,92vw)">
+      <h3>설정</h3>
+      <div class="set-tabs">
+        <button class="set-tab active" data-settab="general">일반</button>
+        <button class="set-tab" data-settab="display">표시</button>
+        <button class="set-tab" data-settab="shortcuts">단축키</button>
+      </div>
+
+      <div class="set-pane" data-setpane="general">
+        <div class="set-row">
+          <label class="chk"><input type="checkbox" id="setAutosave" /> 자동 임시저장 사용</label>
+        </div>
+        <div class="set-row">
+          <label>저장 주기(초)
+            <input type="number" id="setAutosaveSec" min="1" max="300" step="1" style="width:80px" />
+          </label>
+        </div>
+        <p class="muted">자동 임시저장은 이 브라우저에 작업을 주기적으로 저장해 새로고침 시 복구합니다. 꺼두면 직접 '저장'으로만 보관됩니다.</p>
+      </div>
+
+      <div class="set-pane" data-setpane="display" hidden>
+        <h4 style="margin:0 0 6px">부품 이름표</h4>
+        <div class="set-row">
+          <label>글자 크기(px)
+            <input type="number" id="setLabelSize" min="8" max="28" step="1" style="width:80px" />
+          </label>
+        </div>
+        <div class="set-row">
+          <label class="chk"><input type="checkbox" id="setLabelBold" /> 굵게</label>
+        </div>
+        <div class="set-row">
+          <label class="chk"><input type="checkbox" id="setLabelBox" /> 배경 사각블럭 (배선·배경과 겹쳐도 잘 보이게)</label>
+        </div>
+      </div>
+
+      <div class="set-pane" data-setpane="shortcuts" hidden>
+        <p class="muted" style="margin:0 0 8px">칸을 클릭하고 원하는 키를 누르세요. (Backspace로 해제)</p>
+        <div class="sc-list">
+          <div class="sc-row"><span>선택 모드</span><input class="sc-input" data-action="mode-select" readonly /></div>
+          <div class="sc-row"><span>배선 모드</span><input class="sc-input" data-action="mode-wire" readonly /></div>
+          <div class="sc-row"><span>텍스트 모드</span><input class="sc-input" data-action="mode-text" readonly /></div>
+        </div>
+        <p class="muted" style="margin:8px 0 0">배선 모드로 전환할 때마다 마우스 위치 근처에 배선색 팝업이 자동으로 뜹니다.</p>
+      </div>
+
+      <div class="modal-actions"><button id="setClose" class="primary">확인</button></div>
+    </div>
+  </div>
+
+  <!-- 색상 팔레트 관리 모달 -->
+  <div id="paletteModal" class="modal" hidden>
+    <div class="modal-box">
+      <h3>배선 색상 팔레트</h3>
+      <p class="muted">색상 + 의미를 등록하면 배선색으로 쓰고, 나중에 PDF 범례에도 나옵니다.</p>
+      <div id="paletteList" class="preset-list"></div>
+      <div class="preset-add">
+        <input type="color" id="newPalColor" value="#3949ab" />
+        <input type="text" id="newPalLabel" placeholder="예: 오디오 R" />
+        <button id="btnAddPal" class="primary">＋ 추가</button>
+      </div>
+      <div class="modal-actions"><button id="palClose">닫기</button></div>
+    </div>
+  </div>
+
+  <!-- 단자 배치 편집 모달 (확대/축소) -->
+  <div id="termModal" class="modal" hidden>
+    <div class="modal-box term-editor">
+      <div class="te-head">
+        <h3>단자 배치</h3>
+        <div class="te-tools">
+          <button id="teModePlace" class="te-mode active" title="이미지 클릭으로 단자 추가">＋ 배치 모드</button>
+          <button id="teModeSelect" class="te-mode" title="드래그로 단자 다중선택">▣ 선택 모드</button>
+          <span class="sep"></span>
+          <label class="inline">배치할 단자
+            <select id="tePlacePreset"></select>
+          </label>
+          <button id="tePresetManage" class="small">프리셋 관리…</button>
+          <span class="sep"></span>
+          <button id="teZoomOut" title="축소">－</button>
+          <span id="teZoomLabel">100%</span>
+          <button id="teZoomIn" title="확대">＋</button>
+          <button id="teZoomFit" class="small">맞춤</button>
+        </div>
+      </div>
+      <div class="te-body">
+        <div id="teViewport" class="checker">
+          <svg id="teSvg" xmlns="http://www.w3.org/2000/svg">
+            <g id="teContent"></g>
+          </svg>
+        </div>
+        <div class="te-side">
+          <p class="muted">이미지 클릭=단자 추가 · 드래그=이동 · <b>Ctrl+클릭=다중선택</b>(여러 개 함께 드래그) · Delete=삭제 · 휠=확대</p>
+          <div id="teAlign" class="te-align" hidden>
+            <div class="te-align-row">
+              <button data-talign="x" title="같은 X로(수직 한 줄)">↕ 세로정렬</button>
+              <button data-talign="y" title="같은 Y로(수평 한 줄)">↔ 가로정렬</button>
+              <button data-talign="distY" title="세로 균등 간격(3개↑)">▤ 세로균등</button>
+              <button data-talign="distX" title="가로 균등 간격(3개↑)">▦ 가로균등</button>
+            </div>
+          </div>
+          <div id="teList"></div>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button id="teDone" class="primary">완료</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 단자 프리셋 관리 모달 -->
+  <div id="presetModal" class="modal" hidden>
+    <div class="modal-box">
+      <h3>단자 프리셋 관리</h3>
+      <p class="muted">자주 쓰는 단자(라벨+색상)를 등록하면 다음에도 재사용됩니다. 브라우저에 저장돼요.</p>
+      <div id="presetList" class="preset-list"></div>
+      <div class="preset-add">
+        <input type="color" id="newPresetColor" value="#1e88e5" title="색상" />
+        <input type="text" id="newPresetLabel" placeholder="예: MISO" />
+        <button id="btnAddPreset" class="primary">＋ 추가</button>
+      </div>
+      <div class="modal-actions"><button id="presetClose">닫기</button></div>
+    </div>
+  </div>
+
+  <!-- 배경 제거 모달 -->
+  <div id="bgModal" class="modal" hidden>
+    <div class="modal-box">
+      <h3>배경 제거</h3>
+      <p class="muted" id="bgHint">배경(제거할 부분)을 클릭해 색을 추가하세요. 기본으로 네 모서리 색이 잡혀 있습니다.</p>
+      <div id="bgCanvasWrap" class="checker">
+        <canvas id="bgCanvas"></canvas>
+      </div>
+      <div class="bg-controls">
+        <label class="chk"><input type="checkbox" id="bgEnable" checked /> 배경 제거 켜기</label>
+        <label class="slider">허용오차 <input type="range" id="bgTol" min="0" max="120" value="30" />
+          <span id="bgTolVal">30</span></label>
+        <label class="chk"><input type="checkbox" id="bgFeather" /> 경계 부드럽게</label>
+        <button id="bgReset" class="small">색 초기화(모서리)</button>
+        <label class="chk"><input type="checkbox" id="bgCrop" /> 자르기(테두리)</label>
+        <span class="sep" style="width:1px;height:18px;background:#ddd"></span>
+        <button id="bgRotL" class="small" title="왼쪽 90° 회전">↺ 90°</button>
+        <button id="bgRotR" class="small" title="오른쪽 90° 회전">↻ 90°</button>
+      </div>
+      <p class="muted" id="bgCropHint" hidden>파란 사각형의 모서리를 드래그해 크기 조절, 안쪽을 드래그해 이동. 사각형 안만 남깁니다.</p>
+      <div class="modal-actions">
+        <button id="bgCancel">취소</button>
+        <button id="bgUseOriginal">원본 그대로</button>
+        <button id="bgApply" class="primary">적용해서 배치</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 첫 방문 환영 모달 -->
+  <div id="welcomeModal" class="modal" hidden>
+    <div class="modal-box" style="width:min(480px,92vw)">
+      <h3 style="font-size:20px">🔌 이지케이블 <span class="beta-badge">BETA</span></h3>
+      <p style="margin:6px 0 10px">이미지로 부품을 올리고, 단자를 찍고, 선을 이어<br /><b>배선도를 가장 쉽게</b> 그리는 도구입니다.</p>
+      <ol class="welcome-steps">
+        <li>좌측 <b>부품 라이브러리 ＋ 부품 추가</b> — 부품 사진을 올리면 배경 제거까지</li>
+        <li>부품의 <b>⋯ 메뉴 → 단자 배치</b>로 단자를 찍고</li>
+        <li><b>╱ 배선</b> 모드로 단자끼리 클릭 연결 — <b>BOM·배선 리스트·PDF는 자동</b></li>
+      </ol>
+      <p class="muted" style="margin:10px 0 0">베타 기간에는 <b>모든 기능이 무료</b>입니다. 작업물은 이 브라우저에 자동 저장됩니다.</p>
+      <div class="modal-actions">
+        <button id="welcomeStart" class="primary" style="width:100%">시작하기</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 빠른 배선색 선택 팝업 (단축키로 마우스 위치 근처에 표시) -->
+  <div id="quickColorPicker" class="qcp" hidden>
+    <div id="qcpSwatches" class="qcp-swatches"></div>
+  </div>
+
+  <!-- 스크립트: file:// 호환 위해 일반 script (모듈 아님), 순서 중요 -->
+  <script src="js/awg.js"></script>
+  <script src="js/model.js"></script>
+  <script src="js/presets.js"></script>
+  <script src="js/geometry.js"></script>
+  <script src="js/render.js"></script>
+  <script src="js/bgremove.js"></script>
+  <script src="js/termeditor.js"></script>
+  <script src="js/interactions.js"></script>
+  <script src="js/store.js"></script>
+  <script src="js/history.js"></script>
+  <script src="js/library.js"></script>
+  <script src="js/io.js"></script>
+  <script src="js/pdf.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
