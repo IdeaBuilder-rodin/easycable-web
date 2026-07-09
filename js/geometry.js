@@ -371,6 +371,56 @@ WE.geometry = (function () {
     return { wireIds: Object.keys(wires), terms: terms };
   }
 
+  // 단자 라벨 자동배치(충돌회피 공용 로직) — 배선도 캔버스·단자배치 모달이 동일한 결과를 내도록 공유
+  // terminals: t.labelPos(수동 위치)가 없는 단자만 넘길 것. cmpW/cmpH: 회전 무관 원본 폭/높이(분류 기준)
+  // box: {x,y,x2,y2} 라벨을 붙일 기준 사각형(호출측 좌표계). dotOf(t): 해당 좌표계의 단자 점 위치 반환
+  // 반환: [{ t, dot:{x,y}, lx, ly, anchor:'start'|'end'|'middle', side:'L'|'R'|'T'|'B' }, ...]
+  function layoutTermLabels(terminals, cmpW, cmpH, box, dotOf, opts) {
+    opts = opts || {};
+    var offset = opts.offset != null ? opts.offset : 10;
+    var minGapLR = opts.minGapLR != null ? opts.minGapLR : 15;
+    var minGapTB = opts.minGapTB != null ? opts.minGapTB : 26;
+    var groups = { L: [], R: [], T: [], B: [] };
+    terminals.forEach(function (t) {
+      var dot = dotOf(t);
+      var side;
+      if (t.labelSide === "L" || t.labelSide === "R" || t.labelSide === "T" || t.labelSide === "B") {
+        side = t.labelSide;
+      } else {
+        var dl = t.rx * cmpW, dr = (1 - t.rx) * cmpW, dt = t.ry * cmpH, db = (1 - t.ry) * cmpH;
+        var minD = Math.min(dl, dr, dt, db);
+        side = minD === dt ? "T" : minD === db ? "B" : minD === dl ? "L" : "R";
+      }
+      groups[side].push({ t: t, dot: dot });
+    });
+    var out = [];
+    ["L", "R"].forEach(function (side) {
+      var arr = groups[side];
+      arr.sort(function (a, b) { return a.dot.y - b.dot.y; });
+      var lastY = -Infinity;
+      var lx = side === "L" ? box.x - offset : box.x2 + offset;
+      arr.forEach(function (o) {
+        var ly = o.dot.y;
+        if (ly < lastY + minGapLR) ly = lastY + minGapLR;
+        lastY = ly;
+        out.push({ t: o.t, dot: o.dot, lx: lx, ly: ly, anchor: side === "L" ? "end" : "start", side: side });
+      });
+    });
+    ["T", "B"].forEach(function (side) {
+      var arr = groups[side];
+      arr.sort(function (a, b) { return a.dot.x - b.dot.x; });
+      var lastX = -Infinity;
+      var ly = side === "T" ? box.y - offset : box.y2 + offset;
+      arr.forEach(function (o) {
+        var lx = o.dot.x;
+        if (lx < lastX + minGapTB) lx = lastX + minGapTB;
+        lastX = lx;
+        out.push({ t: o.t, dot: o.dot, lx: lx, ly: ly, anchor: "middle", side: side });
+      });
+    });
+    return out;
+  }
+
   // 배선 path의 d 문자열
   function wirePath(wire) {
     var pts = wireRoutePoints(wire);
@@ -393,6 +443,7 @@ WE.geometry = (function () {
     simplify: simplify,
     avoidOverlapCoord: avoidOverlapCoord,
     netFrom: netFrom,
-    wirePath: wirePath
+    wirePath: wirePath,
+    layoutTermLabels: layoutTermLabels
   };
 })();

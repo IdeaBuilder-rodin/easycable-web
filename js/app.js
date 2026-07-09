@@ -29,6 +29,7 @@ WE.app = (function () {
     bindSettings();
     bindModalBackdrops();
     bindWelcome();
+    bindBetaBanner();
     bindFeedback();
     bindQuickColorPicker();
     bindHelp();
@@ -1518,7 +1519,7 @@ WE.app = (function () {
     }).catch(function () { cb(false); });
   }
 
-  // ---- 첫 방문 환영 모달 ----
+  // ---- 첫 방문 환영 모달 (1회성) ----
   function bindWelcome() {
     var modal = document.getElementById("welcomeModal");
     try {
@@ -1527,6 +1528,14 @@ WE.app = (function () {
     document.getElementById("welcomeStart").addEventListener("click", function () {
       modal.hidden = true;
       try { localStorage.setItem("we_welcomed", "1"); } catch (e) { /* 무시 */ }
+    });
+  }
+
+  // ---- 베타 안내 배너: 방문할 때마다 항상 표시. 닫기는 이번 방문에서만(저장 안 함, 새로고침하면 다시 나타남) ----
+  function bindBetaBanner() {
+    var banner = document.getElementById("betaBanner");
+    document.getElementById("betaBannerClose").addEventListener("click", function () {
+      banner.hidden = true;
     });
   }
 

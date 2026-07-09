@@ -17,6 +17,11 @@
   </script>
 </head>
 <body>
+  <!-- 베타 안내 배너: 접속할 때마다 항상 표시(1회성 아님), X로 닫으면 이번 방문 동안만 숨김 -->
+  <div id="betaBanner">
+    <span>🔌 이지케이블은 현재 <b>베타 테스트 중</b>입니다 — 모든 기능이 무료로 제공되며, 작업물은 이 브라우저에 자동 저장됩니다.</span>
+    <button id="betaBannerClose" title="닫기">×</button>
+  </div>
   <!-- 상단 툴바 -->
   <div id="toolbar">
     <!-- 1행: 문서 레벨 (파일 관리 · 내보내기 · 설정) -->
@@ -523,6 +528,16 @@
               <button data-talign="y" title="같은 Y로(수평 한 줄)">↔ 가로정렬</button>
               <button data-talign="distY" title="세로 균등 간격(3개↑)">▤ 세로균등</button>
               <button data-talign="distX" title="가로 균등 간격(3개↑)">▦ 가로균등</button>
+            </div>
+          </div>
+          <div id="teLabelSide" class="te-align" hidden>
+            <span class="muted">라벨 방향(선택한 단자, 자동판정 애매할 때)</span>
+            <div class="te-dir-pad">
+              <button data-tside="T" title="위로 고정" class="te-dir-t">↑ 위</button>
+              <button data-tside="L" title="왼쪽으로 고정" class="te-dir-l">← 왼쪽</button>
+              <button data-tside="auto" title="자동 배치로 되돌림" class="te-dir-c">자동</button>
+              <button data-tside="R" title="오른쪽으로 고정" class="te-dir-r">→ 오른쪽</button>
+              <button data-tside="B" title="아래로 고정" class="te-dir-b">↓ 아래</button>
             </div>
           </div>
           <div id="teList"></div>

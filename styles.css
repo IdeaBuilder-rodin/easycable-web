@@ -38,6 +38,21 @@ html, body {
 }
 body { display: flex; flex-direction: column; }
 
+/* 베타 안내 배너: 매 방문마다 표시(1회성 첫방문 모달과 별개), 닫아도 새로고침하면 다시 나타남 */
+#betaBanner {
+  flex: none; display: flex; align-items: center; justify-content: center; gap: 10px;
+  background: var(--primary-bg); color: var(--primary-d);
+  font-size: var(--fs-sm); padding: 6px 32px 6px 12px; text-align: center; position: relative;
+  border-bottom: 1px solid #cfe0f5;
+}
+#betaBanner b { font-weight: 700; }
+#betaBannerClose {
+  position: absolute; right: 8px; top: 50%; transform: translateY(-50%);
+  border: none; background: none; color: var(--primary-d); font-size: 16px; line-height: 1;
+  cursor: pointer; padding: 4px 6px; border-radius: var(--r-sm);
+}
+#betaBannerClose:hover { background: rgba(21,101,192,.12); }
+
 /* 공용 버튼 (디자인 가이드 4종) — .btn + 변형 */
 .btn { font-family: inherit; font-size: var(--fs-sm); padding: 6px 12px; border-radius: var(--r);
   border: 1px solid var(--bd); background: var(--bg); color: var(--tx2); cursor: pointer; line-height: 1.2; }
@@ -530,6 +545,22 @@ body.panning #canvas, body.panning #canvas * { cursor: grabbing !important; }
 .te-align-row button:hover { background: #e8f1fc; border-color: #1e88e5; color: #1e88e5; }
 .te-mode { padding: 5px 10px; border: 1px solid #cfd6de; background: #fff; border-radius: 5px; cursor: pointer; font-size: 12px; font-family: inherit; }
 .te-mode.active { background: #1e88e5; color: #fff; border-color: #1e88e5; }
+
+/* 단자 라벨 방향 십자(+) 패드: 버튼 위치 자체가 방향을 나타내 직관적 */
+.te-dir-pad {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  grid-template-areas: ".  t  ." "l  c  r" ".  b  .";
+  gap: 4px; margin-top: 6px;
+}
+.te-dir-pad button {
+  padding: 7px 4px; border: 1px solid #cfd6de; background: #fff; border-radius: 5px;
+  cursor: pointer; font-size: 12px; font-family: inherit;
+}
+.te-dir-pad button:hover { background: #e8f1fc; border-color: #1e88e5; color: #1e88e5; }
+.te-dir-t { grid-area: t; } .te-dir-l { grid-area: l; } .te-dir-c { grid-area: c; }
+.te-dir-r { grid-area: r; } .te-dir-b { grid-area: b; }
+.te-dir-c { background: #f2f5f8; font-weight: 600; }
 .te-marquee { fill: #1e88e5; fill-opacity: 0.1; stroke: #1e88e5; stroke-dasharray: 4 3; pointer-events: none; }
 .te-guide { stroke: #ff3d7f; stroke-dasharray: 5 4; pointer-events: none; }
 

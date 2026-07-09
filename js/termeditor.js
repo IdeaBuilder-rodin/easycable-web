@@ -39,9 +39,19 @@ WE.termeditor = (function () {
   }
   function updateAlignVis() {
     var a = document.getElementById("teAlign"); if (a) a.hidden = selTids.length < 2;
+    var ls = document.getElementById("teLabelSide"); if (ls) ls.hidden = selTids.length < 1;
   }
   function selectedTerms() {
     return selTids.map(function (id) { return WE.model.getTerminal(cmp, id); }).filter(Boolean);
+  }
+  // 선택된 단자(1개 또는 여러 개)의 도면 라벨 방향을 한 번에 강제 지정/해제
+  function setLabelSide(side) {
+    var ts = selectedTerms(); if (!ts.length) return;
+    ts.forEach(function (t) {
+      if (side === "auto") delete t.labelSide; else t.labelSide = side;
+      delete t.labelPos;   // 이전에 드래그로 옮긴 위치가 있으면 방향 지정이 묻히므로 초기화
+    });
+    renderTerminals(); teCommit();
   }
   function alignTerms(mode) {
     var ts = selectedTerms(); if (ts.length < 2) return;
@@ -174,6 +184,10 @@ WE.termeditor = (function () {
       var b = e.target.closest("button[data-talign]");
       if (b) alignTerms(b.dataset.talign);
     });
+    document.getElementById("teLabelSide").addEventListener("click", function (e) {
+      var b = e.target.closest("button[data-tside]");
+      if (b) setLabelSide(b.dataset.tside);
+    });
     document.getElementById("teModePlace").addEventListener("click", function () { setTeMode("place"); });
     document.getElementById("teModeSelect").addEventListener("click", function () { setTeMode("select"); });
 
@@ -202,24 +216,45 @@ WE.termeditor = (function () {
     document.getElementById("teZoomLabel").textContent = Math.round(zoom * 100) + "%";
   }
 
+  // 배선도 캔버스(render.js)와 동일한 충돌회피 라벨 배치(geometry.layoutTermLabels)를 공유해서
+  // 두 화면이 항상 같은 결과를 보여줌(핀 촘촘한 부품에서 글자가 겹쳐 뭉개지는 문제 해결)
   function renderTerminals() {
     if (!termsG) return;
     termsG.innerHTML = "";
-    var r = 7 / zoom, hit = 13 / zoom, fs = 13 / zoom, off = 10 / zoom;
+    var r = 7 / zoom, hit = 13 / zoom, fs = 13 / zoom;
+    var offset = 10 / zoom, gapLR = 15 / zoom, gapTB = 26 / zoom;
+    var box = { x: 0, y: 0, x2: baseW, y2: baseH };
+    function dotOf(t) { return { x: t.rx * baseW, y: t.ry * baseH }; }
+
+    var autoTerms = [], laid = [];
     cmp.terminals.forEach(function (t) {
-      var cx = t.rx * baseW, cy = t.ry * baseH;
-      var color = t.color || WE.model.DEFAULT_TERMINAL_COLOR;
+      if (t.labelPos) {
+        var dot = dotOf(t);
+        laid.push({ t: t, dot: dot, lx: t.labelPos.x, ly: t.labelPos.y, anchor: t.labelPos.x < dot.x ? "end" : "start" });
+      } else autoTerms.push(t);
+    });
+    laid = laid.concat(WE.geometry.layoutTermLabels(autoTerms, baseW, baseH, box, dotOf, { offset: offset, minGapLR: gapLR, minGapTB: gapTB }));
+
+    laid.forEach(function (o) {
+      var t = o.t, dot = o.dot, color = t.color || WE.model.DEFAULT_TERMINAL_COLOR;
       var g = el("g");
       g.appendChild(el("circle", {
-        cx: cx, cy: cy, r: hit, fill: "#000", "fill-opacity": 0,
+        cx: dot.x, cy: dot.y, r: hit, fill: "#000", "fill-opacity": 0,
         "data-tid": t.id, style: "pointer-events:all;cursor:pointer"
       }));
       if (isSel(t.id)) {
-        g.appendChild(el("circle", { cx: cx, cy: cy, r: r + 3 / zoom, fill: "none", stroke: "#1e88e5", "stroke-width": 2 / zoom, "pointer-events": "none" }));
+        g.appendChild(el("circle", { cx: dot.x, cy: dot.y, r: r + 3 / zoom, fill: "none", stroke: "#1e88e5", "stroke-width": 2 / zoom, "pointer-events": "none" }));
       }
-      g.appendChild(el("circle", { cx: cx, cy: cy, r: r, fill: color, stroke: "#fff", "stroke-width": 2 / zoom, "pointer-events": "none" }));
-      var tx = el("text", { x: cx + off, y: cy - off * 0.5, "pointer-events": "none",
-        style: "font:" + fs + "px 'Malgun Gothic',sans-serif;fill:#222;paint-order:stroke;stroke:#fff;stroke-width:" + (3 / zoom) + "px;user-select:none" });
+      g.appendChild(el("circle", { cx: dot.x, cy: dot.y, r: r, fill: color, stroke: "#fff", "stroke-width": 2 / zoom, "pointer-events": "none" }));
+      g.appendChild(el("line", {
+        x1: dot.x, y1: dot.y, x2: o.lx, y2: o.ly,
+        stroke: color, "stroke-width": 1 / zoom, "stroke-opacity": 0.6, "pointer-events": "none"
+      }));
+      var tx = el("text", {
+        x: o.lx + (o.anchor === "end" ? -2 / zoom : (o.anchor === "start" ? 2 / zoom : 0)), y: o.ly,
+        "text-anchor": o.anchor, "dominant-baseline": "middle", "pointer-events": "none",
+        style: "font:" + fs + "px 'Malgun Gothic',sans-serif;fill:#222;paint-order:stroke;stroke:#fff;stroke-width:" + (3 / zoom) + "px;user-select:none"
+      });
       tx.textContent = t.name;
       g.appendChild(tx);
       termsG.appendChild(g);

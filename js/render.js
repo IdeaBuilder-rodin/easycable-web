@@ -56,6 +56,7 @@ WE.render = (function () {
     if (cmp.hideTermLabels) return false;
     return cmp.terminals.some(function (t) {
       if (t.labelPos) return false;
+      if (t.labelSide) return t.labelSide === "B";
       var dl = t.rx * cmp.width, dr = (1 - t.rx) * cmp.width, dt = t.ry * cmp.height, db = (1 - t.ry) * cmp.height;
       return Math.min(dl, dr, dt, db) === db;
     });
@@ -127,7 +128,6 @@ WE.render = (function () {
   function appendTermLabels(cmp) {
     if (cmp.hideTermLabels) return;   // 단자 많은 복잡한 부품은 라벨을 꺼서 도면을 깔끔하게 (마우스 오버 시 이름 표시로 대체)
     var def = WE.model.DEFAULT_TERMINAL_COLOR;
-    var center = WE.geometry.localToAbs(cmp, cmp.width / 2, cmp.height / 2);
     var box = componentBBox(cmp);
 
     function draw(t, dot, lx, ly, anchor) {
@@ -145,48 +145,21 @@ WE.render = (function () {
       layerTermLabels.appendChild(tx);
     }
 
-    // 단자가 부품의 어느 변(좌/우/상/하)에 가장 가까운지로 자동 분류
-    // → 가로로 늘어선 핀 헤더(상/하단)는 아래·위로, 세로로 늘어선 핀은 좌·우로 순서대로 배치되어 선이 안 꼬임
-    var groups = { L: [], R: [], T: [], B: [] };
+    var autoTerms = [];
     cmp.terminals.forEach(function (t) {
-      var dot = WE.geometry.terminalAbs(cmp, t);
       if (t.labelPos) {                                   // 수동 위치(로컬 저장) → 화면좌표
+        var dot = WE.geometry.terminalAbs(cmp, t);
         var lp = WE.geometry.localToAbs(cmp, t.labelPos.x, t.labelPos.y);
         draw(t, dot, lp.x, lp.y, lp.x < dot.x ? "end" : "start");
         return;
       }
-      // 비율이 아닌 실제 픽셀 거리로 비교: 옆으로 넓은 부품은 상/하 변이, 세로로 긴 부품은 좌/우 변이
-      // 실제로 더 가까우므로 모서리 근처 단자도 올바른 방향으로 판정됨
-      var rx = t.rx, ry = t.ry;
-      var dl = rx * cmp.width, dr = (1 - rx) * cmp.width, dt = ry * cmp.height, db = (1 - ry) * cmp.height;
-      var minD = Math.min(dl, dr, dt, db);
-      var side = minD === dt ? "T" : minD === db ? "B" : minD === dl ? "L" : "R";
-      groups[side].push({ t: t, dot: dot });
+      autoTerms.push(t);
     });
-    ["L", "R"].forEach(function (side) {
-      var arr = groups[side];
-      arr.sort(function (a, b) { return a.dot.y - b.dot.y; });
-      var minGap = 15, lastY = -Infinity;
-      var lx = side === "L" ? box.x - 10 : box.x2 + 10;
-      arr.forEach(function (o) {
-        var ly = o.dot.y;
-        if (ly < lastY + minGap) ly = lastY + minGap;
-        lastY = ly;
-        draw(o.t, o.dot, lx, ly, side === "L" ? "end" : "start");
-      });
+    // 단자배치 모달(termeditor.js)과 동일한 충돌회피 로직(geometry.layoutTermLabels) 공유 → 두 화면이 항상 같은 결과
+    var laid = WE.geometry.layoutTermLabels(autoTerms, cmp.width, cmp.height, box, function (t) {
+      return WE.geometry.terminalAbs(cmp, t);
     });
-    ["T", "B"].forEach(function (side) {
-      var arr = groups[side];
-      arr.sort(function (a, b) { return a.dot.x - b.dot.x; });
-      var minGap = 26, lastX = -Infinity;
-      var ly = side === "T" ? box.y - 10 : box.y2 + 10;
-      arr.forEach(function (o) {
-        var lx = o.dot.x;
-        if (lx < lastX + minGap) lx = lastX + minGap;
-        lastX = lx;
-        draw(o.t, o.dot, lx, ly, "middle");
-      });
-    });
+    laid.forEach(function (o) { draw(o.t, o.dot, o.lx, o.ly, o.anchor); });
   }
   function renderTermLabels() {
     layerTermLabels.innerHTML = "";
