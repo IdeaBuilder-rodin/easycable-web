@@ -3,10 +3,20 @@ var WE = window.WE || {};
 window.WE = WE;
 
 WE.pdf = (function () {
+  var _savedTitle = null;
   function init() {
     document.getElementById("btnPdf").addEventListener("click", exportPrint);
-    // Ctrl+P 직접 인쇄에도 제목/범례 채우기
-    window.addEventListener("beforeprint", populate);
+    // Ctrl+P 직접 인쇄에도 제목 채우기 + 저장 파일명(document.title)을 프로젝트 이름으로 지정
+    window.addEventListener("beforeprint", function () {
+      populate();
+      _savedTitle = document.title;
+      var name = (WE.model.project.meta.name || "").trim() || "배선도";
+      document.title = name;   // 브라우저 인쇄 대화상자의 기본 PDF 파일명이 이 값이 됨
+    });
+    // 인쇄 종료 후 원래 탭 제목으로 복원
+    window.addEventListener("afterprint", function () {
+      if (_savedTitle !== null) { document.title = _savedTitle; _savedTitle = null; }
+    });
   }
 
   function exportPrint() {

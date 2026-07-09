@@ -147,20 +147,40 @@ WE.io = (function () {
   // 공유 파일의 부품을 라이브러리에 병합: 같은 이름이 이미 있으면 건너뜀(내 서랍 보존).
   // 반환: { added, idMap } — idMap은 원본 libraryId → 받는 쪽 실제 부품 id (프로젝트 재연결용)
   function mergeLibraryParts(list) {
-    var idMap = {}, added = 0;
+    var idMap = {}, added = 0, filled = 0;
     list.forEach(function (p) {
       if (!p || !p.name) return;
       var existing = WE.library.findByName(p.name);
       if (existing) {
         idMap[p.id] = existing.id;                 // 이름 중복 → 기존 부품에 연결
+        // 같은 이름이 있어도, 기존 부품에 '비어 있는' 항목(스펙·가격·링크·데이터시트·전기정보)은
+        // 공유파일 데이터로 채움 → 받는 쪽에 껍데기 부품만 있어도 BOM/데이터시트가 살아남.
+        // (받는 쪽이 직접 입력해 둔 값은 덮지 않음)
+        if (fillMissingFields(existing, p)) filled++;
       } else {
         var np = WE.library.addPart(p);            // 새로 추가(새 id 발급)
         idMap[p.id] = np.id;
         added++;
       }
     });
-    if (added) WE.app.renderLibrary();
+    if (added || filled) WE.app.renderLibrary();
     return { added: added, idMap: idMap };
+  }
+
+  // 기존 부품의 빈 항목만 공유본(src)에서 보충. 하나라도 채웠으면 true.
+  function fillMissingFields(existing, src) {
+    function empty(v) { return v === undefined || v === null || v === ""; }
+    var patch = {}, changed = false;
+    ["spec", "link", "price", "image", "role", "volt", "current", "power",
+     "capacityAh", "dod", "minPerHour", "efficiency"].forEach(function (k) {
+      if (empty(existing[k]) && !empty(src[k])) { patch[k] = src[k]; changed = true; }
+    });
+    // 데이터시트: 기존에 하나도 없고 공유본엔 있으면 통째로 가져옴
+    if ((!existing.datasheets || !existing.datasheets.length) && src.datasheets && src.datasheets.length) {
+      patch.datasheets = src.datasheets; changed = true;
+    }
+    if (changed) WE.library.updatePart(existing.id, patch);
+    return changed;
   }
 
   return { init: init, save: save, share: share, clearFileHandle: clearFileHandle };
