@@ -23,6 +23,8 @@ WE.interactions = (function () {
     svg.addEventListener("pointerout", onNetHoverOut);
     svg.addEventListener("pointerover", onWireLabelHover);
     svg.addEventListener("pointerleave", function () { _hoverLabelId = null; WE.render.setWireLabelHover(null); });
+    svg.addEventListener("pointermove", onTermTooltipMove);
+    svg.addEventListener("pointerleave", hideTermTooltip);
   }
 
   // 배선 번호 라벨 위에 마우스를 올리면 강조(드래그 가능함을 명확히 표시)
@@ -69,6 +71,30 @@ WE.interactions = (function () {
     if (!e.relatedTarget || !svg.contains(e.relatedTarget)) {
       if (_netKey) { _netKey = null; WE.render.setNetHighlight(null); }
     }
+  }
+
+  // ---- 단자 마우스오버 툴팁: 라벨을 꺼둔 부품도 단자 이름을 바로 확인 ----
+  var _tipEl = null, _tipShown = false;
+  function onTermTooltipMove(e) {
+    if (drag) { hideTermTooltip(); return; }
+    var termEl = e.target.closest("[data-term-id]");
+    if (!termEl) { hideTermTooltip(); return; }
+    var cmp = WE.model.getComponent(termEl.getAttribute("data-cmp-id"));
+    var t = cmp && WE.model.getTerminal(cmp, termEl.getAttribute("data-term-id"));
+    if (!t) { hideTermTooltip(); return; }
+    showTermTooltip(t.name, e.clientX, e.clientY);
+  }
+  function showTermTooltip(text, clientX, clientY) {
+    if (!_tipEl) _tipEl = document.getElementById("termTooltip");
+    var rect = document.getElementById("centerCol").getBoundingClientRect();
+    _tipEl.textContent = text || "(이름 없음)";
+    _tipEl.style.left = (clientX - rect.left) + "px";
+    _tipEl.style.top = (clientY - rect.top) + "px";
+    if (!_tipShown) { _tipEl.hidden = false; _tipShown = true; }
+  }
+  function hideTermTooltip() {
+    if (!_tipEl) _tipEl = document.getElementById("termTooltip");
+    if (_tipShown) { _tipEl.hidden = true; _tipShown = false; }
   }
 
   function onKeyUp(e) {

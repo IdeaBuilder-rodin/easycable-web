@@ -348,31 +348,56 @@ WE.app = (function () {
 
   // ---- 부품 라이브러리 ----
   var _placeN = 0;
+  // 이미지 파일 → 배경제거 모달 → 라이브러리 저장 → 편집 모달 오픈 (버튼 클릭/드래그앤드롭 공용)
+  function addImageFileToLibrary(file) {
+    if (!file || file.type.indexOf("image/") !== 0) return;
+    var name = file.name.replace(/\.[^.]+$/, "");
+    var reader = new FileReader();
+    reader.onload = function (ev) {
+      WE.bgremove.open(ev.target.result, function (url) {
+        var probe = new Image();
+        probe.onload = function () {
+          var maxSide = 160, w = probe.width, h = probe.height, r = w / h;
+          if (w >= h) { w = maxSide; h = Math.round(maxSide / r); } else { h = maxSide; w = Math.round(maxSide * r); }
+          var np = saveToLibrary(name, function () {
+            return { name: name, image: url, defaultWidth: w, defaultHeight: h, terminals: [] };
+          });
+          if (np) openLibEdit(np.id);   // 바로 스펙/구매링크 입력
+        };
+        probe.src = url;
+      });
+    };
+    reader.readAsDataURL(file);
+  }
   function bindLibrary() {
     document.getElementById("btnLibAdd").addEventListener("click", function () {
       document.getElementById("fileLibAdd").click();
     });
     document.getElementById("fileLibAdd").addEventListener("change", function (e) {
       var file = e.target.files && e.target.files[0]; if (!file) return;
-      var name = file.name.replace(/\.[^.]+$/, "");
-      var reader = new FileReader();
-      reader.onload = function (ev) {
-        WE.bgremove.open(ev.target.result, function (url) {
-          var probe = new Image();
-          probe.onload = function () {
-            var maxSide = 160, w = probe.width, h = probe.height, r = w / h;
-            if (w >= h) { w = maxSide; h = Math.round(maxSide / r); } else { h = maxSide; w = Math.round(maxSide * r); }
-            var np = saveToLibrary(name, function () {
-              return { name: name, image: url, defaultWidth: w, defaultHeight: h, terminals: [] };
-            });
-            if (np) openLibEdit(np.id);   // 바로 스펙/구매링크 입력
-
-          };
-          probe.src = url;
-        });
-      };
-      reader.readAsDataURL(file);
+      addImageFileToLibrary(file);
       e.target.value = "";
+    });
+
+    // 좌측 라이브러리 패널 전체에 이미지 파일을 드래그해서 놓으면 부품 추가(버튼 클릭과 동일 동작)
+    var leftPanel = document.getElementById("leftPanel");
+    leftPanel.addEventListener("dragover", function (e) {
+      if (!(e.dataTransfer && e.dataTransfer.types && e.dataTransfer.types.indexOf("Files") >= 0)) return;
+      e.preventDefault(); e.dataTransfer.dropEffect = "copy";
+      leftPanel.classList.add("lib-dragover");
+    });
+    leftPanel.addEventListener("dragleave", function (e) {
+      if (e.target === leftPanel) leftPanel.classList.remove("lib-dragover");
+    });
+    leftPanel.addEventListener("drop", function (e) {
+      leftPanel.classList.remove("lib-dragover");
+      var files = e.dataTransfer && e.dataTransfer.files;
+      if (!files || !files.length) return;
+      var img = null;
+      for (var i = 0; i < files.length; i++) { if (files[i].type.indexOf("image/") === 0) { img = files[i]; break; } }
+      if (!img) return;
+      e.preventDefault();
+      addImageFileToLibrary(img);
     });
 
     document.getElementById("btnLibExport").addEventListener("click", function () {
@@ -2151,77 +2176,10 @@ WE.app = (function () {
       var c = WE.model.getSelectedComponent();
       if (c) WE.termeditor.open(c);
     });
-
-    var list = document.getElementById("termList");
-    // 이름 입력 / 색상 변경
-    list.addEventListener("input", function (e) {
+    document.getElementById("propHideTermLabels").addEventListener("change", function (e) {
       var c = WE.model.getSelectedComponent(); if (!c) return;
-      var row = e.target.closest(".term-row"); if (!row) return;
-      var t = WE.model.getTerminal(c, row.dataset.tid); if (!t) return;
-      if (e.target.classList.contains("tname")) { t.name = e.target.value; WE.render.rerenderComponent(c); }
-      else if (e.target.classList.contains("tcolor")) { t.color = e.target.value; WE.render.rerenderComponent(c); }
-    });
-    // 프리셋 적용 (이름+색상 덮어씀)
-    list.addEventListener("change", function (e) {
-      if (!e.target.classList.contains("tpreset")) return;
-      var c = WE.model.getSelectedComponent(); if (!c) return;
-      var row = e.target.closest(".term-row");
-      var t = WE.model.getTerminal(c, row.dataset.tid);
-      var p = WE.presets.get(e.target.value);
-      if (t && p) { t.name = p.label; t.color = p.color; WE.render.rerenderComponent(c); renderTermList(); }
-      e.target.value = "";
-    });
-    list.addEventListener("click", function (e) {
-      var row = e.target.closest(".term-row"); if (!row) return;
-      var c = WE.model.getSelectedComponent(); if (!c) return;
-      if (e.target.classList.contains("tdel")) {
-        WE.model.removeTerminal(c, row.dataset.tid);
-        WE.render.rerenderComponent(c); renderTermList();
-      } else if (!e.target.matches("input,select,button")) {
-        WE.model.ui.selectedTerminalId = row.dataset.tid;
-        WE.render.rerenderComponent(c); renderTermList();
-      }
-    });
-  }
-
-  function renderTermList() {
-    var list = document.getElementById("termList");
-    list.innerHTML = "";
-    var c = WE.model.getSelectedComponent();
-    if (!c) return;
-    if (c.terminals.length === 0) {
-      var p = document.createElement("p");
-      p.className = "muted"; p.textContent = "단자 없음. '＋ 단자 편집' 후 부품을 클릭하세요.";
-      list.appendChild(p); return;
-    }
-    c.terminals.forEach(function (t) {
-      var row = document.createElement("div");
-      row.className = "term-row" + (WE.model.ui.selectedTerminalId === t.id ? " sel" : "");
-      row.dataset.tid = t.id;
-
-      var color = document.createElement("input");
-      color.className = "tcolor"; color.type = "color"; color.value = t.color || WE.model.DEFAULT_TERMINAL_COLOR;
-      color.title = "색상";
-
-      var name = document.createElement("input");
-      name.className = "tname"; name.type = "text"; name.value = t.name;
-
-      var sel = document.createElement("select");
-      sel.className = "tpreset"; sel.title = "프리셋 적용";
-      var head = document.createElement("option");
-      head.value = ""; head.textContent = "프리셋…";
-      sel.appendChild(head);
-      WE.presets.getAll().forEach(function (ps) {
-        var o = document.createElement("option");
-        o.value = ps.id; o.textContent = ps.label;
-        sel.appendChild(o);
-      });
-
-      var del = document.createElement("button");
-      del.className = "tdel"; del.textContent = "×"; del.title = "삭제";
-
-      row.appendChild(color); row.appendChild(name); row.appendChild(sel); row.appendChild(del);
-      list.appendChild(row);
+      c.hideTermLabels = e.target.checked;
+      WE.render.renderAll();
     });
   }
 
@@ -2280,7 +2238,6 @@ WE.app = (function () {
   // 프리셋 목록 변경 시 관련 UI 갱신
   function onPresetsChanged() {
     if (WE.termeditor.isOpen()) WE.termeditor.refreshPresets();
-    renderTermList();
   }
 
   // ---- 부품 ⋯ 컨텍스트 메뉴 ----
@@ -2497,7 +2454,7 @@ WE.app = (function () {
     setIfNotFocused("propH", Math.round(c.height));
     setIfNotFocused("propRot", Math.round(c.rotation));
     document.getElementById("propLockAspect").checked = WE.model.ui.lockAspect;
-    renderTermList();
+    document.getElementById("propHideTermLabels").checked = !!c.hideTermLabels;
     renderCompElec(c);
   }
 

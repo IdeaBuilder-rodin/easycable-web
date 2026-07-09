@@ -50,6 +50,17 @@ WE.render = (function () {
     return g;
   }
 
+  // appendTermLabels()의 변 판정과 동일한 기준으로, 자동배치된(수동 위치 없는) 단자 중
+  // 아래쪽으로 뻗는 라벨이 있는지 확인 → 부품명이 그 라벨들과 겹치지 않게 더 아래로 내림
+  function hasAutoBottomTermLabels(cmp) {
+    if (cmp.hideTermLabels) return false;
+    return cmp.terminals.some(function (t) {
+      if (t.labelPos) return false;
+      var dl = t.rx * cmp.width, dr = (1 - t.rx) * cmp.width, dt = t.ry * cmp.height, db = (1 - t.ry) * cmp.height;
+      return Math.min(dl, dr, dt, db) === db;
+    });
+  }
+
   // 부품명 라벨: 회전과 무관하게 항상 수평·박스 아래 중앙
   function labelPos(cmp) {
     var W = cmp.width, H = cmp.height;
@@ -59,7 +70,8 @@ WE.render = (function () {
     ];
     var maxY = Math.max(corners[0].y, corners[1].y, corners[2].y, corners[3].y);
     var center = WE.geometry.localToAbs(cmp, W / 2, H / 2);
-    return { x: center.x, y: maxY + 5 };
+    var gap = hasAutoBottomTermLabels(cmp) ? 26 : 5;   // 하단 단자 라벨과 겹치지 않게 여백 확보
+    return { x: center.x, y: maxY + gap };
   }
   function updateComponentLabel(cmp) {
     var lbl = layerLabels.querySelector('text[data-label-for="' + cmp.id + '"]');
@@ -94,19 +106,26 @@ WE.render = (function () {
     cmp.terminals.forEach(function (t) {
       var cx = t.rx * cmp.width, cy = t.ry * cmp.height;
       var color = t.color || def;
-      g.appendChild(el("circle", {
+      // 그룹으로 묶어 CSS :hover로 마우스오버 시 강조 + 커스텀 툴팁(interactions.js)으로 단자명 표시
+      var tg = el("g", { "class": "term-dot" });
+      tg.appendChild(el("circle", {
         cx: cx, cy: cy, r: 10, fill: "#000", "fill-opacity": 0,
         "data-term-id": t.id, "data-cmp-id": cmp.id, style: "pointer-events:all;cursor:pointer"
       }));
       if (WE.model.ui.selectedTerminalId === t.id) {
-        g.appendChild(el("circle", { cx: cx, cy: cy, r: 8, fill: "none", stroke: "#1e88e5", "stroke-width": 2, "pointer-events": "none" }));
+        tg.appendChild(el("circle", { cx: cx, cy: cy, r: 8, fill: "none", stroke: "#1e88e5", "stroke-width": 2, "pointer-events": "none" }));
       }
-      g.appendChild(el("circle", { cx: cx, cy: cy, r: 4.5, fill: color, stroke: "#fff", "stroke-width": 1.5, "pointer-events": "none" }));
+      tg.appendChild(el("circle", {
+        cx: cx, cy: cy, r: 4.5, fill: color, stroke: "#fff", "stroke-width": 1.5, "pointer-events": "none",
+        "class": "term-dot-mark"
+      }));
+      g.appendChild(tg);
     });
   }
 
   // ---- 단자 라벨 (화면 기준 자동 배치: 회전해도 수평·안 꼬임) ----
   function appendTermLabels(cmp) {
+    if (cmp.hideTermLabels) return;   // 단자 많은 복잡한 부품은 라벨을 꺼서 도면을 깔끔하게 (마우스 오버 시 이름 표시로 대체)
     var def = WE.model.DEFAULT_TERMINAL_COLOR;
     var center = WE.geometry.localToAbs(cmp, cmp.width / 2, cmp.height / 2);
     var box = componentBBox(cmp);
@@ -118,7 +137,7 @@ WE.render = (function () {
         stroke: color, "stroke-width": 1, "stroke-opacity": 0.55, "pointer-events": "none"
       }));
       var tx = el("text", {
-        x: lx + (anchor === "end" ? -2 : 2), y: ly,
+        x: lx + (anchor === "end" ? -2 : (anchor === "start" ? 2 : 0)), y: ly,
         "class": "term-label", "text-anchor": anchor, "dominant-baseline": "middle",
         "data-label-tid": t.id, "data-cmp-id": cmp.id, style: "cursor:move"
       });
@@ -126,7 +145,9 @@ WE.render = (function () {
       layerTermLabels.appendChild(tx);
     }
 
-    var groups = { L: [], R: [] };
+    // 단자가 부품의 어느 변(좌/우/상/하)에 가장 가까운지로 자동 분류
+    // → 가로로 늘어선 핀 헤더(상/하단)는 아래·위로, 세로로 늘어선 핀은 좌·우로 순서대로 배치되어 선이 안 꼬임
+    var groups = { L: [], R: [], T: [], B: [] };
     cmp.terminals.forEach(function (t) {
       var dot = WE.geometry.terminalAbs(cmp, t);
       if (t.labelPos) {                                   // 수동 위치(로컬 저장) → 화면좌표
@@ -134,7 +155,13 @@ WE.render = (function () {
         draw(t, dot, lp.x, lp.y, lp.x < dot.x ? "end" : "start");
         return;
       }
-      (dot.x < center.x ? groups.L : groups.R).push({ t: t, dot: dot });
+      // 비율이 아닌 실제 픽셀 거리로 비교: 옆으로 넓은 부품은 상/하 변이, 세로로 긴 부품은 좌/우 변이
+      // 실제로 더 가까우므로 모서리 근처 단자도 올바른 방향으로 판정됨
+      var rx = t.rx, ry = t.ry;
+      var dl = rx * cmp.width, dr = (1 - rx) * cmp.width, dt = ry * cmp.height, db = (1 - ry) * cmp.height;
+      var minD = Math.min(dl, dr, dt, db);
+      var side = minD === dt ? "T" : minD === db ? "B" : minD === dl ? "L" : "R";
+      groups[side].push({ t: t, dot: dot });
     });
     ["L", "R"].forEach(function (side) {
       var arr = groups[side];
@@ -146,6 +173,18 @@ WE.render = (function () {
         if (ly < lastY + minGap) ly = lastY + minGap;
         lastY = ly;
         draw(o.t, o.dot, lx, ly, side === "L" ? "end" : "start");
+      });
+    });
+    ["T", "B"].forEach(function (side) {
+      var arr = groups[side];
+      arr.sort(function (a, b) { return a.dot.x - b.dot.x; });
+      var minGap = 26, lastX = -Infinity;
+      var ly = side === "T" ? box.y - 10 : box.y2 + 10;
+      arr.forEach(function (o) {
+        var lx = o.dot.x;
+        if (lx < lastX + minGap) lx = lastX + minGap;
+        lastX = lx;
+        draw(o.t, o.dot, lx, ly, "middle");
       });
     });
   }

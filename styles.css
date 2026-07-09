@@ -99,6 +99,15 @@ body { display: flex; flex-direction: column; }
   border-radius: 8px; box-shadow: 0 6px 20px rgba(0,0,0,.18); padding: 8px;
 }
 
+/* 단자 마우스오버 툴팁: #centerCol 기준 절대배치, 커서 따라다님 */
+.term-tooltip {
+  position: absolute; z-index: 60; pointer-events: none;
+  background: #222; color: #fff; font-size: 12px; line-height: 1;
+  padding: 4px 8px; border-radius: 4px; white-space: nowrap;
+  transform: translate(-50%, -130%);
+  box-shadow: 0 2px 6px rgba(0,0,0,.25);
+}
+
 /* 캔버스 우하단 플로팅 컨트롤(실행취소·다시실행 + 확대/축소) — Excalidraw 참고
    #centerCol(캔버스 영역 실제 박스) 기준 절대배치라 창 크기·패널 폭과 무관하게 항상 정확한 위치에 붙음. */
 .canvas-corner-tools {
@@ -191,7 +200,9 @@ body.wire-mode #canvasWrap { box-shadow: inset 0 0 0 3px #1e88e5; }
   padding: 10px; overflow: auto; flex: none;
 }
 /* 좌측 라이브러리 패널: 세로 flex — 목록만 스크롤, 저장/불러오기는 하단 고정 */
-#leftPanel { width: 200px; display: flex; flex-direction: column; overflow: hidden; }
+#leftPanel { width: 200px; display: flex; flex-direction: column; overflow: hidden; position: relative; }
+/* 이미지 파일을 라이브러리 패널로 드래그해서 놓을 때 시각 피드백 */
+#leftPanel.lib-dragover { outline: 2px dashed var(--primary); outline-offset: -2px; background: var(--primary-bg); }
 #rightPanel { width: 260px; display: flex; flex-direction: column; gap: 12px; }
 #leftPanel h3, #rightPanel h3 { margin: 0 0 8px; font-size: var(--fs-lg); }
 
@@ -492,6 +503,8 @@ body.panning #canvas, body.panning #canvas * { cursor: grabbing !important; }
   user-select: none; paint-order: stroke;
   stroke: #fff; stroke-width: 2.5px;
 }
+/* 단자 마우스오버 강조: 이름 라벨을 꺼둔 부품에서도 단자 구성을 바로 확인 가능(네이티브 title 툴팁 병행) */
+.term-dot:hover .term-dot-mark { r: 7; stroke-width: 2.5px; }
 /* 단자 섹션(속성 패널) */
 .term-section { margin-top: 12px; border-top: 1px solid #ddd; padding-top: 8px; }
 .term-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }

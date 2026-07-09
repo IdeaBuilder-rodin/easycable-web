@@ -164,6 +164,9 @@
 
       <!-- 우하단 플로팅 컨트롤: 실행취소/다시실행 + 확대/축소 (Excalidraw 참고)
            centerCol 기준 배치라 창 크기와 무관하게 캔버스 우하단에 고정. 배율 숫자 클릭 = 화면 맞춤. -->
+      <!-- 단자 마우스오버 시 이름 표시(빠른 커스텀 툴팁) -->
+      <div id="termTooltip" class="term-tooltip" hidden></div>
+
       <div class="canvas-corner-tools">
         <div class="canvas-float-controls" title="실행 취소 (Ctrl+Z) / 다시 실행 (Ctrl+Shift+Z)">
           <button id="btnUndo" title="실행 취소 (Ctrl+Z)" disabled>↶</button>
@@ -313,7 +316,7 @@
               <span>단자</span>
               <button id="btnTermEdit" class="small">🔍 단자 배치 편집…</button>
             </div>
-            <div id="termList"></div>
+            <label class="chk"><input type="checkbox" id="propHideTermLabels" /> 단자 이름 숨기기 (도면에서)</label>
           </div>
 
           <button id="propBgRemove" style="width:100%">배경 제거 편집…</button>
