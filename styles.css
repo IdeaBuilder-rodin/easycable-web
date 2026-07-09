@@ -38,21 +38,6 @@ html, body {
 }
 body { display: flex; flex-direction: column; }
 
-/* 베타 안내 배너: 매 방문마다 표시(1회성 첫방문 모달과 별개), 닫아도 새로고침하면 다시 나타남 */
-#betaBanner {
-  flex: none; display: flex; align-items: center; justify-content: center; gap: 10px;
-  background: var(--primary-bg); color: var(--primary-d);
-  font-size: var(--fs-sm); padding: 6px 32px 6px 12px; text-align: center; position: relative;
-  border-bottom: 1px solid #cfe0f5;
-}
-#betaBanner b { font-weight: 700; }
-#betaBannerClose {
-  position: absolute; right: 8px; top: 50%; transform: translateY(-50%);
-  border: none; background: none; color: var(--primary-d); font-size: 16px; line-height: 1;
-  cursor: pointer; padding: 4px 6px; border-radius: var(--r-sm);
-}
-#betaBannerClose:hover { background: rgba(21,101,192,.12); }
-
 /* 공용 버튼 (디자인 가이드 4종) — .btn + 변형 */
 .btn { font-family: inherit; font-size: var(--fs-sm); padding: 6px 12px; border-radius: var(--r);
   border: 1px solid var(--bd); background: var(--bg); color: var(--tx2); cursor: pointer; line-height: 1.2; }
@@ -79,8 +64,36 @@ body { display: flex; flex-direction: column; }
   font-size: 10px; font-weight: 700; letter-spacing: .5px;
   color: #fff; background: #f6b100; border-radius: 8px; vertical-align: 2px;
 }
-.welcome-steps { margin: 8px 0; padding-left: 20px; line-height: 1.8; font-size: 13px; }
-.welcome-steps li { margin-bottom: 2px; }
+/* 방문 안내 모달 — 여백을 넉넉히 */
+.welcome-box { width: min(500px, 92vw); padding: 26px 28px 20px; }
+.welcome-head { text-align: center; margin-bottom: 20px; }
+.welcome-box h3 { font-size: 22px; margin: 0 0 10px; }
+.welcome-head p { margin: 0; color: var(--tx2); line-height: 1.6; font-size: 14px; }
+.welcome-steps {
+  list-style: none; margin: 0 0 18px; padding: 16px 18px;
+  background: var(--bg2); border-radius: var(--r-lg);
+  display: flex; flex-direction: column; gap: 12px;
+}
+.welcome-steps li { display: flex; align-items: flex-start; gap: 10px; font-size: 13px; line-height: 1.5; color: var(--tx); }
+.ws-num {
+  flex: none; width: 20px; height: 20px; margin-top: 1px;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--primary); color: #fff; border-radius: 50%;
+  font-size: 12px; font-weight: 700;
+}
+.welcome-beta {
+  margin: 0 0 18px; padding: 10px 14px; text-align: center;
+  background: var(--primary-bg); color: var(--primary-d);
+  border-radius: var(--r); font-size: 12.5px; line-height: 1.5;
+}
+.welcome-start {
+  width: 100%; padding: 12px; font-size: 15px; font-weight: 600;
+  background: var(--primary); color: #fff; border: 1px solid var(--primary-d);
+  border-radius: var(--r); cursor: pointer; font-family: inherit;
+}
+.welcome-start:hover { background: var(--primary-d); }
+.welcome-privacy { margin: 12px 0 0; text-align: center; font-size: 11px; color: var(--tx3); }
+.welcome-privacy a { color: var(--tx3); }
 #projName {
   background: #3d434d; color: #eee; border: 1px solid #555;
   border-radius: 4px; padding: 4px 8px; width: 150px; font-size: 13px;

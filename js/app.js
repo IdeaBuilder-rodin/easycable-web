@@ -29,7 +29,6 @@ WE.app = (function () {
     bindSettings();
     bindModalBackdrops();
     bindWelcome();
-    bindBetaBanner();
     bindFeedback();
     bindQuickColorPicker();
     bindHelp();
@@ -300,7 +299,10 @@ WE.app = (function () {
     // 라이브러리 부품이므로 자동 반영 (확인 없이)
 
     var srcTerms = c.terminals.map(function (t) {
-      return { name: t.name, color: t.color, rx: t.rx, ry: t.ry };
+      var s = { name: t.name, color: t.color, rx: t.rx, ry: t.ry };
+      if (t.labelSide) s.labelSide = t.labelSide;
+      if (t.labelPos) s.labelPos = { x: t.labelPos.x, y: t.labelPos.y };
+      return s;
     });
     others.forEach(function (x) {
       // 이름이 같은 단자는 id 유지(배선 보존), 나머지는 새로 생성
@@ -308,8 +310,11 @@ WE.app = (function () {
       x.terminals.forEach(function (t) { byName[t.name] = t; });
       x.terminals = srcTerms.map(function (s) {
         var ex = byName[s.name];
-        if (ex) { ex.color = s.color; ex.rx = s.rx; ex.ry = s.ry; return ex; }
-        return { id: WE.model.nextId("t"), name: s.name, color: s.color, rx: s.rx, ry: s.ry };
+        var t = ex || { id: WE.model.nextId("t") };
+        t.name = s.name; t.color = s.color; t.rx = s.rx; t.ry = s.ry;
+        if (s.labelSide) t.labelSide = s.labelSide; else delete t.labelSide;
+        if (s.labelPos) t.labelPos = s.labelPos; else delete t.labelPos;
+        return t;
       });
     });
     // 사라진 단자를 참조하던 배선 정리
@@ -1519,23 +1524,12 @@ WE.app = (function () {
     }).catch(function () { cb(false); });
   }
 
-  // ---- 첫 방문 환영 모달 (1회성) ----
+  // ---- 방문 안내 모달: 베타 기간이라 접속할 때마다 항상 표시(1회성 아님, 저장 안 함) ----
   function bindWelcome() {
     var modal = document.getElementById("welcomeModal");
-    try {
-      if (!localStorage.getItem("we_welcomed")) modal.hidden = false;
-    } catch (e) { /* 무시 */ }
+    modal.hidden = false;
     document.getElementById("welcomeStart").addEventListener("click", function () {
       modal.hidden = true;
-      try { localStorage.setItem("we_welcomed", "1"); } catch (e) { /* 무시 */ }
-    });
-  }
-
-  // ---- 베타 안내 배너: 방문할 때마다 항상 표시. 닫기는 이번 방문에서만(저장 안 함, 새로고침하면 다시 나타남) ----
-  function bindBetaBanner() {
-    var banner = document.getElementById("betaBanner");
-    document.getElementById("betaBannerClose").addEventListener("click", function () {
-      banner.hidden = true;
     });
   }
 

@@ -34,7 +34,10 @@ WE.library = (function () {
     if (p.defaultWidth) part.defaultWidth = p.defaultWidth;
     if (p.defaultHeight) part.defaultHeight = p.defaultHeight;
     if (p.terminals) part.terminals = p.terminals.map(function (t) {
-      return { name: t.name, color: t.color, rx: t.rx, ry: t.ry };
+      var s = { name: t.name, color: t.color, rx: t.rx, ry: t.ry };
+      if (t.labelSide) s.labelSide = t.labelSide;
+      if (t.labelPos) s.labelPos = { x: t.labelPos.x, y: t.labelPos.y };
+      return s;
     });
     ["role", "volt", "current", "power", "capacityAh", "dod", "minPerHour", "efficiency", "price"].forEach(function (k) {
       if (p[k] != null) part[k] = p[k];
@@ -68,7 +71,10 @@ WE.library = (function () {
         return { id: d.id, name: d.name, type: d.type, data: d.data };
       }),
       terminals: (p.terminals || []).map(function (t) {
-        return { name: t.name, color: t.color, rx: t.rx, ry: t.ry };
+        var s = { name: t.name, color: t.color, rx: t.rx, ry: t.ry };
+        if (t.labelSide) s.labelSide = t.labelSide;
+        if (t.labelPos) s.labelPos = { x: t.labelPos.x, y: t.labelPos.y };
+        return s;
       })
     };
     parts.push(part); save(); return part;
@@ -115,7 +121,10 @@ WE.library = (function () {
       libraryId: part.id, name: part.name, image: part.image,
       width: part.defaultWidth, height: part.defaultHeight, x: x, y: y,
       terminals: part.terminals.map(function (t) {
-        return { id: WE.model.nextId("t"), name: t.name, color: t.color, rx: t.rx, ry: t.ry };
+        var nt = { id: WE.model.nextId("t"), name: t.name, color: t.color, rx: t.rx, ry: t.ry };
+        if (t.labelSide) nt.labelSide = t.labelSide;
+        if (t.labelPos) nt.labelPos = { x: t.labelPos.x, y: t.labelPos.y };
+        return nt;
       })
     };
   }

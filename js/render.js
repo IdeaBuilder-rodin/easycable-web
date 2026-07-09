@@ -323,6 +323,14 @@ WE.render = (function () {
         paths[1].setAttribute("d", d);
       }
     });
+    // 배선 번호 라벨도 경로 위에 다시 배치(드래그 중 라벨이 옛 위치에 남지 않게)
+    _termRects = null;
+    layerWireLabels.innerHTML = "";
+    var labelObs = termLabelRects().slice();
+    WE.model.project.wires.forEach(function (w) {
+      var lbl = buildWireLabel(w, labelObs);
+      if (lbl) layerWireLabels.appendChild(lbl);
+    });
   }
 
   // ---- 주석 ----
