@@ -7,6 +7,14 @@
   <meta name="description" content="이미지로 부품을 올리고 단자를 이어 배선도를 그리는 웹 에디터. BOM·배선 리스트·PDF 자동 생성. 베타 기간 무료." />
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔌</text></svg>" />
   <link rel="stylesheet" href="styles.css" />
+  <!-- Google Analytics 4 (방문/재방문·사용 패턴 분석) -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-LN9RMMTF8M"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag() { dataLayer.push(arguments); }
+    gtag('js', new Date());
+    gtag('config', 'G-LN9RMMTF8M');
+  </script>
 </head>
 <body>
   <!-- 상단 툴바 -->
@@ -75,7 +83,6 @@
       <input type="file" id="fileLibAdd" accept="image/*" hidden />
       <input type="file" id="fileLibImport" accept=".ezclib,.json,application/json" hidden />
       <input type="search" id="libSearch" placeholder="🔍 부품 검색 (이름·스펙)" autocomplete="off" />
-      <p class="muted lib-tip">부품 클릭 → 캔버스에 배치. 캔버스 부품의 ⋯메뉴 “라이브러리에 저장”으로 단자까지 등록.</p>
       <div id="libList" class="lib-list"></div>
       <div class="lib-footer">
         <button id="btnLibExport" class="lib-io-btn" title="라이브러리 전체를 .json 파일로 저장 (다른 PC·브라우저로 옮길 때)">⤓ 저장</button>
@@ -118,7 +125,7 @@
           <button id="bomExportCsv" class="btn-sm">⤓ CSV</button>
           <button id="bomExportWires" class="btn-sm" title="배선 리스트(번호·색·AWG·출발→도착) CSV">⤓ 배선 리스트</button>
           <details class="bom-colcfg" id="bomColCfg">
-            <summary>열 표시</summary>
+            <summary title="표에 어떤 열을 보이게 할지 선택합니다">표시할 열 선택</summary>
             <div class="bom-colcfg-body">
               <label><input type="checkbox" data-col="spec" /> 스펙</label>
               <label><input type="checkbox" data-col="price" /> 단가</label>
@@ -137,6 +144,19 @@
             <div class="add-col-zone" id="bomAddColZone" title="열 추가">＋</div>
             <div class="add-row-zone" id="bomAddRowZone" title="행 추가">＋</div>
           </div>
+        </div>
+      </div>
+
+      <!-- 배선 리스트 표 뷰 — 배선 리스트 탭 누르면 표시 -->
+      <div id="wireListView" hidden>
+        <div class="bom-tools">
+          <button id="wlExportCsv" class="btn-sm" title="번호·색·AWG·출발→도착 CSV로 내보내기">⤓ CSV</button>
+        </div>
+        <div class="bom-head">
+          <h2>배선 리스트</h2>
+        </div>
+        <div class="bom-table-wrap">
+          <table id="wireListTable"></table>
         </div>
       </div>
 
@@ -160,11 +180,11 @@
       <div id="viewTabs">
         <button class="view-tab active" data-view="wiring">📐 배선도</button>
         <button class="view-tab" data-view="bom">📋 BOM</button>
+        <button class="view-tab" data-view="wirelist">🔌 배선 리스트</button>
       </div>
     </div><!-- /centerCol -->
 
     <!-- 인쇄용 범례 (화면에선 숨김) -->
-    <div id="printLegend" class="print-only"></div>
     <!-- 인쇄용 BOM (화면에선 숨김) -->
     <div id="printBOM" class="print-only"></div>
 
@@ -531,16 +551,22 @@
     <div class="modal-box">
       <h3>배경 제거</h3>
       <p class="muted" id="bgHint">배경(제거할 부분)을 클릭해 색을 추가하세요. 기본으로 네 모서리 색이 잡혀 있습니다.</p>
-      <div id="bgCanvasWrap" class="checker">
+      <div class="bg-zoom-row">
+        <button id="bgModeView" class="bg-mode active" title="클릭해도 아무 변화 없음 — 그냥 보기/확인용">🖐 보기</button>
+        <button id="bgModePick" class="bg-mode" title="캔버스를 클릭하면 그 위치 색을 배경으로 추가해 제거합니다">🎯 배경 선택</button>
+        <span class="sep" style="width:1px;height:18px;background:#ddd"></span>
+        <button id="bgResetAll" class="small" title="배경 제거·자르기·회전 등 모든 편집을 원본 상태로 되돌립니다">↺ 원본으로</button>
+      </div>
+      <div id="bgCanvasWrap" class="checker" title="Ctrl+휠: 확대/축소 · 휠클릭(가운데버튼) 드래그: 화면 이동">
         <canvas id="bgCanvas"></canvas>
       </div>
       <div class="bg-controls">
-        <label class="chk"><input type="checkbox" id="bgEnable" checked /> 배경 제거 켜기</label>
-        <label class="slider">허용오차 <input type="range" id="bgTol" min="0" max="120" value="30" />
+        <button id="bgEnable" class="bg-toggle" title="켜면 배경(제거할 부분)이 투명하게 지워집니다">배경 제거 켜기</button>
+        <label class="slider" title="숫자가 클수록 클릭한 색과 비슷한 범위의 색까지 넓게 배경으로 지웁니다. 너무 크면 부품 자체도 지워질 수 있어요.">허용오차 <input type="range" id="bgTol" min="0" max="120" value="30" />
           <span id="bgTolVal">30</span></label>
         <label class="chk"><input type="checkbox" id="bgFeather" /> 경계 부드럽게</label>
         <button id="bgReset" class="small">색 초기화(모서리)</button>
-        <label class="chk"><input type="checkbox" id="bgCrop" /> 자르기(테두리)</label>
+        <button id="bgCrop" class="bg-toggle" title="켜면 사각형 테두리를 지정해 그 안쪽만 남기고 잘라냅니다">자르기(테두리)</button>
         <span class="sep" style="width:1px;height:18px;background:#ddd"></span>
         <button id="bgRotL" class="small" title="왼쪽 90° 회전">↺ 90°</button>
         <button id="bgRotR" class="small" title="오른쪽 90° 회전">↻ 90°</button>
@@ -578,6 +604,7 @@
       <h3>단축키</h3>
       <div class="sc-list" id="helpShortcutList"></div>
       <p class="muted" style="margin:14px 0 0">계속 추가될 예정입니다. 단축키는 ⚙ 설정에서 변경할 수 있습니다.</p>
+      <p style="margin:10px 0 0"><a href="/privacy.html" target="_blank" rel="noopener" style="font-size:11px;color:#aaa">개인정보처리방침</a></p>
       <div class="modal-actions"><button id="helpClose" class="primary">확인</button></div>
     </div>
   </div>

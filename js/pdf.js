@@ -22,35 +22,14 @@ WE.pdf = (function () {
     // 제목
     document.getElementById("printTitle").textContent = WE.model.project.meta.name || "";
 
-    // 범례 (팔레트)
-    var lg = document.getElementById("printLegend");
-    lg.innerHTML = "";
-    var pal = WE.model.project.palette || [];
-    if (pal.length) {
-      var title = document.createElement("div");
-      title.className = "legend-title"; title.textContent = "범례";
-      lg.appendChild(title);
-      var rows = document.createElement("div");
-      rows.className = "legend-rows";
-      pal.forEach(function (p) {
-        var row = document.createElement("div");
-        row.className = "legend-row";
-        var sw = document.createElement("span");
-        sw.className = "legend-swatch"; sw.style.background = p.color;
-        var tx = document.createElement("span");
-        tx.textContent = p.label;
-        row.appendChild(sw); row.appendChild(tx);
-        rows.appendChild(row);
-      });
-      lg.appendChild(rows);
-    }
-
-    // BOM (자재명세서) — 화면 BOM 표와 동일한 데이터/열(표시/숨김·사용자열 포함) 사용
+    // BOM (자재명세서) — 화면에 보이는 그 표(열 구성·순서·너비·행 높이)를 그대로 인쇄
     var bomBox = document.getElementById("printBOM");
     bomBox.innerHTML = "";
     var data = WE.app.bomData ? WE.app.bomData() : { rows: [], total: 0, totalQty: 0 };
     var cols = WE.app.bomColumns ? WE.app.bomColumns() : [];
+    var proj = WE.model.project;
     function won(v) { return v ? "₩" + Math.round(v).toLocaleString() : ""; }
+    // 텍스트 셀 내용(구매링크·데이터시트는 별도 처리 — 아래 linkTd/ds 분기 참고)
     function cellText(col, r) {
       if (col.kind === "custom") return (r.custom && r.custom[col.colId]) || "";
       switch (col.id) {
@@ -59,20 +38,43 @@ WE.pdf = (function () {
         case "qty": return r.qty + "개";
         case "price": return r.price ? Math.round(Number(r.price)).toLocaleString() : "";
         case "sum": return won(r.sum);
-        case "link": return r.link || "";
-        case "ds": return (r.dsNames || []).join(", ");
       }
       return "";
     }
+    // 화면에 실제로 그려진 열 너비를 그대로 측정(사용자가 직접 조절했든 자동 맞춤이든 전부 반영)
+    var screenWidths = measureScreenBomColWidths(cols);
+
     if (data.rows.length) {
       var bt = document.createElement("div");
-      bt.className = "bom-title"; bt.textContent = "부품 목록 (BOM)";
+      bt.className = "bom-title pdf-page-break"; bt.textContent = "부품 목록 (BOM)";   // 1페이지는 배선도만 — BOM부터 다음 페이지 시작
       bomBox.appendChild(bt);
 
       var table = document.createElement("table");
       table.className = "bom";
+      table.style.setProperty("--bom-rh", (Number(proj.bomRowH) || 6) + "px");   // 화면과 같은 행 높이
       function td(text, cls) { var d = document.createElement("td"); if (cls) d.className = cls; d.textContent = text; return d; }
       function th(text, cls) { var d = document.createElement("th"); if (cls) d.className = cls; d.textContent = text; return d; }
+      // 구매링크 셀: 실제 클릭 가능한 하이퍼링크(href)로 — 화면은 JS가 클릭을 가로채는 방식이라 PDF엔 안 통함
+      function linkTd(url) {
+        var d = document.createElement("td"); d.className = "link";
+        if (url) {
+          var a = document.createElement("a");
+          a.href = url; a.target = "_blank"; a.rel = "noopener";
+          a.textContent = WE.app.linkLabel ? WE.app.linkLabel(url) : url;
+          d.appendChild(a);
+        }
+        return d;
+      }
+
+      // 열 너비: 화면에서 실측한 픽셀 값을 그대로 적용, 표 전체 폭도 그 합으로 고정(비율 왜곡 방지)
+      var cg = document.createElement("colgroup");
+      var widths = [38];   // No열 기본값(실측 실패 시 폴백)
+      if (screenWidths && screenWidths.length === cols.length + 1) widths = screenWidths;
+      widths.forEach(function (w) {
+        var c = document.createElement("col"); c.style.width = Math.round(w) + "px"; cg.appendChild(c);
+      });
+      table.appendChild(cg);
+      table.style.width = Math.round(widths.reduce(function (a, b) { return a + b; }, 0)) + "px";
 
       var thead = document.createElement("thead"), htr = document.createElement("tr");
       htr.appendChild(th("No", "qty"));
@@ -84,7 +86,9 @@ WE.pdf = (function () {
         var tr = document.createElement("tr");
         tr.appendChild(td(String(b.no), "qty"));
         cols.forEach(function (col) {
-          tr.appendChild(td(cellText(col, b), col.kind === "num" ? "qty" : (col.kind === "link" ? "link" : "")));
+          if (col.id === "link") { tr.appendChild(linkTd(b.link)); return; }
+          if (col.id === "ds") { tr.appendChild(td((b.dsNames || []).length ? ("📎 " + b.dsNames.length) : "", "qty")); return; }
+          tr.appendChild(td(cellText(col, b), col.kind === "num" ? "qty" : ""));
         });
         tbody.appendChild(tr);
       });
@@ -107,7 +111,7 @@ WE.pdf = (function () {
     var wl = WE.app.wireListData ? WE.app.wireListData() : [];
     if (wl.length) {
       var wt = document.createElement("div");
-      wt.className = "bom-title"; wt.style.marginTop = "10px"; wt.textContent = "배선 리스트";
+      wt.className = "bom-title pdf-page-break"; wt.textContent = "배선 리스트";
       bomBox.appendChild(wt);
       var wtbl = document.createElement("table");
       wtbl.className = "bom";
@@ -148,6 +152,28 @@ WE.pdf = (function () {
         tr.appendChild(th); tr.appendChild(td); ptbl.appendChild(tr);
       });
       bomBox.appendChild(ptbl);
+    }
+  }
+
+  // 화면 BOM 표(#bomTable)에 실제로 그려진 열 너비를 그대로 측정해 반환: [No열, col1, col2, ...]
+  // (화면이 지금 BOM 탭이 아니어도 잠시 보이지 않게(visibility:hidden) 그려서 정확한 폭을 잼)
+  function measureScreenBomColWidths(cols) {
+    var bomView = document.getElementById("bomView");
+    var wasHidden = bomView.hidden;
+    var prevVisibility = bomView.style.visibility;
+    try {
+      if (wasHidden) { bomView.hidden = false; bomView.style.visibility = "hidden"; }
+      if (WE.app.renderBOMView) WE.app.renderBOMView();
+      var ths = document.querySelectorAll("#bomTable thead th");
+      // ths[0]=드래그용 여백열(제외), ths[1]="#"(No), ths[2..]=실제 열들
+      if (ths.length < cols.length + 2) return null;
+      var widths = [];
+      for (var i = 1; i < ths.length; i++) widths.push(ths[i].getBoundingClientRect().width);
+      return widths;
+    } catch (e) {
+      return null;
+    } finally {
+      if (wasHidden) { bomView.hidden = true; bomView.style.visibility = prevVisibility; }
     }
   }
 

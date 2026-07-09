@@ -537,20 +537,27 @@ WE.app = (function () {
       fav.textContent = part.fav ? "★" : "☆";
       fav.title = part.fav ? "즐겨찾기 해제" : "즐겨찾기";
       item.appendChild(fav);
+      var thumbWrap = document.createElement("div"); thumbWrap.className = "lib-thumb-wrap";
       var thumb = document.createElement(part.image ? "img" : "div");
       thumb.className = "lib-thumb";
       if (part.image) thumb.src = part.image;
+      thumbWrap.appendChild(thumb);
+      if (part.link) {
+        var lk = document.createElement("span"); lk.className = "lib-haslink"; lk.textContent = "🔗"; lk.title = "구매 링크 있음";
+        thumbWrap.appendChild(lk);
+      }
       var info = document.createElement("div"); info.className = "lib-info";
       var nm = document.createElement("div"); nm.className = "lib-name";
       nm.innerHTML = hlHtml(part.name, q);
-      var meta = document.createElement("div"); meta.className = "lib-meta";
-      meta.innerHTML = "단자 " + part.terminals.length + "개" +
-        (part.spec ? " · " + hlHtml(part.spec, q) : "");
-      if (part.link) { var lk = document.createElement("span"); lk.className = "lib-haslink"; lk.textContent = "  🔗링크"; meta.appendChild(lk); }
-      info.appendChild(nm); info.appendChild(meta);
+      info.appendChild(nm);
+      if (part.spec) {
+        var meta = document.createElement("div"); meta.className = "lib-meta";
+        meta.innerHTML = hlHtml(part.spec, q);
+        info.appendChild(meta);
+      }
       var edit = document.createElement("button"); edit.className = "lib-edit"; edit.textContent = "✎"; edit.title = "정보/구매링크 편집";
       var del = document.createElement("button"); del.className = "lib-del"; del.textContent = "×"; del.title = "삭제";
-      item.appendChild(thumb); item.appendChild(info); item.appendChild(edit); item.appendChild(del);
+      item.appendChild(thumbWrap); item.appendChild(info); item.appendChild(edit); item.appendChild(del);
       list.appendChild(item);
     });
   }
@@ -647,22 +654,39 @@ WE.app = (function () {
     var tabs = document.querySelectorAll(".view-tab");
     for (var i = 0; i < tabs.length; i++) tabs[i].classList.toggle("active", tabs[i].dataset.view === view);
   }
-  // 배선도는 항상 표시. BOM 탭 = 배선도 아래에 BOM 창을 추가 표시(스크롤 이동), 배선도 탭 = BOM 숨김.
+  // 배선도는 항상 표시. BOM/배선 리스트 탭 = 배선도 아래에 해당 창을 추가 표시(스크롤 이동), 배선도 탭 = 둘 다 숨김.
   function switchView(view) {
     _view = view; setActiveTab(view);
     var wrap = document.getElementById("canvasWrap");
     var bom = document.getElementById("bomView");
-    if (view === "bom") {
-      bom.hidden = false;
-      renderBOMView();
-      wrap.scrollTo({ top: bom.offsetTop - 8, behavior: "smooth" });
-    } else {
-      bom.hidden = true;                                 // 배선도만
-      wrap.scrollTo({ top: 0, behavior: "smooth" });
-    }
+    var wl = document.getElementById("wireListView");
+    bom.hidden = view !== "bom";
+    wl.hidden = view !== "wirelist";
+    if (view === "bom") { renderBOMView(); wrap.scrollTo({ top: bom.offsetTop - 8, behavior: "smooth" }); }
+    else if (view === "wirelist") { renderWireListView(); wrap.scrollTo({ top: wl.offsetTop - 8, behavior: "smooth" }); }
+    else { wrap.scrollTo({ top: 0, behavior: "smooth" }); }   // 배선도만
   }
-  // 모델 변경 시 BOM이 열려 있으면 갱신
-  function afterModelRender() { if (_view === "bom") renderBOMView(); }
+  // 모델 변경 시 BOM/배선 리스트가 열려 있으면 갱신
+  function afterModelRender() {
+    if (_view === "bom") renderBOMView();
+    else if (_view === "wirelist") renderWireListView();
+  }
+  function renderWireListView() {
+    var rows = wireListData();
+    var t = document.getElementById("wireListTable");
+    if (!rows.length) { t.innerHTML = "<tr><td class='muted' style='border:none'>배선이 없습니다.</td></tr>"; return; }
+    var html = "<thead><tr><th>번호</th><th>색</th><th>AWG</th><th>전류(A)</th><th>출발</th><th>도착</th></tr></thead><tbody>";
+    rows.forEach(function (r) {
+      html += "<tr><td>" + esc(r.no) + "</td>" +
+        "<td><span style='display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:4px;vertical-align:middle;background:" + esc(r.colorHex) + "'></span>" + esc(r.color) + "</td>" +
+        "<td>" + (r.awg ? esc("AWG " + r.awg) : "") + "</td>" +
+        "<td>" + esc(r.current) + "</td>" +
+        "<td>" + esc(r.fromCmp) + " · " + esc(r.fromTerm) + "</td>" +
+        "<td>" + esc(r.toCmp) + " · " + esc(r.toTerm) + "</td></tr>";
+    });
+    html += "</tbody>";
+    t.innerHTML = html;
+  }
 
   function won(v) { return n(v) ? "₩" + Math.round(n(v)).toLocaleString() : ""; }
 
@@ -1204,6 +1228,7 @@ WE.app = (function () {
     // 툴바
     document.getElementById("bomExportCsv").addEventListener("click", exportBomCSV);
     document.getElementById("bomExportWires").addEventListener("click", exportWireListCSV);
+    document.getElementById("wlExportCsv").addEventListener("click", exportWireListCSV);
     var cbs = document.querySelectorAll("#bomColCfg input[data-col]");
     for (var j = 0; j < cbs.length; j++) {
       cbs[j].addEventListener("change", function (e) {
@@ -1321,6 +1346,7 @@ WE.app = (function () {
       if (!confirm("현재 작업을 비우고 새 프로젝트를 시작할까요?\n(저장 안 한 내용은 사라집니다)")) return;
       WE.model.newProject();
       applyDefaultLayoutToProject();   // 새 배선도도 마지막 BOM 레이아웃 유지
+      WE.io.clearFileHandle();         // 이전 파일과의 연결 해제 → 다음 저장은 "다른 이름으로" 새로 지정
       WE.store.clear();
       reloadUI();
       WE.store.syncBaseline();
@@ -2537,6 +2563,8 @@ WE.app = (function () {
     buildBOM: buildBOM,
     bomData: bomData,
     bomColumns: visibleCols,
+    linkLabel: linkLabel,
+    renderBOMView: renderBOMView,
     wireListData: wireListData,
     afterModelRender: afterModelRender,
     powerSummaryRows: powerSummaryRows,

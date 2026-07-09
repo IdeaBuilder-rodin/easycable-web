@@ -804,11 +804,13 @@ WE.interactions = (function () {
   function isBusy() { return !!drag; }
 
   function onKeyDown(e) {
-    // Ctrl/⌘+S → 즉시 저장(브라우저에 보관). 입력창·모달 상관없이 항상 동작
+    // Ctrl/⌘+S → 실제 파일에 저장(Chrome/Edge는 이미 연결된 파일에 조용히 덮어씀, 그 외엔 새로 저장창).
+    // 브라우저 임시저장도 함께 갱신. 입력창·모달 상관없이 항상 동작
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") {
       e.preventDefault();
       if (WE.store) WE.store.saveNow();
       if (WE.app.setSavedHint) WE.app.setSavedHint();
+      if (WE.io) WE.io.save();
       return;
     }
 

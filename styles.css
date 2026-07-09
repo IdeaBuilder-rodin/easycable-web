@@ -193,7 +193,7 @@ body.wire-mode #canvasWrap { box-shadow: inset 0 0 0 3px #1e88e5; }
 /* 좌측 라이브러리 패널: 세로 flex — 목록만 스크롤, 저장/불러오기는 하단 고정 */
 #leftPanel { width: 200px; display: flex; flex-direction: column; overflow: hidden; }
 #rightPanel { width: 260px; display: flex; flex-direction: column; gap: 12px; }
-#leftPanel h3, #rightPanel h3 { margin: 0 0 8px; font-size: 13px; }
+#leftPanel h3, #rightPanel h3 { margin: 0 0 8px; font-size: var(--fs-lg); }
 
 /* 라이브러리 */
 .lib-head { flex: none; }
@@ -203,7 +203,6 @@ body.wire-mode #canvasWrap { box-shadow: inset 0 0 0 3px #1e88e5; }
   font-size: var(--fs); font-family: inherit; color: var(--tx); cursor: pointer;
 }
 .lib-add-btn:hover { background: var(--bg3); }
-.lib-tip { flex: none; margin: 2px 0 8px; line-height: 1.4; }
 /* 하단 저장/불러오기 */
 .lib-footer {
   flex: none; display: flex; gap: 6px; margin-top: 8px; padding-top: 8px;
@@ -251,13 +250,21 @@ body.wire-mode #canvasWrap { box-shadow: inset 0 0 0 3px #1e88e5; }
 }
 .lib-fav, .lib-edit, .lib-del { cursor: pointer; }
 .lib-drop-line { height: 0; border-top: 3px solid #1e88e5; border-radius: 2px; margin: -2px 0; pointer-events: none; }
+.lib-thumb-wrap { position: relative; flex: none; }
 .lib-thumb {
-  width: 44px; height: 40px; object-fit: contain; flex: none;
+  display: block; width: 44px; height: 40px; object-fit: contain;
   background: #f0f0f0; border-radius: 4px;
+}
+/* 구매 링크 배지: 썸네일 우측 하단 모서리에 항상 같은 자리로 고정 */
+.lib-haslink {
+  position: absolute; right: -3px; bottom: -3px;
+  width: 15px; height: 15px; line-height: 15px; text-align: center;
+  font-size: 9px; background: #43a047; color: #fff; border-radius: 50%;
+  box-shadow: 0 0 0 1.5px #fff;
 }
 .lib-info { flex: 1; min-width: 0; }
 .lib-name { font-size: 12px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.lib-meta { font-size: 11px; color: #999; }
+.lib-meta { font-size: 11px; color: #999; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* 수정(✎)·삭제(×): 우측 세로 칸 전체가 클릭 영역 (즐겨찾기와 동일 기준) */
 .lib-edit, .lib-del {
   flex: none; border: none; background: none; cursor: pointer;
@@ -313,7 +320,7 @@ body.wire-mode #canvasWrap { box-shadow: inset 0 0 0 3px #1e88e5; }
 
 /* BOM 표 뷰 */
 /* BOM 뷰 — 배선도와 확실히 구분되게 위쪽 여백 + 카드 프레임 */
-#bomView { background: var(--bg); border: 1px solid var(--bd); border-radius: var(--r-lg);
+#bomView, #wireListView { background: var(--bg); border: 1px solid var(--bd); border-radius: var(--r-lg);
   padding: 20px 24px; box-shadow: 0 4px 16px rgba(0,0,0,.14); min-height: 60%;
   margin-top: 40px; }
 .bom-head { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
@@ -326,9 +333,9 @@ body.wire-mode #canvasWrap { box-shadow: inset 0 0 0 3px #1e88e5; }
 .btn-sm2 { padding: 4px 9px; border: 1px solid #cfd6de; background: #fff; color: #444; border-radius: 5px; cursor: pointer; font-size: 12px; font-family: inherit; }
 .btn-sm2:hover { background: #eef1f5; }
 .bom-table-wrap { overflow-x: auto; }
-#bomTable { border-collapse: collapse; width: 100%; font-size: 13px; }
-#bomTable th, #bomTable td { border: 1px solid #d5dae1; padding: var(--bom-rh, 6px) 9px; text-align: center; vertical-align: middle; }
-#bomTable th { background: #f2f5f8; font-weight: 600; white-space: nowrap; }
+#bomTable, #wireListTable { border-collapse: collapse; width: 100%; font-size: 13px; }
+#bomTable th, #bomTable td, #wireListTable th, #wireListTable td { border: 1px solid #d5dae1; padding: var(--bom-rh, 6px) 9px; text-align: center; vertical-align: middle; }
+#bomTable th, #wireListTable th { background: #f2f5f8; font-weight: 600; white-space: nowrap; }
 #bomTable td.num, #bomTable th.num { white-space: nowrap; }
 #bomTable td.editable { cursor: text; }
 #bomTable td.editable:empty::before { content: "—"; color: #bbb; }
@@ -584,11 +591,33 @@ body.term-mode #canvas { cursor: crosshair; }
   box-shadow: 0 10px 40px rgba(0,0,0,.3);
 }
 .modal-box h3 { margin: 0 0 6px; }
+/* 배경 제거 모달: 이미지 작업 공간이라 더 크게, 고정 높이 박스라 배율 계산이 안정적 */
+#bgModal .modal-box { width: min(760px, 94vw); }
+.bg-zoom-row {
+  display: flex; align-items: center; gap: 6px; margin-top: 6px;
+  font-size: 12px; color: #666;
+}
+.bg-zoom-row button {
+  padding: 3px 9px; border: 1px solid #ccc; border-radius: 4px;
+  background: #fff; cursor: pointer; font-family: inherit;
+}
+.bg-zoom-row button:hover { background: #f0f0f0; }
+.bg-mode.active { background: var(--primary, #1e88e5); border-color: #1565c0; color: #fff; }
+.bg-mode.active:hover { background: var(--primary, #1e88e5); }
+.bg-toggle {
+  padding: 5px 10px; border: 1px solid #ccc; border-radius: 4px;
+  background: #fff; color: #333; cursor: pointer; font-family: inherit; font-size: 13px;
+}
+.bg-toggle:hover { background: #f0f0f0; }
+.bg-toggle.active { background: var(--primary, #1e88e5); border-color: #1565c0; color: #fff; }
+.bg-toggle.active:hover { background: var(--primary, #1e88e5); }
+#bgZoomLevel { min-width: 38px; text-align: center; font-variant-numeric: tabular-nums; }
 #bgCanvasWrap {
-  margin: 10px 0; display: flex; justify-content: center; align-items: center;
-  border: 1px solid #ddd; border-radius: 4px; min-height: 120px; max-height: 46vh;
+  margin: 10px 0; text-align: center;
+  border: 1px solid #ddd; border-radius: 4px; height: 460px;
   overflow: auto;
 }
+#bgCanvasWrap::after { content: ""; display: inline-block; height: 100%; vertical-align: middle; }
 /* 투명 표시용 체커보드 */
 .checker {
   background-image:
@@ -599,7 +628,7 @@ body.term-mode #canvas { cursor: crosshair; }
   background-size: 16px 16px;
   background-position: 0 0, 0 8px, 8px -8px, -8px 0;
 }
-#bgCanvas { cursor: crosshair; display: block; }
+#bgCanvas { cursor: default; display: inline-block; vertical-align: middle; }   /* 실제 커서는 모드에 따라 JS에서 지정 */
 .bg-controls {
   display: flex; flex-wrap: wrap; gap: 14px; align-items: center;
   padding: 6px 0; border-top: 1px solid #eee;
@@ -654,7 +683,7 @@ body.term-mode #canvas { cursor: crosshair; }
 /* ===== 인쇄(PDF) ===== */
 @media print {
   @page { size: landscape; margin: 8mm; }
-  #toolbar, #leftPanel, #rightPanel, .modal, #cmpMenu, #viewTabs, #bomView,
+  #toolbar, #leftPanel, #rightPanel, .modal, #cmpMenu, #viewTabs, #bomView, #wireListView,
   .canvas-corner-tools { display: none !important; }
   html, body { height: auto; display: block; background: #fff; }
   #main, #centerCol { display: block; }
@@ -670,18 +699,14 @@ body.term-mode #canvas { cursor: crosshair; }
     font-size: 18px; font-weight: 700; margin: 0 0 6px;
     font-family: "Malgun Gothic", sans-serif;
   }
-  #printLegend { margin-top: 8px; page-break-inside: avoid; }
-  .legend-title { font-weight: 700; font-size: 13px; margin-bottom: 4px; }
-  .legend-rows { display: flex; flex-wrap: wrap; gap: 6px 18px; }
-  .legend-row { display: flex; align-items: center; gap: 6px; font-size: 12px; }
-  .legend-swatch { width: 16px; height: 10px; border-radius: 2px; display: inline-block; }
 
-  #printBOM { margin-top: 12px; page-break-inside: avoid; }
+  #printBOM { margin-top: 12px; }
   .bom-title { font-weight: 700; font-size: 13px; margin-bottom: 4px; }
-  table.bom { border-collapse: collapse; width: 100%; font-size: 11px; }
-  table.bom th, table.bom td { border: 1px solid #999; padding: 3px 6px; text-align: left; vertical-align: top; }
+  .pdf-page-break { page-break-before: always; break-before: page; }
+  table.bom { border-collapse: collapse; width: 100%; table-layout: fixed; font-size: 11px; page-break-inside: avoid; }
+  table.bom th, table.bom td { border: 1px solid #999; padding: var(--bom-rh, 3px) 6px; text-align: left; vertical-align: top; overflow-wrap: break-word; }
   table.bom th { background: #eee; white-space: nowrap; }
   table.bom td.qty { text-align: center; white-space: nowrap; }
-  table.bom td.link { word-break: break-all; color: #1a0dab; }
+  table.bom td.link a { color: #1a0dab; text-decoration: underline; }
   table.bom tr.bom-total td { font-weight: 700; background: #f0f0f0; }
 }
