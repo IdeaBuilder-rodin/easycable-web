@@ -1544,7 +1544,7 @@ WE.app = (function () {
   // ---- 설정 (자동저장 등) ----
   var _settings = {
     autosaveEnabled: true, autosaveSec: 3,
-    labelFontSize: 12, labelBold: false, labelBox: false
+    labelFontSize: 12, labelBold: true, labelBox: true   // 부품명: 굵게 + 배경 사각블럭이 기본
   };
   function loadSettings() {
     try {
