@@ -577,6 +577,8 @@ body.panning #canvas, body.panning #canvas * { cursor: grabbing !important; }
   fill: #7e8b99; opacity: .10;
   pointer-events: none; user-select: none;
 }
+/* 작업 중에는 워터마크 숨김 — PDF 저장(인쇄) 시에만 나타남 (아래 @media print에서 복원) */
+#layerWatermark { display: none; }
 .wire-label-hover { fill: rgba(30,136,229,.10); stroke: #90b8dd; stroke-width: 1; pointer-events: none; }
 .wire-label-selected { fill: rgba(30,136,229,.16); stroke: #1e88e5; stroke-width: 1.5; pointer-events: none; }
 .term-label {
@@ -793,6 +795,7 @@ body.term-mode #canvas { cursor: crosshair; }
 /* ===== 인쇄(PDF) ===== */
 @media print {
   @page { size: landscape; margin: 8mm; }
+  #layerWatermark { display: block; }   /* 화면에선 숨긴 워터마크를 PDF에는 표시 */
   #toolbar, #leftPanel, #rightPanel, .modal, #cmpMenu, #viewTabs, #bomView, #wireListView,
   .canvas-corner-tools { display: none !important; }
   html, body { height: auto; display: block; background: #fff; }
