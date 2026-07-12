@@ -129,29 +129,18 @@ WE.termeditor = (function () {
     cmp = component;
     selTid = null; selTids = [];
     ensureDom();
-    // 박스 비율을 이미지 원본 비율에 맞춤(레터박스 제거 → 캔버스와 단자 위치 일치)
-    fitBoxToImage(function () {
-      baseW = cmp.width; baseH = cmp.height;
-      buildStatic();
-      fillPlacePreset();
-      setTeMode("place");
-      teResetHistory();
-      modal.hidden = false;
-      opened = true;
-      // 레이아웃 확정 후 맞춤
-      requestAnimationFrame(function () { fit(); buildList(); updateAlignVis(); });
-    });
-  }
-  // 부품 박스 높이를 이미지 원본 비율에 맞게 보정
-  function fitBoxToImage(done) {
-    if (!cmp.image) { done(); return; }
-    var probe = new Image();
-    probe.onload = function () {
-      if (probe.width > 0) cmp.height = Math.max(10, Math.round(cmp.width * probe.height / probe.width));
-      done();
-    };
-    probe.onerror = function () { done(); };
-    probe.src = cmp.image;
+    // 부품 크기를 절대 건드리지 않음 — 캔버스·모달 모두 이미지를 박스에 꽉 채워(stretch)
+    // 그리므로 박스 비율이 어떻든 단자 좌표가 동일하게 보임 (예전 fitBoxToImage가
+    // 모달 열 때마다 height를 이미지 비율로 덮어써서 부품 비율이 멋대로 바뀌던 버그 제거)
+    baseW = cmp.width; baseH = cmp.height;
+    buildStatic();
+    fillPlacePreset();
+    setTeMode("place");
+    teResetHistory();
+    modal.hidden = false;
+    opened = true;
+    // 레이아웃 확정 후 맞춤
+    requestAnimationFrame(function () { fit(); buildList(); updateAlignVis(); });
   }
 
   function ensureDom() {
@@ -198,7 +187,7 @@ WE.termeditor = (function () {
   function buildStatic() {
     content.innerHTML = "";
     if (cmp.image) {
-      var img = el("image", { x: 0, y: 0, width: baseW, height: baseH, preserveAspectRatio: "xMidYMid meet" });
+      var img = el("image", { x: 0, y: 0, width: baseW, height: baseH, preserveAspectRatio: "none" });   // 캔버스와 같은 stretch 방식
       img.setAttributeNS("http://www.w3.org/1999/xlink", "href", cmp.image);
       img.setAttribute("href", cmp.image);
       content.appendChild(img);
@@ -233,7 +222,8 @@ WE.termeditor = (function () {
         laid.push({ t: t, dot: dot, lx: t.labelPos.x, ly: t.labelPos.y, anchor: t.labelPos.x < dot.x ? "end" : "start" });
       } else autoTerms.push(t);
     });
-    laid = laid.concat(WE.geometry.layoutTermLabels(autoTerms, baseW, baseH, box, dotOf, { offset: offset, minGapLR: gapLR, minGapTB: gapTB }));
+    laid = laid.concat(WE.geometry.layoutTermLabels(autoTerms, baseW, baseH, box, dotOf,
+      { offset: offset, minGapLR: gapLR, minGapTB: gapTB, charW: 7.5 / zoom, minGapV: 14 / zoom }));
 
     laid.forEach(function (o) {
       var t = o.t, dot = o.dot, color = t.color || WE.model.DEFAULT_TERMINAL_COLOR;
@@ -250,11 +240,18 @@ WE.termeditor = (function () {
         x1: dot.x, y1: dot.y, x2: o.lx, y2: o.ly,
         stroke: color, "stroke-width": 1 / zoom, "stroke-opacity": 0.6, "pointer-events": "none"
       }));
-      var tx = el("text", {
-        x: o.lx + (o.anchor === "end" ? -2 / zoom : (o.anchor === "start" ? 2 / zoom : 0)), y: o.ly,
+      var txAttrs = {
         "text-anchor": o.anchor, "dominant-baseline": "middle", "pointer-events": "none",
         style: "font:" + fs + "px 'Malgun Gothic',sans-serif;fill:#222;paint-order:stroke;stroke:#fff;stroke-width:" + (3 / zoom) + "px;user-select:none"
-      });
+      };
+      if (o.vertical) {   // 촘촘한 핀헤더: 캔버스와 동일하게 90° 세로쓰기
+        txAttrs.transform = "translate(" + o.lx + "," + o.ly + ") rotate(-90)";
+        txAttrs.x = 0; txAttrs.y = 0;
+      } else {
+        txAttrs.x = o.lx + (o.anchor === "end" ? -2 / zoom : (o.anchor === "start" ? 2 / zoom : 0));
+        txAttrs.y = o.ly;
+      }
+      var tx = el("text", txAttrs);
       tx.textContent = t.name;
       g.appendChild(tx);
       termsG.appendChild(g);

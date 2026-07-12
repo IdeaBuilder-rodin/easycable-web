@@ -300,7 +300,7 @@ WE.app = (function () {
     });
   }
 
-  // 단자 편집 후: 같은 라이브러리 부품에 단자 배치 일괄 반영 옵션
+  // 단자 편집 후: 라이브러리·같은 부품에 반영할지 사용자가 결정
   function afterTerminalEdit(c) {
     if (!c || !c.libraryId) return;
     var others = WE.model.project.components.filter(function (x) {
@@ -308,7 +308,9 @@ WE.app = (function () {
     });
     var lib = WE.library.get(c.libraryId);
     if (!others.length && !lib) return;
-    // 라이브러리 부품이므로 자동 반영 (확인 없이)
+    // 예전엔 확인 없이 자동 반영했는데, 단순 편집만 해도 라이브러리가 조용히 바뀌는 문제가 있어 확인창 추가
+    if (!confirm("단자 변경을 라이브러리에도 반영할까요?\n\n[확인] 라이브러리" +
+      (others.length ? (" + 배치된 같은 부품 " + others.length + "개") : "") + "에 반영\n[취소] 이 부품에만 적용")) return;
 
     var srcTerms = c.terminals.map(function (t) {
       var s = { name: t.name, color: t.color, rx: t.rx, ry: t.ry };
@@ -337,26 +339,64 @@ WE.app = (function () {
     setHint("단자 배치를 라이브러리 부품 " + (others.length + 1) + "개에 자동 반영했습니다.");
   }
 
-  // 인스턴스 이미지 편집 결과 적용 (라이브러리 부품이면 자동으로 전체 반영)
-  // 새 이미지 비율에 맞춰 박스 높이도 보정(찌그러짐/여백 방지)
-  function applyInstanceImage(c, url) {
+  // 배경제거 편집에서 회전/크롭했을 때 단자 좌표(rx·ry)를 이미지와 똑같이 변환
+  // (안 하면 이미지만 돌아가고 단자는 옛 방향 그대로라 배치가 완전히 깨짐)
+  var LABEL_SIDE_CW = { L: "T", T: "R", R: "B", B: "L" };
+  function transformTerminal(t, tf) {
+    if (!tf || (!tf.rotation && !tf.crop)) return;
+    var rx = t.rx, ry = t.ry, nrx = rx, nry = ry;
+    if (tf.rotation === 90) { nrx = 1 - ry; nry = rx; }
+    else if (tf.rotation === 180) { nrx = 1 - rx; nry = 1 - ry; }
+    else if (tf.rotation === 270) { nrx = ry; nry = 1 - rx; }
+    if (tf.crop) { nrx = (nrx - tf.crop.x) / tf.crop.w; nry = (nry - tf.crop.y) / tf.crop.h; }
+    t.rx = Math.max(0, Math.min(1, nrx));
+    t.ry = Math.max(0, Math.min(1, nry));
+    delete t.labelPos;                       // 수동 라벨 위치는 옛 좌표계 기준이라 초기화
+    if (t.labelSide && tf.rotation) {        // 수동 라벨 방향은 회전만큼 같이 돌림
+      for (var i = 0; i < tf.rotation / 90; i++) t.labelSide = LABEL_SIDE_CW[t.labelSide];
+    }
+  }
+
+  // 인스턴스 이미지 편집 결과 적용 — 새 이미지 비율로 박스 보정 + 단자 좌표 변환.
+  // 라이브러리 반영은 확인창을 거침(단자 편집과 동일한 규칙)
+  function applyInstanceImage(c, url, tf) {
     var probe = new Image();
     probe.onload = function () {
       var aspect = probe.width > 0 ? probe.height / probe.width : (c.height / c.width);
-      function fit(x) { x.image = url; x.height = Math.max(10, Math.round(x.width * aspect)); }
+      var swap = tf && (tf.rotation === 90 || tf.rotation === 270);   // 90/270°는 가로세로가 실제로 뒤바뀜
+      function fit(x) {
+        x.image = url;
+        if (swap) x.width = Math.max(10, x.height);
+        x.height = Math.max(10, Math.round(x.width * aspect));
+        (x.terminals || []).forEach(function (t) { transformTerminal(t, tf); });
+      }
       fit(c);
       if (c.libraryId) {
         var others = WE.model.project.components.filter(function (x) {
           return x.libraryId === c.libraryId && x.id !== c.id;
         });
         var lib = WE.library.get(c.libraryId);
-        if (others.length || lib) {
+        if ((others.length || lib) &&
+            confirm("이미지 변경을 라이브러리에도 반영할까요?\n\n[확인] 라이브러리" +
+              (others.length ? (" + 배치된 같은 부품 " + others.length + "개") : "") + "에 반영\n[취소] 이 부품에만 적용")) {
           others.forEach(fit);
           if (lib) {
-            WE.library.updatePart(lib.id, { image: url, defaultHeight: Math.max(10, Math.round(lib.defaultWidth * aspect)) });
+            var nw = swap ? lib.defaultHeight : lib.defaultWidth;
+            var libTerms = (lib.terminals || []).map(function (t) {
+              var s = { name: t.name, color: t.color, rx: t.rx, ry: t.ry };
+              if (t.labelSide) s.labelSide = t.labelSide;
+              if (t.labelPos) s.labelPos = { x: t.labelPos.x, y: t.labelPos.y };
+              transformTerminal(s, tf);
+              return s;
+            });
+            WE.library.updatePart(lib.id, {
+              image: url, defaultWidth: nw,
+              defaultHeight: Math.max(10, Math.round(nw * aspect)),
+              terminals: libTerms
+            });
             renderLibrary();
           }
-          setHint("이미지를 라이브러리 부품 " + (others.length + 1) + "개에 자동 반영했습니다.");
+          setHint("이미지를 라이브러리 부품 " + (others.length + 1) + "개에 반영했습니다.");
         }
       }
       WE.render.renderAll();
@@ -1828,6 +1868,79 @@ WE.app = (function () {
     });
   }
 
+  // ---- PNG 이미지 내보내기 ----
+  // SVG를 복제해 문서 CSS를 인라인 스타일로 구운 뒤(직렬화하면 외부 CSS가 안 먹으므로),
+  // 내용 영역만 잘라 2배 해상도 캔버스에 그려 PNG로 저장. 워터마크 레이어는 내보낼 때만 켬.
+  function exportPng() {
+    WE.model.clearSelection();
+    WE.render.clearWirePreview();
+    WE.render.renderOverlay();
+
+    var svg = document.getElementById("canvas");
+    // 내용(부품·배선·라벨·주석) 전체를 감싸는 영역 계산
+    var ids = ["layerComponents", "layerLabels", "layerWires", "layerWireLabels", "layerTermLabels", "layerAnnotations"];
+    var x1 = Infinity, y1 = Infinity, x2 = -Infinity, y2 = -Infinity;
+    ids.forEach(function (id) {
+      try {
+        var b = document.getElementById(id).getBBox();
+        if (b.width || b.height) {
+          x1 = Math.min(x1, b.x); y1 = Math.min(y1, b.y);
+          x2 = Math.max(x2, b.x + b.width); y2 = Math.max(y2, b.y + b.height);
+        }
+      } catch (e) { /* 빈 레이어 무시 */ }
+    });
+    if (x1 === Infinity) { setHint("내보낼 내용이 없습니다. 부품을 먼저 배치하세요."); return; }
+    var PAD = 30;
+    x1 -= PAD; y1 -= PAD; x2 += PAD; y2 += PAD;
+
+    // 복제본에 계산된 스타일 인라인 (원본/복제본은 같은 구조라 인덱스로 1:1 대응)
+    var clone = svg.cloneNode(true);
+    var srcEls = svg.querySelectorAll("*"), dstEls = clone.querySelectorAll("*");
+    var PROPS = ["fill", "stroke", "stroke-width", "stroke-dasharray", "stroke-linecap", "stroke-linejoin",
+                 "stroke-opacity", "fill-opacity", "opacity", "font-family", "font-size", "font-weight",
+                 "font-style", "text-anchor", "dominant-baseline", "paint-order", "letter-spacing", "visibility"];
+    for (var i = 0; i < srcEls.length; i++) {
+      var cs = getComputedStyle(srcEls[i]), st = "";
+      for (var k = 0; k < PROPS.length; k++) {
+        var v = cs.getPropertyValue(PROPS[k]);
+        if (v) st += PROPS[k] + ":" + v + ";";
+      }
+      dstEls[i].setAttribute("style", st);
+    }
+    var grid = clone.querySelector("#gridBg");
+    if (grid) grid.setAttribute("fill", "#ffffff");   // 격자 대신 흰 배경
+    var wm = clone.querySelector("#layerWatermark");
+    if (wm) wm.setAttribute("style", "display:block"); // 화면에선 숨긴 워터마크를 이미지엔 표시
+
+    var W = x2 - x1, H = y2 - y1, SCALE = 2;
+    clone.setAttribute("viewBox", x1 + " " + y1 + " " + W + " " + H);
+    clone.setAttribute("width", Math.round(W * SCALE));
+    clone.setAttribute("height", Math.round(H * SCALE));
+
+    var svgUrl = URL.createObjectURL(new Blob([new XMLSerializer().serializeToString(clone)],
+      { type: "image/svg+xml;charset=utf-8" }));
+    var img = new Image();
+    img.onload = function () {
+      var cv = document.createElement("canvas");
+      cv.width = Math.round(W * SCALE); cv.height = Math.round(H * SCALE);
+      var ctx = cv.getContext("2d");
+      ctx.fillStyle = "#ffffff"; ctx.fillRect(0, 0, cv.width, cv.height);
+      ctx.drawImage(img, 0, 0, cv.width, cv.height);
+      URL.revokeObjectURL(svgUrl);
+      cv.toBlob(function (blob) {
+        if (!blob) { setHint("이미지 생성에 실패했습니다."); return; }
+        var a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = ((WE.model.project.meta.name || "배선도").replace(/[\\/:*?"<>|]/g, "_")) + ".png";
+        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+        setTimeout(function () { URL.revokeObjectURL(a.href); }, 1000);
+        setHint("이미지 저장 완료 (PNG)");
+      }, "image/png");
+    };
+    img.onerror = function () { URL.revokeObjectURL(svgUrl); setHint("이미지 생성에 실패했습니다."); };
+    img.src = svgUrl;
+  }
+
   // ---- 이전 버전 복구 모달 ----
   var _snapList = [];   // 마지막으로 조회한 스냅샷(최신순) — 복구 시 재조회 없이 사용
   function fmtSnapTime(t) {
@@ -1900,9 +2013,18 @@ WE.app = (function () {
     btn.addEventListener("click", function (e) {
       e.stopPropagation();
       menu.hidden = !menu.hidden;
+      if (!menu.hidden) closeExportSub();   // 메뉴를 새로 열면 하위 옵션은 접힌 상태로
     });
-    // 항목 클릭(각자의 핸들러 실행 후) / 바깥 클릭 / Esc → 닫기
+    // 내보내기 = 하위 옵션(PDF/PNG) 펼침 토글 — 드로어를 닫지 않음
+    var exportSub = document.getElementById("exportSub");
+    function closeExportSub() { exportSub.hidden = true; document.getElementById("exportArrow").textContent = "▸"; }
+    document.getElementById("btnExport").addEventListener("click", function () {
+      exportSub.hidden = !exportSub.hidden;
+      document.getElementById("exportArrow").textContent = exportSub.hidden ? "▸" : "▾";
+    });
+    // 항목 클릭(각자의 핸들러 실행 후) / 바깥 클릭 / Esc → 닫기 (내보내기 토글 제외)
     menu.addEventListener("click", function (e) {
+      if (e.target.closest("#btnExport")) return;
       if (e.target.closest(".menu-item")) menu.hidden = true;
     });
     document.addEventListener("pointerdown", function (e) {
@@ -1915,6 +2037,7 @@ WE.app = (function () {
     // 메뉴의 저장·공유 = 툴바 버튼과 같은 동작 (메뉴에서도 찾을 수 있게 중복 배치)
     document.getElementById("btnSaveMenu").addEventListener("click", function () { WE.io.save(); });
     document.getElementById("btnShareMenu").addEventListener("click", function () { WE.io.share(); });
+    document.getElementById("btnPng").addEventListener("click", exportPng);
 
     bindHistoryModal();
 
@@ -2459,7 +2582,7 @@ WE.app = (function () {
       if (act === "terminals") {
         WE.termeditor.open(c);
       } else if (act === "bg" && c.image) {
-        WE.bgremove.open(c.image, function (url) { applyInstanceImage(c, url); });
+        WE.bgremove.open(c.image, function (url, tf) { applyInstanceImage(c, url, tf); });
       } else if (act === "tolib") {
         var savedPart = saveToLibrary(c.name, function () {
           return {
@@ -2570,7 +2693,7 @@ WE.app = (function () {
     document.getElementById("propBgRemove").addEventListener("click", function () {
       var c = WE.model.getSelectedComponent();
       if (!c || !c.image) return;
-      WE.bgremove.open(c.image, function (url) { applyInstanceImage(c, url); });
+      WE.bgremove.open(c.image, function (url, tf) { applyInstanceImage(c, url, tf); });
     });
     document.getElementById("propDuplicate").addEventListener("click", function () {
       var c = WE.model.getSelectedComponent();

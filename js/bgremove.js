@@ -387,7 +387,11 @@ WE.bgremove = (function () {
   function finish(dataUrl) {
     modal.hidden = true;
     var cb = onDone; onDone = null;
-    if (cb) cb(dataUrl);
+    // 좌표계를 바꾸는 편집(회전·크롭) 정보를 함께 전달 —
+    // 받는 쪽에서 기존 단자 좌표(rx·ry)를 같은 방식으로 변환해 배치가 깨지지 않게 함
+    var tf = { rotation: rotation, crop: null };
+    if (cropOn()) tf.crop = { x: cropRect.x / W, y: cropRect.y / H, w: cropRect.w / W, h: cropRect.h / H };
+    if (cb) cb(dataUrl, tf);
   }
 
   function close() {

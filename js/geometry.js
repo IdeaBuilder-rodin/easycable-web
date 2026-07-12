@@ -387,7 +387,9 @@ WE.geometry = (function () {
       if (t.labelSide === "L" || t.labelSide === "R" || t.labelSide === "T" || t.labelSide === "B") {
         side = t.labelSide;
       } else {
-        var dl = t.rx * cmpW, dr = (1 - t.rx) * cmpW, dt = t.ry * cmpH, db = (1 - t.ry) * cmpH;
+        // 로컬(rx·ry)이 아니라 실제 표시 좌표(dot)와 외곽 박스(box)의 거리로 판정 —
+        // 부품을 회전해도 단자의 "화면상" 위치 기준으로 올바른 방향이 잡힘
+        var dl = dot.x - box.x, dr = box.x2 - dot.x, dt = dot.y - box.y, db = box.y2 - dot.y;
         var minD = Math.min(dl, dr, dt, db);
         side = minD === dt ? "T" : minD === db ? "B" : minD === dl ? "L" : "R";
       }
@@ -406,16 +408,35 @@ WE.geometry = (function () {
         out.push({ t: o.t, dot: o.dot, lx: lx, ly: ly, anchor: side === "L" ? "end" : "start", side: side });
       });
     });
+    var charW = opts.charW != null ? opts.charW : 6.5;       // 라벨 폭 추정용 글자 폭
+    var minGapV = opts.minGapV != null ? opts.minGapV : 13;  // 세로쓰기 시 라벨 줄 간격
     ["T", "B"].forEach(function (side) {
       var arr = groups[side];
       arr.sort(function (a, b) { return a.dot.x - b.dot.x; });
-      var lastX = -Infinity;
       var ly = side === "T" ? box.y - offset : box.y2 + offset;
+      // 밀도 판정: 평균 핀 간격이 평균 라벨 폭보다 좁으면 가로쓰기가 뭉개지므로 세로쓰기(90° 회전)로 전환.
+      // 개수가 아니라 간격 기준이라, 핀 2개짜리(배터리)는 가로 유지·촘촘한 핀헤더만 세로가 됨
+      var vertical = false;
+      if (arr.length >= 2) {
+        var span = arr[arr.length - 1].dot.x - arr[0].dot.x;
+        var avgGap = span / (arr.length - 1);
+        var avgW = 0;
+        arr.forEach(function (o) { avgW += String(o.t.name || "").length * charW + 8; });
+        avgW /= arr.length;
+        vertical = avgGap < avgW;
+      }
+      var lastX = -Infinity, gap = vertical ? minGapV : minGapTB;
       arr.forEach(function (o) {
         var lx = o.dot.x;
-        if (lx < lastX + minGapTB) lx = lastX + minGapTB;
+        if (lx < lastX + gap) lx = lastX + gap;
         lastX = lx;
-        out.push({ t: o.t, dot: o.dot, lx: lx, ly: ly, anchor: "middle", side: side });
+        out.push({
+          t: o.t, dot: o.dot, lx: lx, ly: ly, side: side,
+          vertical: vertical,
+          // 세로쓰기: 글을 아래→위로 읽게 회전(-90°). 위쪽은 시작점이 점 위(위로 뻗음),
+          // 아래쪽은 끝점이 점 아래(아래로 뻗음)가 되도록 앵커를 나눔
+          anchor: vertical ? (side === "T" ? "start" : "end") : "middle"
+        });
       });
     });
     return out;

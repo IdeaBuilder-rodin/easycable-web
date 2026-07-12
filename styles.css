@@ -84,6 +84,10 @@ body { display: flex; flex-direction: column; }
 #toolbar button.tb-accent:hover { background: var(--primary-d); }
 .app-menu .menu-link { font-size: var(--fs-sm); color: var(--tx3); }
 .app-menu .menu-divider { height: 1px; background: var(--bd2); margin: 5px 8px; }
+/* 내보내기 하위 옵션 (들여쓰기 + 왼쪽 가이드선) */
+.app-menu .menu-sub { display: flex; flex-direction: column; margin-left: 24px; padding-left: 6px; border-left: 2px solid var(--bd2); }
+.app-menu .menu-sub[hidden] { display: none; }
+#toolbar .app-menu .menu-sub .menu-item { padding: 6px 12px; font-size: var(--fs-sm); }
 
 /* 이전 버전 복구 목록 */
 .history-list { max-height: 320px; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; }

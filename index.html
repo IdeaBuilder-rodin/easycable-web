@@ -39,7 +39,11 @@
       <button id="btnOpen" class="menu-item" title="프로젝트 파일 열기"><span><i>📂</i>열기</span><kbd>Ctrl+O</kbd></button>
       <button id="btnSaveMenu" class="menu-item" title="프로젝트를 파일로 저장"><span><i>💾</i>저장</span><kbd>Ctrl+S</kbd></button>
       <button id="btnShareMenu" class="menu-item" title="프로젝트 + 사용된 부품을 한 파일로 내보내기"><span><i>🔗</i>공유</span></button>
-      <button id="btnPdf" class="menu-item" title="PDF로 인쇄"><span><i>🖨️</i>PDF 내보내기</span></button>
+      <button id="btnExport" class="menu-item" title="PDF 또는 이미지로 내보내기"><span><i>📤</i>내보내기</span><kbd id="exportArrow">▸</kbd></button>
+      <div id="exportSub" class="menu-sub" hidden>
+        <button id="btnPdf" class="menu-item" title="PDF로 인쇄">PDF 문서</button>
+        <button id="btnPng" class="menu-item" title="배선도를 PNG 이미지로 저장 (카페·블로그·메신저 공유용)">이미지 (PNG)</button>
+      </div>
       <button id="btnSample" class="menu-item" title="예제 배선도를 열어봅니다"><span><i>💡</i>샘플 프로젝트</span></button>
       <button id="btnHistory" class="menu-item" title="자동 보관된 이전 스냅샷으로 되돌립니다"><span><i>🕘</i>이전 버전 복구</span></button>
       <div class="menu-divider"></div>

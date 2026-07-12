@@ -57,7 +57,10 @@ WE.render = (function () {
       var img = el("image", { x: 0, y: 0, width: cmp.width, height: cmp.height });
       img.setAttributeNS("http://www.w3.org/1999/xlink", "href", cmp.image);
       img.setAttribute("href", cmp.image);
-      img.setAttribute("preserveAspectRatio", "xMidYMid meet"); // 이미지 자기 비율 유지(찌그러짐 방지)
+      // 이미지를 박스에 꽉 채움(stretch) — 단자 좌표(박스 기준 rx·ry)와 이미지가 항상 일치.
+      // 예전 meet(여백 유지) 방식은 박스/이미지 비율이 어긋나면 단자가 밀려 보여서,
+      // 단자 편집 모달이 부품 height를 몰래 고쳐야 했음(비율이 멋대로 바뀌는 버그의 원인)
+      img.setAttribute("preserveAspectRatio", "none");
       g.appendChild(img);
     } else {
       g.appendChild(el("rect", {
@@ -76,10 +79,12 @@ WE.render = (function () {
   // 아래쪽으로 뻗는 라벨이 있는지 확인 → 부품명이 그 라벨들과 겹치지 않게 더 아래로 내림
   function hasAutoBottomTermLabels(cmp) {
     if (cmp.hideTermLabels) return false;
+    var box = componentBBox(cmp);   // 화면 좌표 기준(회전 반영) — layoutTermLabels와 같은 판정
     return cmp.terminals.some(function (t) {
       if (t.labelPos) return false;
       if (t.labelSide) return t.labelSide === "B";
-      var dl = t.rx * cmp.width, dr = (1 - t.rx) * cmp.width, dt = t.ry * cmp.height, db = (1 - t.ry) * cmp.height;
+      var dot = WE.geometry.terminalAbs(cmp, t);
+      var dl = dot.x - box.x, dr = box.x2 - dot.x, dt = dot.y - box.y, db = box.y2 - dot.y;
       return Math.min(dl, dr, dt, db) === db;
     });
   }
@@ -152,17 +157,24 @@ WE.render = (function () {
     var def = WE.model.DEFAULT_TERMINAL_COLOR;
     var box = componentBBox(cmp);
 
-    function draw(t, dot, lx, ly, anchor) {
+    function draw(t, dot, lx, ly, anchor, vertical) {
       var color = t.color || def;
       layerTermLabels.appendChild(el("line", {
         x1: dot.x, y1: dot.y, x2: lx, y2: ly,
         stroke: color, "stroke-width": 1, "stroke-opacity": 0.55, "pointer-events": "none"
       }));
-      var tx = el("text", {
-        x: lx + (anchor === "end" ? -2 : (anchor === "start" ? 2 : 0)), y: ly,
+      var attrs = {
         "class": "term-label", "text-anchor": anchor, "dominant-baseline": "middle",
         "data-label-tid": t.id, "data-cmp-id": cmp.id, style: "cursor:move"
-      });
+      };
+      if (vertical) {   // 촘촘한 핀헤더: 글자를 90° 세워서(아래→위로 읽음) 겹침 방지
+        attrs.transform = "translate(" + lx + "," + ly + ") rotate(-90)";
+        attrs.x = 0; attrs.y = 0;
+      } else {
+        attrs.x = lx + (anchor === "end" ? -2 : (anchor === "start" ? 2 : 0));
+        attrs.y = ly;
+      }
+      var tx = el("text", attrs);
       tx.textContent = t.name;
       layerTermLabels.appendChild(tx);
     }
@@ -181,7 +193,7 @@ WE.render = (function () {
     var laid = WE.geometry.layoutTermLabels(autoTerms, cmp.width, cmp.height, box, function (t) {
       return WE.geometry.terminalAbs(cmp, t);
     });
-    laid.forEach(function (o) { draw(o.t, o.dot, o.lx, o.ly, o.anchor); });
+    laid.forEach(function (o) { draw(o.t, o.dot, o.lx, o.ly, o.anchor, o.vertical); });
   }
   function renderTermLabels() {
     layerTermLabels.innerHTML = "";
