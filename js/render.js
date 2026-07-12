@@ -14,6 +14,28 @@ WE.render = (function () {
     layerTermLabels = document.getElementById("layerTermLabels");
     layerAnnotations = document.getElementById("layerAnnotations");
     layerOverlay = document.getElementById("layerOverlay");
+    buildWatermark();
+  }
+
+  // 워터마크: 반투명 대각선 문구를 캔버스 전체에 타일 배치 (부품 아래 레이어라 작업 방해 없음).
+  // 캔버스(도면 용지)의 일부라서 화면·PDF 양쪽에 함께 나타남.
+  function buildWatermark() {
+    var g = document.getElementById("layerWatermark");
+    if (!g) return;
+    var TEXT = "EasyCable · easycable.co.kr";
+    var COL_W = 460, ROW_H = 230;   // 타일 간격
+    for (var row = 0, y = 140; y < 900 + ROW_H; row++, y += ROW_H) {
+      var offset = (row % 2) ? COL_W / 2 : 0;   // 벽돌식 엇배치
+      for (var x = 120 + offset; x < 1600 + COL_W; x += COL_W) {
+        var t = el("text", {
+          "class": "canvas-watermark",
+          transform: "translate(" + x + "," + y + ") rotate(-30)",
+          "text-anchor": "middle"
+        });
+        t.textContent = TEXT;
+        g.appendChild(t);
+      }
+    }
   }
 
   function el(name, attrs) {
@@ -392,6 +414,7 @@ WE.render = (function () {
     drawNetHighlight();
     drawWireLabelGuide();
     drawWireLabelHover();
+    drawAlignGuides();
 
     // 다중 선택(2개 이상): 부품 + 주석 + 배선 하이라이트 — 단일 선택보다 먼저 판정
     var multi = WE.model.getMulti(), mAnno = WE.model.getMultiAnno(), mWire = WE.model.getMultiWire();
@@ -558,6 +581,19 @@ WE.render = (function () {
       }));
     }
   }
+  // ---- 부품 드래그 스마트 정렬 가이드 (다른 부품의 변/중심과 정렬되면 파란 선) ----
+  var _alignGuides = null;   // [{ axis:"x"|"y", value:number }, ...]
+  function setAlignGuides(g) { _alignGuides = (g && g.length) ? g : null; renderOverlay(); }
+  function drawAlignGuides() {
+    if (!_alignGuides) return;
+    // 정렬된 두 부품 사이 구간(from~to)만 그림 — 화면 전체를 가로지르면 오히려 헷갈림
+    _alignGuides.forEach(function (g) {
+      layerOverlay.appendChild(el("line", g.axis === "x"
+        ? { x1: g.value, y1: g.from, x2: g.value, y2: g.to, "class": "align-guide" }
+        : { x1: g.from, y1: g.value, x2: g.to, y2: g.value, "class": "align-guide" }));
+    });
+  }
+
   function drawWireLabelHover() {
     if (!_hoverWireLabelId) return;
     var lblEl = layerWireLabels.querySelector('text[data-wire-label-for="' + _hoverWireLabelId + '"]');
@@ -655,6 +691,7 @@ WE.render = (function () {
     clearMarquee: clearMarquee,
     setNetHighlight: setNetHighlight,
     setWireLabelGuide: setWireLabelGuide,
+    setAlignGuides: setAlignGuides,
     setWireLabelHover: setWireLabelHover,
     componentBBox: componentBBox,
     annoBBox: annoBBox,

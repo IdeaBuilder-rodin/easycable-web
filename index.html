@@ -41,6 +41,7 @@
       <button id="btnShareMenu" class="menu-item" title="프로젝트 + 사용된 부품을 한 파일로 내보내기"><span><i>🔗</i>공유</span></button>
       <button id="btnPdf" class="menu-item" title="PDF로 인쇄"><span><i>🖨️</i>PDF 내보내기</span></button>
       <button id="btnSample" class="menu-item" title="예제 배선도를 열어봅니다"><span><i>💡</i>샘플 프로젝트</span></button>
+      <button id="btnHistory" class="menu-item" title="자동 보관된 이전 스냅샷으로 되돌립니다"><span><i>🕘</i>이전 버전 복구</span></button>
       <div class="menu-divider"></div>
       <button id="btnSettings" class="menu-item"><span><i>⚙</i>설정</span></button>
       <button id="btnHelpMenu" class="menu-item"><span><i>?</i>단축키 도움말</span><kbd>?</kbd></button>
@@ -106,6 +107,7 @@
           </pattern>
         </defs>
         <rect id="gridBg" x="0" y="0" width="100%" height="100%" fill="url(#gridPattern)" />
+        <g id="layerWatermark"></g>
         <g id="layerComponents"></g>
         <g id="layerLabels"></g>
         <g id="layerWires"></g>
@@ -612,6 +614,16 @@
 
       <button id="welcomeStart" class="primary welcome-start">시작하기</button>
       <p class="welcome-privacy">이용 시 <a href="privacy.html" target="_blank" rel="noopener">개인정보처리방침</a>에 동의한 것으로 간주됩니다.</p>
+    </div>
+  </div>
+
+  <!-- 이전 버전 복구 모달 -->
+  <div id="historyModal" class="modal" hidden>
+    <div class="modal-box" style="width:min(480px,92vw)">
+      <h3>🕘 이전 버전 복구</h3>
+      <p class="muted" style="margin:0 0 10px">이 브라우저에 5분 간격으로 자동 보관된 최근 스냅샷입니다 (최대 3개).</p>
+      <div id="historyList" class="history-list"></div>
+      <div class="modal-actions"><button id="historyClose">닫기</button></div>
     </div>
   </div>
 

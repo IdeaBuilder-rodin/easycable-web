@@ -50,12 +50,58 @@ WE.store = (function () {
     } catch (e) { cb(null); }
   }
 
+  // ---- 스냅샷 히스토리 (이전 버전 복구) ----
+  // 자동저장 슬롯은 1개뿐이라 실수로 덮어쓰면 복구 불가였음 →
+  // 5분 간격 자동 스냅샷을 최대 3개 롤링 보관(가장 오래된 것부터 밀려남).
+  // 이미지가 base64로 포함돼 스냅샷 하나가 수 MB일 수 있어 개수를 작게 유지.
+  var HKEY = "history::" + (location.pathname || "");
+  var SNAP_MAX = 3, SNAP_INTERVAL = 5 * 60 * 1000;
+  var _lastSnapTs = 0;
+
+  function isEmptyProject(p) {
+    return !(p.components && p.components.length) &&
+           !(p.wires && p.wires.length) &&
+           !(p.annotations && p.annotations.length);
+  }
+  // 빈 프로젝트는 보관 가치 없어 스킵
+  function pushSnapshot(cb) {
+    var p = WE.model.project;
+    if (isEmptyProject(p)) { cb && cb(false); return; }
+    var json = JSON.stringify(p);
+    getRaw(HKEY, function (v) {
+      var list = [];
+      if (v) { try { list = JSON.parse(v); } catch (e) { list = []; } }
+      // 직전 스냅샷과 내용이 같으면 중복 보관하지 않음
+      if (list.length && list[list.length - 1].json === json) { cb && cb(false); return; }
+      list.push({
+        t: Date.now(),
+        name: (p.meta && p.meta.name) || "",
+        comps: (p.components || []).length, wires: (p.wires || []).length,
+        json: json
+      });
+      while (list.length > SNAP_MAX) list.shift();
+      putRaw(HKEY, JSON.stringify(list));
+      _lastSnapTs = Date.now();
+      cb && cb(true);
+    });
+  }
+  // 목록 조회(최신순). json 포함 — 복구 시 재조회 없이 바로 사용
+  function getSnapshots(cb) {
+    getRaw(HKEY, function (v) {
+      var list = [];
+      if (v) { try { list = JSON.parse(v); } catch (e) { list = []; } }
+      cb(list.slice().reverse());
+    });
+  }
+
   // 변경 있을 때만 저장
   function saveNow() {
     var json = JSON.stringify(WE.model.project);
     if (json === lastJson) return;
     lastJson = json;
     write(json);
+    // 주기 스냅샷: 마지막 보관 후 5분 지났으면 히스토리에도 한 부 남김
+    if (Date.now() - _lastSnapTs > SNAP_INTERVAL) pushSnapshot();
   }
 
   // 방금 로드한 상태를 기준선으로 삼아 즉시 재저장 방지
@@ -99,6 +145,7 @@ WE.store = (function () {
 
   return {
     init: init, load: load, saveNow: saveNow, syncBaseline: syncBaseline,
-    clear: clear, start: start, setAutosave: setAutosave, putRaw: putRaw, getRaw: getRaw
+    clear: clear, start: start, setAutosave: setAutosave, putRaw: putRaw, getRaw: getRaw,
+    pushSnapshot: pushSnapshot, getSnapshots: getSnapshots
   };
 })();

@@ -757,9 +757,57 @@ WE.interactions = (function () {
     var p1 = WE.geometry.clientToCanvas(svg, e.clientX, e.clientY);
     var dx = p1.x - p0.x, dy = p1.y - p0.y;
 
+    // ---- 스마트 정렬 스냅 (diagrams.net 스타일) ----
+    // 드래그 중인 부품의 좌/중/우·상/중/하가 다른 부품의 같은 기준선과 가까우면
+    // 그 선에 착 붙이고 파란 가이드선을 표시. 그리드 스냅보다 나중에 적용되어 우선함.
+    var ALIGN_TOL = 5;
+    function cmpBBox(c) {
+      var W = c.width, H = c.height;
+      var pts = [WE.geometry.localToAbs(c, 0, 0), WE.geometry.localToAbs(c, W, 0),
+                 WE.geometry.localToAbs(c, W, H), WE.geometry.localToAbs(c, 0, H)];
+      var xs = pts.map(function (p) { return p.x; }), ys = pts.map(function (p) { return p.y; });
+      return { x: Math.min.apply(null, xs), y: Math.min.apply(null, ys),
+               x2: Math.max.apply(null, xs), y2: Math.max.apply(null, ys) };
+    }
+    function applyAlignSnap(c) {
+      var b = cmpBBox(c);
+      var candX = [b.x, (b.x + b.x2) / 2, b.x2];
+      var candY = [b.y, (b.y + b.y2) / 2, b.y2];
+      var bestX = null, bdx = ALIGN_TOL, bestY = null, bdy = ALIGN_TOL;
+      WE.model.project.components.forEach(function (o) {
+        if (o.id === c.id) return;
+        var ob = cmpBBox(o);
+        [ob.x, (ob.x + ob.x2) / 2, ob.x2].forEach(function (tx) {
+          candX.forEach(function (cx) {
+            var d = Math.abs(tx - cx);
+            if (d < bdx) { bdx = d; bestX = { target: tx, cur: cx, ob: ob }; }
+          });
+        });
+        [ob.y, (ob.y + ob.y2) / 2, ob.y2].forEach(function (ty) {
+          candY.forEach(function (cy) {
+            var d = Math.abs(ty - cy);
+            if (d < bdy) { bdy = d; bestY = { target: ty, cur: cy, ob: ob }; }
+          });
+        });
+      });
+      if (bestX) c.x += bestX.target - bestX.cur;
+      if (bestY) c.y += bestY.target - bestY.cur;
+      // 가이드선은 화면 전체가 아니라 "정렬된 두 부품 사이 구간"만 — 스냅 반영 후 위치로 계산
+      var guides = [];
+      if (bestX || bestY) {
+        var nb = cmpBBox(c);
+        if (bestX) guides.push({ axis: "x", value: bestX.target,
+          from: Math.min(nb.y, bestX.ob.y), to: Math.max(nb.y2, bestX.ob.y2) });
+        if (bestY) guides.push({ axis: "y", value: bestY.target,
+          from: Math.min(nb.x, bestY.ob.x), to: Math.max(nb.x2, bestY.ob.x2) });
+      }
+      WE.render.setAlignGuides(guides);
+    }
+
     if (drag.mode === "move") {
       cmp.x = snapVal(drag.orig.x + dx);
       cmp.y = snapVal(drag.orig.y + dy);
+      applyAlignSnap(cmp);   // 다른 부품의 변/중심과 정렬되면 착 붙이고 파란 가이드선 표시
       applyWireFollow(drag.follow, cmp.x - drag.orig.x, cmp.y - drag.orig.y);
     } else if (drag.mode === "resize") {
       // 회전된 부품도 올바르게 리사이즈되도록 이동량을 로컬 좌표로 변환
@@ -823,6 +871,9 @@ WE.interactions = (function () {
         }
       }
     }
+    // 부품 이동 종료 → 정렬 가이드선 정리
+    if (drag.mode === "move") WE.render.setAlignGuides(null);
+
     // 방금 배치한 텍스트 주석 → 마우스를 뗀 즉시 입력 모드로 (별도 클릭 없이 바로 타이핑)
     if (drag.mode === "anno" && drag.fresh && WE.app.focusAnnoText) {
       WE.app.focusAnnoText();

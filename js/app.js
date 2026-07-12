@@ -1671,7 +1671,8 @@ WE.app = (function () {
     bgModal: "bgCancel",
     welcomeModal: "welcomeStart",
     helpModal: "helpClose",
-    feedbackModal: "feedbackClose"
+    feedbackModal: "feedbackClose",
+    historyModal: "historyClose"
   };
   function bindModalBackdrops() {
     Object.keys(MODAL_CLOSE_MAP).forEach(function (mid) {
@@ -1827,6 +1828,50 @@ WE.app = (function () {
     });
   }
 
+  // ---- 이전 버전 복구 모달 ----
+  var _snapList = [];   // 마지막으로 조회한 스냅샷(최신순) — 복구 시 재조회 없이 사용
+  function fmtSnapTime(t) {
+    var d = new Date(t);
+    function p2(n) { return (n < 10 ? "0" : "") + n; }
+    return (d.getMonth() + 1) + "/" + d.getDate() + " " + p2(d.getHours()) + ":" + p2(d.getMinutes());
+  }
+  function bindHistoryModal() {
+    var modal = document.getElementById("historyModal");
+    document.getElementById("btnHistory").addEventListener("click", function () {
+      WE.store.getSnapshots(function (list) {
+        _snapList = list;
+        var box = document.getElementById("historyList");
+        if (!list.length) {
+          box.innerHTML = "<p class='muted'>아직 보관된 스냅샷이 없습니다. 작업을 시작하면 5분 간격으로 자동 보관됩니다.</p>";
+        } else {
+          box.innerHTML = list.map(function (s, i) {
+            return "<div class='history-row'>" +
+              "<div class='history-info'><b>" + fmtSnapTime(s.t) + "</b>" +
+              "<span class='muted'> — " + esc(s.name || "이름없는 배선도") +
+              " (부품 " + s.comps + " · 배선 " + s.wires + ")</span></div>" +
+              "<button class='history-restore' data-i='" + i + "'>복구</button></div>";
+          }).join("");
+        }
+        modal.hidden = false;
+      });
+    });
+    document.getElementById("historyClose").addEventListener("click", function () { modal.hidden = true; });
+    document.getElementById("historyList").addEventListener("click", function (e) {
+      var btn = e.target.closest(".history-restore"); if (!btn) return;
+      var s = _snapList[+btn.dataset.i]; if (!s) return;
+      if (!confirm(fmtSnapTime(s.t) + " 시점으로 되돌릴까요?\n(지금 화면의 작업은 사라집니다)")) return;
+      try {
+        WE.model.loadProject(JSON.parse(s.json));
+      } catch (err) { alert("스냅샷을 읽을 수 없습니다: " + err.message); return; }
+      WE.io.clearFileHandle();   // 옛 버전이 연결된 파일을 조용히 덮어쓰지 않도록 연결 해제
+      reloadUI();
+      if (WE.history) WE.history.reset();
+      WE.store.saveNow();
+      modal.hidden = true;
+      setHint("복구 완료: " + fmtSnapTime(s.t) + " 시점");
+    });
+  }
+
   // ---- 단축키 도움말 (우하단 ? 버튼 + ☰ 메뉴) ----
   function openHelpModal() {
     renderHelpShortcuts();
@@ -1870,6 +1915,8 @@ WE.app = (function () {
     // 메뉴의 저장·공유 = 툴바 버튼과 같은 동작 (메뉴에서도 찾을 수 있게 중복 배치)
     document.getElementById("btnSaveMenu").addEventListener("click", function () { WE.io.save(); });
     document.getElementById("btnShareMenu").addEventListener("click", function () { WE.io.share(); });
+
+    bindHistoryModal();
 
     // 샘플 프로젝트 열기 (사이트에 올려둔 sample.ezc — 공유 번들이라 부품·스펙까지 온전)
     document.getElementById("btnSample").addEventListener("click", function () {

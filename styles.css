@@ -84,6 +84,20 @@ body { display: flex; flex-direction: column; }
 #toolbar button.tb-accent:hover { background: var(--primary-d); }
 .app-menu .menu-link { font-size: var(--fs-sm); color: var(--tx3); }
 .app-menu .menu-divider { height: 1px; background: var(--bd2); margin: 5px 8px; }
+
+/* 이전 버전 복구 목록 */
+.history-list { max-height: 320px; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; }
+.history-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 8px 10px; background: var(--bg2); border: 1px solid var(--bd2); border-radius: var(--r);
+  font-size: var(--fs);
+}
+.history-info { min-width: 0; line-height: 1.4; }
+.history-restore {
+  flex: none; padding: 5px 12px; cursor: pointer; font-family: inherit; font-size: var(--fs-sm);
+  background: var(--bg); border: 1px solid var(--bd); border-radius: var(--r);
+}
+.history-restore:hover { background: var(--primary-bg); border-color: var(--primary); color: var(--primary-d); }
 .tb-row {
   display: flex; align-items: center; gap: 12px;
   flex-wrap: wrap; row-gap: 6px;                 /* 그래도 좁으면 줄 단위로 접힘(글자 줄바꿈 방지) */
@@ -557,6 +571,12 @@ body.panning #canvas, body.panning #canvas * { cursor: grabbing !important; }
   pointer-events: none;
 }
 .wire-label-guide { stroke: #ff3d7f; stroke-dasharray: 5 4; stroke-width: 1; pointer-events: none; }
+.align-guide { stroke: #1e88e5; stroke-width: 1; pointer-events: none; }   /* 부품 정렬 스마트 가이드 */
+.canvas-watermark {
+  font: 600 26px "Segoe UI", "Malgun Gothic", sans-serif;
+  fill: #7e8b99; opacity: .10;
+  pointer-events: none; user-select: none;
+}
 .wire-label-hover { fill: rgba(30,136,229,.10); stroke: #90b8dd; stroke-width: 1; pointer-events: none; }
 .wire-label-selected { fill: rgba(30,136,229,.16); stroke: #1e88e5; stroke-width: 1.5; pointer-events: none; }
 .term-label {
