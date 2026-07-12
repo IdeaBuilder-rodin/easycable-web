@@ -19,27 +19,33 @@
 <body>
   <!-- 상단 툴바 -->
   <div id="toolbar">
-    <!-- 1행: 문서 레벨 (파일 관리 · 내보내기 · 설정) -->
+    <!-- 1행: 문서 레벨 — 자주 쓰는 것(저장·공유·피드백)만 노출, 나머지는 ☰ 메뉴로 -->
     <div class="tb-row">
+      <button id="btnAppMenu" title="메뉴">☰</button>
       <span class="brand">🔌 이지케이블<span class="beta-badge">BETA</span></span>
       <input type="text" id="projName" title="프로젝트 이름 (저장 파일명·PDF 제목)" />
       <div class="tb-spacer"></div>
       <div class="tb-group">
-        <button id="btnNew" title="새 프로젝트 (현재 작업 비움)">새로</button>
-        <button id="btnSave" title="프로젝트를 JSON 파일로 저장">저장</button>
-        <button id="btnOpen" title="JSON 파일 열기">열기</button>
-        <input type="file" id="fileOpen" accept=".ezc,.json,application/json" hidden />
-      </div>
-      <div class="tb-divider"></div>
-      <div class="tb-group">
+        <button id="btnSave" title="프로젝트를 파일로 저장 (Ctrl+S)">저장</button>
         <button id="btnShare" title="프로젝트 + 사용된 부품을 한 파일로 내보내기 (받는 사람은 파일 하나로 열림)">🔗 공유</button>
-        <button id="btnPdf" title="PDF로 인쇄">PDF</button>
       </div>
       <div class="tb-divider"></div>
-      <div class="tb-group">
-        <button id="btnSettings" title="설정">⚙</button>
-        <button id="btnFeedback" title="의견·버그 제보 보내기">💬 피드백</button>
-      </div>
+      <button id="btnFeedback" class="tb-accent" title="의견·버그 제보 보내기">💬 피드백</button>
+      <input type="file" id="fileOpen" accept=".ezc,.json,application/json" hidden />
+    </div>
+    <!-- ☰ 앱 메뉴 드로어 (Excalidraw 스타일: 아이콘 · 라벨 · 단축키 3열) -->
+    <div id="appMenu" class="app-menu" hidden>
+      <button id="btnNew" class="menu-item" title="새 프로젝트 (현재 작업 비움)"><span><i>📄</i>새 작업</span></button>
+      <button id="btnOpen" class="menu-item" title="프로젝트 파일 열기"><span><i>📂</i>열기</span><kbd>Ctrl+O</kbd></button>
+      <button id="btnSaveMenu" class="menu-item" title="프로젝트를 파일로 저장"><span><i>💾</i>저장</span><kbd>Ctrl+S</kbd></button>
+      <button id="btnShareMenu" class="menu-item" title="프로젝트 + 사용된 부품을 한 파일로 내보내기"><span><i>🔗</i>공유</span></button>
+      <button id="btnPdf" class="menu-item" title="PDF로 인쇄"><span><i>🖨️</i>PDF 내보내기</span></button>
+      <button id="btnSample" class="menu-item" title="예제 배선도를 열어봅니다"><span><i>💡</i>샘플 프로젝트</span></button>
+      <div class="menu-divider"></div>
+      <button id="btnSettings" class="menu-item"><span><i>⚙</i>설정</span></button>
+      <button id="btnHelpMenu" class="menu-item"><span><i>?</i>단축키 도움말</span><kbd>?</kbd></button>
+      <div class="menu-divider"></div>
+      <a class="menu-item menu-link" href="privacy.html" target="_blank" rel="noopener">개인정보처리방침</a>
     </div>
     <!-- 2행: 편집 레벨 (그리기 도구) -->
     <div class="tb-row">
@@ -51,12 +57,7 @@
       <div class="tb-group" id="paletteGroup" title="새 배선 색상">
         <span class="tb-label">배선색</span>
         <div id="paletteSwatches"></div>
-        <select id="wireWidthSel" title="선 두께">
-          <option value="2" selected>2</option>
-          <option value="4">4</option>
-          <option value="6">6</option>
-          <option value="8">8</option>
-        </select>
+        <input type="number" id="wireWidthSel" title="선 두께" min="1" max="30" step="1" value="2" style="width:44px" />
         <select id="wireRoutingSel" title="배선 모양">
           <option value="ortho">직각</option>
           <option value="straight">직선</option>
@@ -631,6 +632,8 @@
       <h3>💬 피드백</h3>
       <p class="muted" style="margin:0 0 10px">의견이나 버그를 자유롭게 적어주세요. 바로 전달됩니다.</p>
       <textarea id="feedbackText" rows="6" placeholder="예: 이런 기능이 있으면 좋겠어요 / 이 부분이 잘 안 돼요…" style="width:100%;resize:vertical;padding:8px;border:1px solid var(--bd);border-radius:var(--r);font:inherit;font-size:var(--fs)"></textarea>
+      <!-- 허니팟: 사람 눈엔 안 보이고 봇만 체크함 → 체크돼 있으면 전송 차단 -->
+      <input type="checkbox" id="feedbackBotcheck" style="display:none" tabindex="-1" autocomplete="off" />
       <p id="feedbackStatus" class="muted" style="margin:8px 0 0;min-height:16px"></p>
       <div class="modal-actions">
         <button id="feedbackClose">취소</button>

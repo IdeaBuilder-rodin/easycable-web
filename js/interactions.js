@@ -525,9 +525,10 @@ WE.interactions = (function () {
     WE.render.renderAnnotations();
     WE.render.renderOverlay();
     WE.app.refreshProps();
-    drag = { mode: "anno", id: a.id, startX: e.clientX, startY: e.clientY, orig: { x: a.x, y: a.y } };
+    // fresh: 방금 배치한 주석 — 마우스를 떼면 바로 텍스트 입력으로 진입
+    // (pointerdown 중의 focus()는 브라우저 기본 포커스 이동에 덮여 무효라 pointerup에서 처리)
+    drag = { mode: "anno", id: a.id, startX: e.clientX, startY: e.clientY, orig: { x: a.x, y: a.y }, fresh: true };
     svg.setPointerCapture(e.pointerId);
-    if (WE.app.focusAnnoText) WE.app.focusAnnoText();
   }
 
   function selectAnnoAndDrag(annoEl, e) {
@@ -822,6 +823,10 @@ WE.interactions = (function () {
         }
       }
     }
+    // 방금 배치한 텍스트 주석 → 마우스를 뗀 즉시 입력 모드로 (별도 클릭 없이 바로 타이핑)
+    if (drag.mode === "anno" && drag.fresh && WE.app.focusAnnoText) {
+      WE.app.focusAnnoText();
+    }
     try { svg.releasePointerCapture(e.pointerId); } catch (err) {}
     drag = null;
     if (WE.history) WE.history.commit();
@@ -839,6 +844,12 @@ WE.interactions = (function () {
       if (WE.io) WE.io.save();
       return;
     }
+    // Ctrl/⌘+O → 프로젝트 파일 열기 (브라우저 기본 '파일 열기' 대신)
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "o") {
+      e.preventDefault();
+      document.getElementById("btnOpen").click();
+      return;
+    }
 
     // 모달(단자 배치·배경 제거·프리셋)이 열려 있으면 캔버스 단축키 무시
     if (document.querySelector(".modal:not([hidden])")) return;
@@ -846,6 +857,12 @@ WE.interactions = (function () {
     // 입력창에 포커스 있으면 단축키 무시(텍스트 입력의 기본 undo 등 보존)
     var tag = (document.activeElement && document.activeElement.tagName) || "";
     if (tag === "INPUT" || tag === "TEXTAREA") return;
+
+    // Esc → 어떤 모드에서든 기본(선택) 모드로 복귀
+    if (e.key === "Escape" && WE.model.ui.mode !== "select") {
+      WE.app.setMode("select");
+      e.preventDefault(); return;
+    }
 
     // 스페이스바 = 팬(이동) 모드
     if (e.code === "Space") { spaceDown = true; document.body.classList.add("pan-ready"); e.preventDefault(); return; }
@@ -862,6 +879,21 @@ WE.interactions = (function () {
     // 사용자 지정 단축키(모드 전환 등, 조합키 없을 때)
     if (!e.ctrlKey && !e.metaKey && !e.altKey && WE.app.handleShortcut && WE.app.handleShortcut(e.key)) {
       e.preventDefault(); return;
+    }
+
+    // 다중 선택 시 Delete → 전체 삭제 (부품 + 주석 + 배선)
+    // 단일 삭제 분기보다 반드시 먼저: 다중 선택에도 '대표 선택' 1개가 함께 잡혀 있어서
+    // 이 검사가 뒤에 있으면 단일 분기가 먼저 걸려 하나만 지워지고 끝나버림
+    var multiSel = WE.model.getMulti(), multiA = WE.model.getMultiAnno(), multiW = WE.model.getMultiWire();
+    if (multiSel.length + multiA.length + multiW.length > 1 && (e.key === "Delete" || e.key === "Backspace")) {
+      multiW.slice().forEach(function (id) { WE.model.removeWire(id); });
+      multiSel.slice().forEach(function (id) { WE.model.removeComponent(id); });
+      multiA.slice().forEach(function (id) { WE.model.removeAnnotation(id); });
+      WE.model.clearSelection();
+      WE.render.renderAll();
+      WE.app.refreshProps();
+      e.preventDefault();
+      return;
     }
 
     // 주석 선택 시 Delete → 주석 삭제
@@ -888,19 +920,6 @@ WE.interactions = (function () {
         WE.model.removeWire(selWire.id);
         WE.render.renderAll(); WE.app.refreshProps();
       }
-      e.preventDefault();
-      return;
-    }
-
-    // 다중 선택 시 Delete → 전체 삭제 (부품 + 주석 + 배선)
-    var multiSel = WE.model.getMulti(), multiA = WE.model.getMultiAnno(), multiW = WE.model.getMultiWire();
-    if (multiSel.length + multiA.length + multiW.length > 1 && (e.key === "Delete" || e.key === "Backspace")) {
-      multiW.slice().forEach(function (id) { WE.model.removeWire(id); });
-      multiSel.slice().forEach(function (id) { WE.model.removeComponent(id); });
-      multiA.slice().forEach(function (id) { WE.model.removeAnnotation(id); });
-      WE.model.clearSelection();
-      WE.render.renderAll();
-      WE.app.refreshProps();
       e.preventDefault();
       return;
     }

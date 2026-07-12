@@ -53,7 +53,37 @@ body { display: flex; flex-direction: column; }
   display: flex; flex-direction: column; gap: 6px;
   padding: 6px 12px; background: #2b2f36; color: #eee;
   border-bottom: 1px solid #1c1f24;
+  position: relative;                            /* ☰ 드로어 기준점 */
 }
+#btnAppMenu { font-size: 15px; line-height: 1; }
+
+/* ☰ 앱 메뉴 드로어 (Excalidraw 스타일) — 문서·부가 기능 수납 */
+.app-menu {
+  position: absolute; top: 40px; left: 10px; z-index: 300;
+  display: flex; flex-direction: column; min-width: 210px;
+  background: var(--bg); color: var(--tx);
+  border: 1px solid var(--bd); border-radius: var(--r-lg);
+  box-shadow: 0 8px 28px rgba(0,0,0,.28);
+  padding: 6px;
+}
+.app-menu[hidden] { display: none; }
+#toolbar .app-menu .menu-item {          /* 툴바 다크 버튼 스타일 덮어쓰기 */
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  background: none; border: none; color: var(--tx);
+  padding: 8px 12px; border-radius: var(--r); font-size: var(--fs);
+  text-align: left; cursor: pointer; text-decoration: none; white-space: nowrap;
+}
+#toolbar .app-menu .menu-item:hover { background: var(--primary-bg); color: var(--primary-d); }
+.app-menu .menu-item kbd { font-family: inherit; font-size: 11px; color: var(--tx3); }
+.app-menu .menu-item > span { display: flex; align-items: center; gap: 9px; }
+.app-menu .menu-item i {                       /* 아이콘 열 폭 고정 → 라벨 세로 정렬 */
+  font-style: normal; width: 18px; text-align: center; flex: none; font-size: 13px;
+}
+/* 피드백 강조 버튼 (베타 핵심 액션) */
+#toolbar button.tb-accent { background: var(--primary); border-color: var(--primary-d); }
+#toolbar button.tb-accent:hover { background: var(--primary-d); }
+.app-menu .menu-link { font-size: var(--fs-sm); color: var(--tx3); }
+.app-menu .menu-divider { height: 1px; background: var(--bd2); margin: 5px 8px; }
 .tb-row {
   display: flex; align-items: center; gap: 12px;
   flex-wrap: wrap; row-gap: 6px;                 /* 그래도 좁으면 줄 단위로 접힘(글자 줄바꿈 방지) */
@@ -114,7 +144,10 @@ body { display: flex; flex-direction: column; }
 .chk { display: flex; align-items: center; gap: 4px; cursor: pointer; }
 .tb-label { color: #9fb4c9; font-size: 12px; }
 .tb-group.modes button.mode { padding: 5px 12px; }
-.tb-group.modes button.mode.active { background: #1e88e5; border-color: #1565c0; }
+.tb-group.modes button.mode.active {
+  background: #1e88e5; border-color: #64b5f6; color: #fff; font-weight: 700;
+  box-shadow: 0 0 0 1px rgba(100,181,246,.35), 0 0 8px rgba(30,136,229,.5);
+}
 #toolbar button.small { padding: 4px 8px; }
 #paletteSwatches { display: flex; gap: 3px; }
 .swatch {
@@ -187,6 +220,8 @@ body { display: flex; flex-direction: column; }
 #annoProps textarea { width: 100%; margin-top: 2px; border: 1px solid #ccc; border-radius: 3px; padding: 4px 6px; font-size: 13px; resize: vertical; font-family: inherit; }
 #annoProps input { width: 100%; padding: 4px 6px; margin-top: 2px; border: 1px solid #ccc; border-radius: 3px; }
 #annoProps input[type=color] { height: 30px; padding: 1px; }
+#annoProps label.chk { display: flex; align-items: center; gap: 6px; }   /* 굵게 체크박스: 글자 옆에 정렬 */
+#annoProps input[type=checkbox] { width: auto; margin: 0; }
 #annoProps button.danger { color: #c62828; border: 1px solid #e0a0a0; background: #fff; border-radius: 4px; padding: 6px; cursor: pointer; margin-top: 4px; }
 #annoProps button.danger:hover { background: #fdecea; }
 
@@ -216,8 +251,6 @@ body.text-mode #canvas { cursor: text; }
 
 /* 배선 / waypoint */
 body.wire-mode #canvas, body.wire-mode #canvas * { cursor: crosshair !important; }
-/* 배선 모드임을 확실히: 캔버스에 파란 테두리 */
-body.wire-mode #canvasWrap { box-shadow: inset 0 0 0 3px #1e88e5; }
 .wp-handle { fill: #fff; stroke: #1e88e5; stroke-width: 1.5; }
 .wp-handle.sel { fill: #1e88e5; }
 

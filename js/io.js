@@ -183,5 +183,5 @@ WE.io = (function () {
     return changed;
   }
 
-  return { init: init, save: save, share: share, clearFileHandle: clearFileHandle };
+  return { init: init, save: save, share: share, clearFileHandle: clearFileHandle, loadProjectText: loadProjectText };
 })();

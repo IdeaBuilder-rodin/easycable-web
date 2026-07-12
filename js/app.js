@@ -10,6 +10,9 @@ WE.app = (function () {
     WE.bgremove.init();
     WE.io.init();
     WE.pdf.init();
+    // 저장된 단축키를 bindSettings()(단축키 입력칸을 채움)보다 먼저 불러와야
+    // 설정창에 기본값이 아니라 실제 저장된 키가 표시됨
+    loadShortcuts();
     bindToolbar();
     bindModes();
     bindPalette();
@@ -32,9 +35,9 @@ WE.app = (function () {
     bindFeedback();
     bindQuickColorPicker();
     bindHelp();
+    bindAppMenu();
     bindBOMView();
     loadSettings();
-    loadShortcuts();
     loadWireSettings();
     document.getElementById("wireWidthSel").value = String(WE.model.ui.wireWidth);
     document.getElementById("wireRoutingSel").value = WE.model.ui.wireRouting;
@@ -55,7 +58,11 @@ WE.app = (function () {
       }
       // 첫 방문(샘플 로드 안 한 브라우저)이면 sample.json이 있을 때만 예시로 보여줌
       tryLoadSample(function (loaded) {
-        if (!loaded) applyDefaultLayoutToProject();
+        if (!loaded) {
+          applyDefaultLayoutToProject();
+          applyDefaultPaletteToProject();  // 저장해둔 배선색 팔레트로 시작(새로고침해도 유지)
+          renderPalette();
+        }
         finish();
       });
       WE.library.load(renderLibrary);
@@ -196,8 +203,13 @@ WE.app = (function () {
 
   // ---- 데이터시트 미리보기 모달 ----
   var _dsList = [], _dsIdx = 0, _dsUrl = null;
-  function dataURLtoBlob(dataURL) {
-    var parts = dataURL.split(","), mime = (parts[0].match(/:(.*?);/) || [])[1] || "application/octet-stream";
+  // MIME은 데이터 내용이 아니라 검증된 타입(d.type)만 허용 — 공유 파일에 심어진
+  // "PDF라고 주장하지만 실제론 text/html"인 데이터가 같은 origin에서 실행되는 것(XSS) 차단
+  // SVG 제외: <img>엔 안전하지만 새 탭(blob URL)에서 열면 스크립트가 실행될 수 있음
+  var DS_SAFE_MIMES = /^(application\/pdf|image\/(png|jpe?g|gif|webp|bmp))$/;
+  function dataURLtoBlob(dataURL, declaredType) {
+    var parts = dataURL.split(",");
+    var mime = DS_SAFE_MIMES.test(declaredType || "") ? declaredType : "application/octet-stream";
     var bin = atob(parts[1]), len = bin.length, arr = new Uint8Array(len);
     for (var i = 0; i < len; i++) arr[i] = bin.charCodeAt(i);
     return new Blob([arr], { type: mime });
@@ -223,10 +235,10 @@ WE.app = (function () {
     var tabs = document.querySelectorAll("#dsViewerTabs .ds-tab");
     for (var k = 0; k < tabs.length; k++) tabs[k].classList.toggle("active", +tabs[k].dataset.i === i);
     if (_dsUrl) { URL.revokeObjectURL(_dsUrl); _dsUrl = null; }
-    _dsUrl = URL.createObjectURL(dataURLtoBlob(d.data));
+    _dsUrl = URL.createObjectURL(dataURLtoBlob(d.data, d.type));
     _dsZoom = 1; _dsPanX = 0; _dsPanY = 0;
     var box = document.getElementById("dsViewerPreview");
-    var isImg = /^image\//.test(d.type);
+    var isImg = /^image\/(png|jpe?g|gif|webp|bmp)$/.test(d.type);
     document.getElementById("dsZoomBtns").style.display = isImg ? "" : "none";  // 이미지일 때만 확대버튼
     box.classList.toggle("img-mode", isImg);
     if (d.type === "application/pdf") box.innerHTML = "<iframe src='" + _dsUrl + "' title='" + esc(d.name) + "'></iframe>";
@@ -250,7 +262,7 @@ WE.app = (function () {
     });
     document.getElementById("dsOpenTab").addEventListener("click", function () {
       var d = _dsList[_dsIdx]; if (!d) return;
-      var url = URL.createObjectURL(dataURLtoBlob(d.data));
+      var url = URL.createObjectURL(dataURLtoBlob(d.data, d.type));
       window.open(url, "_blank", "noopener");
       setTimeout(function () { URL.revokeObjectURL(url); }, 60000);
     });
@@ -420,8 +432,15 @@ WE.app = (function () {
       var file = e.target.files && e.target.files[0]; if (!file) return;
       var reader = new FileReader();
       reader.onload = function (ev) {
-        try { WE.library.importJson(JSON.parse(ev.target.result), false); renderLibrary(); }
-        catch (err) { alert("가져오기 실패: " + err.message); }
+        try {
+          var r = WE.library.importJson(JSON.parse(ev.target.result), false);
+          var relinked = relinkOrphanComponents();   // 연결 끊겼던 배치 부품을 이름으로 복구
+          renderLibrary();
+          WE.render.renderAll();   // BOM·도면 다시 그림
+          setHint("라이브러리 불러오기: 새 부품 " + r.added + "개" +
+            (r.updated ? (" · 기존 부품 " + r.updated + "개 갱신") : "") +
+            (relinked ? (" · 배치 부품 " + relinked + "개 재연결") : ""));
+        } catch (err) { alert("가져오기 실패: " + err.message); }
       };
       reader.readAsText(file); e.target.value = "";
     });
@@ -1377,6 +1396,7 @@ WE.app = (function () {
       if (!confirm("현재 작업을 비우고 새 프로젝트를 시작할까요?\n(저장 안 한 내용은 사라집니다)")) return;
       WE.model.newProject();
       applyDefaultLayoutToProject();   // 새 배선도도 마지막 BOM 레이아웃 유지
+      applyDefaultPaletteToProject();  // 새 배선도도 마지막 배선색 팔레트 유지
       WE.io.clearFileHandle();         // 이전 파일과의 연결 해제 → 다음 저장은 "다른 이름으로" 새로 지정
       WE.store.clear();
       reloadUI();
@@ -1510,15 +1530,20 @@ WE.app = (function () {
     root.setProperty("--cmp-label-box-display", _settings.labelBox ? "inline" : "none");
   }
   // 첫 방문 시 샘플 프로젝트(sample.json) 자동 로드 (한 번만). 없거나 file://면 그냥 빈 화면.
+  // 첫 방문자에게 샘플 프로젝트 자동 표시.
+  // sample.ezc는 "공유(🔗)" 버튼으로 내보낸 번들 파일을 그대로 사이트에 올린 것 —
+  // 프로젝트+사용 부품(스펙·가격·데이터시트 포함)이 한 파일이라 DB 없이도 완전한 샘플이 되고,
+  // 열면서 부품들이 방문자의 라이브러리(IndexedDB)에 병합되어 바로 재사용 가능.
   function tryLoadSample(cb) {
     var seen;
     try { seen = localStorage.getItem("we_sampleShown"); } catch (e) { /* 무시 */ }
     if (seen || !window.fetch) { cb(false); return; }
-    fetch("sample.json").then(function (r) {
+    fetch("sample.ezc").then(function (r) {
       if (!r.ok) throw 0;
-      return r.json();
-    }).then(function (data) {
-      WE.model.loadProject(data); reloadUI();
+      return r.text();
+    }).then(function (text) {
+      JSON.parse(text);   // 손상된 파일이면 여기서 throw → 조용히 빈 화면으로 시작(알림창 없이)
+      WE.io.loadProjectText(text, "샘플 프로젝트");
       try { localStorage.setItem("we_sampleShown", "1"); } catch (e) { /* 무시 */ }
       cb(true);
     }).catch(function () { cb(false); });
@@ -1540,6 +1565,7 @@ WE.app = (function () {
     document.getElementById("btnFeedback").addEventListener("click", function () {
       document.getElementById("feedbackText").value = "";
       document.getElementById("feedbackStatus").textContent = "";
+      document.getElementById("feedbackBotcheck").checked = false;   // 허니팟 초기화
       modal.hidden = false;
       document.getElementById("feedbackText").focus();
     });
@@ -1548,10 +1574,59 @@ WE.app = (function () {
     });
     document.getElementById("feedbackSend").addEventListener("click", sendFeedback);
   }
+  var FEEDBACK_EMAIL = "qksekftkd@gmail.com";
+  var FB_COOLDOWN_MS = 60 * 1000;   // 연타 방지: 1분에 1건
+  var FB_DAILY_MAX = 5;             // 실수/장난 유입으로 무료 한도가 타는 것 방지
+
+  // 전송 가능 여부 확인(로컬 기준). 막혔으면 사용자에게 보여줄 사유 문자열 반환, 통과면 null
+  function feedbackBlockReason() {
+    try {
+      var now = Date.now();
+      var last = Number(localStorage.getItem("we_fb_last") || 0);
+      if (now - last < FB_COOLDOWN_MS) {
+        var sec = Math.ceil((FB_COOLDOWN_MS - (now - last)) / 1000);
+        return "잠시 후 다시 보내주세요. (" + sec + "초)";
+      }
+      var today = new Date().toDateString();
+      if (localStorage.getItem("we_fb_day") === today &&
+          Number(localStorage.getItem("we_fb_count") || 0) >= FB_DAILY_MAX) {
+        return "오늘은 더 보낼 수 없습니다. 급하시면 " + FEEDBACK_EMAIL + " 으로 보내주세요.";
+      }
+    } catch (e) { /* localStorage 불가 브라우저는 그냥 통과 */ }
+    return null;
+  }
+  function feedbackMarkSent() {
+    try {
+      var today = new Date().toDateString();
+      var n = (localStorage.getItem("we_fb_day") === today) ? Number(localStorage.getItem("we_fb_count") || 0) : 0;
+      localStorage.setItem("we_fb_last", String(Date.now()));
+      localStorage.setItem("we_fb_day", today);
+      localStorage.setItem("we_fb_count", String(n + 1));
+    } catch (e) { /* 무시 */ }
+  }
+  // 전송 실패(한도 초과·네트워크 오류 등) 시 메일로 직접 보낼 수 있게 안내
+  function showMailFallback(statusEl, text) {
+    var href = "mailto:" + FEEDBACK_EMAIL +
+      "?subject=" + encodeURIComponent("[이지케이블] 피드백") +
+      "&body=" + encodeURIComponent(text);
+    statusEl.innerHTML += ' <a href="' + href + '">메일로 보내기</a>';
+  }
+
   function sendFeedback() {
     var text = document.getElementById("feedbackText").value.trim();
     var statusEl = document.getElementById("feedbackStatus");
     if (!text) { statusEl.textContent = "내용을 입력해주세요."; return; }
+    // 허니팟: 사람은 절대 체크할 수 없는 숨은 필드 → 채워져 있으면 봇으로 보고 조용히 무시
+    if (document.getElementById("feedbackBotcheck").checked) {
+      statusEl.textContent = "전달됐습니다. 감사합니다!";
+      return;
+    }
+    var blocked = feedbackBlockReason();
+    if (blocked) {
+      statusEl.textContent = blocked;
+      showMailFallback(statusEl, text);
+      return;
+    }
     var btn = document.getElementById("feedbackSend");
     btn.disabled = true;
     statusEl.textContent = "보내는 중…";
@@ -1563,19 +1638,24 @@ WE.app = (function () {
         subject: "[이지케이블] 피드백",
         from_name: "이지케이블 피드백",
         message: text,
+        botcheck: false,
         브라우저: navigator.userAgent
       })
     }).then(function (r) { return r.json(); }).then(function (res) {
       btn.disabled = false;
       if (res.success) {
+        feedbackMarkSent();
         statusEl.textContent = "전달됐습니다. 감사합니다!";
         setTimeout(function () { document.getElementById("feedbackModal").hidden = true; }, 900);
       } else {
+        // 무료 한도 초과 등으로 실패해도 의견이 유실되지 않도록 메일 경로 안내
         statusEl.textContent = "전송 실패: " + (res.message || "다시 시도해주세요.");
+        showMailFallback(statusEl, text);
       }
     }).catch(function () {
       btn.disabled = false;
       statusEl.textContent = "네트워크 오류로 전송하지 못했습니다.";
+      showMailFallback(statusEl, text);
     });
   }
 
@@ -1747,14 +1827,62 @@ WE.app = (function () {
     });
   }
 
-  // ---- 단축키 도움말 (우하단 ? 버튼) ----
+  // ---- 단축키 도움말 (우하단 ? 버튼 + ☰ 메뉴) ----
+  function openHelpModal() {
+    renderHelpShortcuts();
+    document.getElementById("helpModal").hidden = false;
+  }
   function bindHelp() {
-    document.getElementById("btnHelp").addEventListener("click", function () {
-      renderHelpShortcuts();
-      document.getElementById("helpModal").hidden = false;
-    });
+    document.getElementById("btnHelp").addEventListener("click", openHelpModal);
+    document.getElementById("btnHelpMenu").addEventListener("click", openHelpModal);
     document.getElementById("helpClose").addEventListener("click", function () {
       document.getElementById("helpModal").hidden = true;
+    });
+    // '?' 키로 도움말 열기 (Excalidraw와 동일한 관례)
+    document.addEventListener("keydown", function (e) {
+      if (e.key !== "?") return;
+      var tag = (document.activeElement && document.activeElement.tagName) || "";
+      if (tag === "INPUT" || tag === "TEXTAREA") return;
+      if (document.querySelector(".modal:not([hidden])")) return;
+      openHelpModal();
+    });
+  }
+
+  // ---- ☰ 앱 메뉴 드로어 ----
+  function bindAppMenu() {
+    var menu = document.getElementById("appMenu");
+    var btn = document.getElementById("btnAppMenu");
+    btn.addEventListener("click", function (e) {
+      e.stopPropagation();
+      menu.hidden = !menu.hidden;
+    });
+    // 항목 클릭(각자의 핸들러 실행 후) / 바깥 클릭 / Esc → 닫기
+    menu.addEventListener("click", function (e) {
+      if (e.target.closest(".menu-item")) menu.hidden = true;
+    });
+    document.addEventListener("pointerdown", function (e) {
+      if (!menu.hidden && !e.target.closest("#appMenu") && !e.target.closest("#btnAppMenu")) menu.hidden = true;
+    });
+    document.addEventListener("keydown", function (e) {
+      if (e.key === "Escape" && !menu.hidden) menu.hidden = true;
+    });
+
+    // 메뉴의 저장·공유 = 툴바 버튼과 같은 동작 (메뉴에서도 찾을 수 있게 중복 배치)
+    document.getElementById("btnSaveMenu").addEventListener("click", function () { WE.io.save(); });
+    document.getElementById("btnShareMenu").addEventListener("click", function () { WE.io.share(); });
+
+    // 샘플 프로젝트 열기 (사이트에 올려둔 sample.ezc — 공유 번들이라 부품·스펙까지 온전)
+    document.getElementById("btnSample").addEventListener("click", function () {
+      if (!confirm("현재 작업을 비우고 샘플 프로젝트를 열까요?\n(저장 안 한 내용은 사라집니다)")) return;
+      fetch("sample.ezc").then(function (r) {
+        if (!r.ok) throw 0;
+        return r.text();
+      }).then(function (text) {
+        JSON.parse(text);
+        WE.io.loadProjectText(text, "샘플 프로젝트");
+      }).catch(function () {
+        setHint("샘플 프로젝트가 아직 준비되지 않았습니다.");
+      });
     });
   }
   function renderHelpShortcuts() {
@@ -1767,7 +1895,9 @@ WE.app = (function () {
       ["화면 이동(팬)", "Space 드래그 · 휠클릭 드래그"],
       ["확대 / 축소", "Ctrl+휠"],
       ["선택 항목 삭제", "Delete / Backspace"],
-      ["즉시 저장", "Ctrl+S"]
+      ["즉시 저장", "Ctrl+S"],
+      ["파일 열기", "Ctrl+O"],
+      ["이 도움말", "?"]
     ];
     document.getElementById("helpShortcutList").innerHTML = rows.map(function (r) {
       return "<div class='sc-row'><span>" + esc(r[0]) + "</span><b>" + esc(r[1]) + "</b></div>";
@@ -1800,8 +1930,10 @@ WE.app = (function () {
 
   // ---- 색상 팔레트 ----
   function bindPalette() {
-    document.getElementById("wireWidthSel").addEventListener("change", function (e) {
-      WE.model.ui.wireWidth = parseInt(e.target.value, 10);
+    document.getElementById("wireWidthSel").addEventListener("input", function (e) {
+      var v = parseInt(e.target.value, 10);
+      if (isNaN(v) || v < 1) return;
+      WE.model.ui.wireWidth = v;
       saveWireSettings();
     });
     document.getElementById("wireRoutingSel").addEventListener("change", function (e) {
@@ -1818,7 +1950,7 @@ WE.app = (function () {
       var color = document.getElementById("newPalColor").value;
       WE.model.project.palette.push({ color: color, label: label });
       document.getElementById("newPalLabel").value = "";
-      renderPaletteList(); renderPalette();
+      renderPaletteList(); renderPalette(); saveDefaultPalette();
     });
     var pl = document.getElementById("paletteList");
     pl.addEventListener("input", function (e) {
@@ -1832,14 +1964,30 @@ WE.app = (function () {
         if (WE.model.ui.wireColor === oldC) WE.model.ui.wireColor = newC;
         WE.render.renderWires(); WE.render.renderOverlay();
       } else if (e.target.classList.contains("plabel")) p.label = e.target.value;
-      renderPalette();
+      renderPalette(); saveDefaultPalette();
     });
     pl.addEventListener("click", function (e) {
       if (!e.target.classList.contains("pdel")) return;
       var row = e.target.closest(".preset-row");
       WE.model.project.palette.splice(+row.dataset.idx, 1);
-      renderPaletteList(); renderPalette();
+      renderPaletteList(); renderPalette(); saveDefaultPalette();
     });
+  }
+
+  // 배선색 팔레트를 '마지막 = 전역 기본값'으로 저장(BOM 레이아웃과 같은 패턴).
+  // 프로젝트 자체는 새로고침 시 자동 복원 안 하도록 되어 있어서, 팔레트만 이렇게 별도로
+  // 영구 저장해두지 않으면 사용자가 추가한 프리셋이 새로고침/새 작업마다 기본값으로 되돌아감.
+  var PALETTE_KEY = "we_palette";
+  function saveDefaultPalette() {
+    try { localStorage.setItem(PALETTE_KEY, JSON.stringify(WE.model.project.palette)); } catch (e) { /* 무시 */ }
+  }
+  function loadDefaultPalette() {
+    try { var r = localStorage.getItem(PALETTE_KEY); return r ? JSON.parse(r) : null; } catch (e) { return null; }
+  }
+  // 새 배선도가 마지막으로 저장해둔 팔레트에서 시작하도록 적용
+  function applyDefaultPaletteToProject() {
+    var saved = loadDefaultPalette();
+    if (saved && saved.length) WE.model.project.palette = saved;
   }
 
   function renderPalette() {
@@ -1897,6 +2045,12 @@ WE.app = (function () {
     document.getElementById("annoText").addEventListener("input", function (e) {
       var a = WE.model.getSelectedAnnotation(); if (!a) return;
       a.text = e.target.value; WE.render.renderAnnotations(); WE.render.renderOverlay();
+    });
+    // 텍스트 입력 중 Esc → 입력 종료 + 선택 모드로 복귀 (텍스트 작업 마무리 동선)
+    document.getElementById("annoText").addEventListener("keydown", function (e) {
+      if (e.key !== "Escape") return;
+      e.target.blur();
+      setMode("select");
     });
     document.getElementById("annoColor").addEventListener("input", function (e) {
       var a = WE.model.getSelectedAnnotation(); if (!a) return;
@@ -2502,12 +2656,26 @@ WE.app = (function () {
   }
 
   // 프로젝트 열기 후 전체 UI 갱신
+  // 배치된 부품의 libraryId가 라이브러리에서 사라진 경우(다른 브라우저에서 만든 파일,
+  // 예전 버전의 라이브러리 불러오기로 id가 재발급된 경우 등) 같은 이름의 부품으로 다시 연결.
+  // 연결이 끊기면 BOM의 스펙·가격·구매링크·데이터시트가 전부 빈칸으로 보이므로 열 때마다 복구 시도.
+  function relinkOrphanComponents() {
+    var fixed = 0;
+    WE.model.project.components.forEach(function (c) {
+      if (!c.libraryId || WE.library.get(c.libraryId)) return;   // 정상 연결이면 통과
+      var byName = WE.library.findByName(c.name);
+      if (byName) { c.libraryId = byName.id; fixed++; }
+    });
+    return fixed;
+  }
+
   function reloadUI() {
     var snap = WE.model.project.meta.canvas.snap !== false;
     document.getElementById("chkSnap").checked = snap;
     document.getElementById("projName").value = WE.model.project.meta.name || "";
     document.getElementById("wireWidthSel").value = String(WE.model.ui.wireWidth);
     document.getElementById("wireRoutingSel").value = WE.model.ui.wireRouting;
+    relinkOrphanComponents();
     renderPalette();
     WE.render.renderAll();
     refreshProps();
@@ -2528,7 +2696,8 @@ WE.app = (function () {
     wireListData: wireListData,
     afterModelRender: afterModelRender,
     powerSummaryRows: powerSummaryRows,
-    handleShortcut: handleShortcut
+    handleShortcut: handleShortcut,
+    setMode: setMode
   };
 })();
 

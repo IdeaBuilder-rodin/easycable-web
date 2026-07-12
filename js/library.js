@@ -130,13 +130,29 @@ WE.library = (function () {
   }
 
   function exportJson() { return JSON.stringify({ parts: parts }, null, 2); }
+
+  // 라이브러리 가져오기
+  // - 같은 이름의 부품이 이미 있으면 새로 만들지 않고 기존 부품을 갱신 → 중복 등록 방지
+  // - 부품 id는 최대한 원본 그대로 유지 → 이미 배치된 부품의 libraryId 연결이 끊기지 않음
+  //   (예전엔 무조건 id를 재발급해서, 불러오기 후 BOM의 스펙·가격·데이터시트가 전부 비어 보였음)
   function importJson(data, replace) {
     var incoming = (data && data.parts) || [];
+    if (replace) parts = [];
+    var added = 0, updated = 0;
     incoming.forEach(function (p) {
-      p.id = WE.model.nextId("lib"); // id 재발급(충돌 방지)
+      if (!p || !p.name) return;
+      var existing = findByName(p.name);
+      if (existing) {
+        updatePart(existing.id, p);   // id 유지 → 배치된 부품과의 연결 보존
+        updated++;
+      } else {
+        var np = addPart(p);                       // 기본값 정규화(새 id 발급됨)
+        if (p.id && !get(p.id)) np.id = p.id;      // 쓰이지 않는 원본 id면 되살려 연결 유지
+        added++;
+      }
     });
-    parts = replace ? incoming : parts.concat(incoming);
     save();
+    return { added: added, updated: updated };
   }
 
   return {

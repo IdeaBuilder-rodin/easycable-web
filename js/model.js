@@ -5,9 +5,10 @@ window.WE = WE;
 WE.model = (function () {
   var DEFAULT_PALETTE = [   // 색상 + 의미(범례에 사용)
     { color: "#e53935", label: "+ (전원)" },
-    { color: "#9e9e9e", label: "GND" },
-    { color: "#43a047", label: "오디오 L" },
-    { color: "#fbc02d", label: "오디오 R" }
+    { color: "#111111", label: "GND" },
+    { color: "#ffffff", label: "중성" },
+    { color: "#fbc02d", label: "신호" },
+    { color: "#0000ff", label: "통신 (I2C 등)" }
   ];
   function defaultMeta() {
     return { name: "이름없는 배선도", version: 1, canvas: { width: 1600, height: 900, grid: 10, snap: true } };
