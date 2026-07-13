@@ -3,6 +3,19 @@ var WE = window.WE || {};
 window.WE = WE;
 
 WE.app = (function () {
+  // ---- GA4 이벤트 추적 (수요 검증용) ----
+  // 방문자 수·세션은 기본 스니펫이 자동 추적하고, 여기선 '실제로 배선도를 그렸는가'를 봄.
+  // gtag가 차단/미로드여도 안전(try). 퍼널 이벤트는 세션당 1회만 보내 이탈 분석을 깔끔하게 함.
+  var _trackedOnce = {};
+  function track(name, params) {
+    try { if (window.gtag) window.gtag("event", name, params || {}); } catch (e) { /* 무시 */ }
+  }
+  function trackOnce(name, params) {
+    if (_trackedOnce[name]) return;
+    _trackedOnce[name] = 1;
+    track(name, params);
+  }
+
   function init() {
     WE.presets.init();
     WE.render.init();
@@ -359,7 +372,7 @@ WE.app = (function () {
           var np = saveToLibrary(name, function () {
             return { name: name, image: url, defaultWidth: w, defaultHeight: h, terminals: [] };
           });
-          if (np) openLibEdit(np.id);   // 바로 스펙/구매링크 입력
+          if (np) { trackOnce("add_component"); openLibEdit(np.id); }   // 바로 스펙/구매링크 입력
         };
         probe.src = url;
       });
@@ -441,6 +454,7 @@ WE.app = (function () {
       _placeN = (_placeN + 1) % 8;
       var opts = WE.library.instanceOpts(part, 180 + _placeN * 24, 150 + _placeN * 24);
       var cmp = WE.model.addComponent(opts);
+      trackOnce("place_component");
       WE.model.select("component", cmp.id);
       touchLibRecent(part.id);   // 최근 사용 → 목록 상단으로
       renderLibrary();
@@ -1535,6 +1549,7 @@ WE.app = (function () {
     modal.hidden = false;
     document.getElementById("welcomeStart").addEventListener("click", function () {
       modal.hidden = true;
+      track("welcome_start");   // 안내 모달에서 '시작하기' = 실제 진입
     });
   }
 
@@ -1625,6 +1640,7 @@ WE.app = (function () {
       btn.disabled = false;
       if (res.success) {
         feedbackMarkSent();
+        track("feedback_sent");
         statusEl.textContent = "전달됐습니다. 감사합니다!";
         setTimeout(function () { document.getElementById("feedbackModal").hidden = true; }, 900);
       } else {
@@ -1874,6 +1890,7 @@ WE.app = (function () {
         a.download = ((WE.model.project.meta.name || "배선도").replace(/[\\/:*?"<>|]/g, "_")) + ".png";
         document.body.appendChild(a); a.click(); document.body.removeChild(a);
         setTimeout(function () { URL.revokeObjectURL(a.href); }, 1000);
+        track("export", { method: "png" });
         setHint("이미지 저장 완료 (PNG)");
       }, "image/png");
     };
@@ -1989,6 +2006,7 @@ WE.app = (function () {
         return r.text();
       }).then(function (text) {
         JSON.parse(text);
+        track("open_sample");
         WE.io.loadProjectText(text, "샘플 프로젝트");
       }).catch(function () {
         setHint("샘플 프로젝트가 아직 준비되지 않았습니다.");
@@ -2807,7 +2825,8 @@ WE.app = (function () {
     afterModelRender: afterModelRender,
     powerSummaryRows: powerSummaryRows,
     handleShortcut: handleShortcut,
-    setMode: setMode
+    setMode: setMode,
+    track: track, trackOnce: trackOnce
   };
 })();
 

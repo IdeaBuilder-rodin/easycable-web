@@ -407,6 +407,7 @@ WE.interactions = (function () {
         wirePending = { cmpId: hit.cmpId, tid: hit.tid };
       } else if (!(wirePending.cmpId === hit.cmpId && wirePending.tid === hit.tid)) {
         var w = WE.model.addWire(wirePending.cmpId, wirePending.tid, hit.cmpId, hit.tid);
+        if (w && WE.app.trackOnce) WE.app.trackOnce("create_wire");
         wirePending = null;
         WE.render.clearWirePreview();
         WE.render.renderWires();

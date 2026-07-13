@@ -25,6 +25,7 @@ WE.pdf = (function () {
     WE.render.clearWirePreview();
     WE.render.renderOverlay();
     populate();
+    if (WE.app && WE.app.track) WE.app.track("export", { method: "pdf" });
     window.print();
   }
 

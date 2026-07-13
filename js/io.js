@@ -43,6 +43,7 @@ WE.io = (function () {
 
   // 저장: 이미 연결된 파일이 있으면 그 파일에 조용히 덮어쓰기, 없으면 "다른 이름으로 저장" 새로 지정
   function save() {
+    if (WE.app && WE.app.track) WE.app.track("save_project");
     var data = JSON.stringify(WE.model.project);
     var fn = safeName(WE.model.project.meta.name) + ".ezc";
 
@@ -76,6 +77,7 @@ WE.io = (function () {
   // 공유: 배선도 + 이 프로젝트에 실제 쓰인 라이브러리 부품을 한 파일로 (받는 사람은 파일 하나로 열림)
   // 항상 새 파일로 내보내는 별도 산출물이라 파일 핸들과 무관하게 다운로드 방식 유지
   function share() {
+    if (WE.app && WE.app.track) WE.app.track("share_project");
     var proj = WE.model.project;
     var usedIds = {}, usedParts = [];
     (proj.components || []).forEach(function (c) {
