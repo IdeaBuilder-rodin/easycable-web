@@ -300,43 +300,13 @@ WE.app = (function () {
     });
   }
 
-  // 단자 편집 후: 라이브러리·같은 부품에 반영할지 사용자가 결정
+  // 단자 편집 후 처리 — 편집은 '이 부품(인스턴스)'에만 적용(Ctrl+Z로 복구 가능).
+  // 라이브러리 반영은 실수 방지를 위해 분리: 부품 우클릭 → '라이브러리에 저장'을 눌러야 반영됨.
   function afterTerminalEdit(c) {
-    if (!c || !c.libraryId) return;
-    var others = WE.model.project.components.filter(function (x) {
-      return x.libraryId === c.libraryId && x.id !== c.id;
-    });
-    var lib = WE.library.get(c.libraryId);
-    if (!others.length && !lib) return;
-    // 예전엔 확인 없이 자동 반영했는데, 단순 편집만 해도 라이브러리가 조용히 바뀌는 문제가 있어 확인창 추가
-    if (!confirm("단자 변경을 라이브러리에도 반영할까요?\n\n[확인] 라이브러리" +
-      (others.length ? (" + 배치된 같은 부품 " + others.length + "개") : "") + "에 반영\n[취소] 이 부품에만 적용")) return;
-
-    var srcTerms = c.terminals.map(function (t) {
-      var s = { name: t.name, color: t.color, rx: t.rx, ry: t.ry };
-      if (t.labelSide) s.labelSide = t.labelSide;
-      if (t.labelPos) s.labelPos = { x: t.labelPos.x, y: t.labelPos.y };
-      return s;
-    });
-    others.forEach(function (x) {
-      // 이름이 같은 단자는 id 유지(배선 보존), 나머지는 새로 생성
-      var byName = {};
-      x.terminals.forEach(function (t) { byName[t.name] = t; });
-      x.terminals = srcTerms.map(function (s) {
-        var ex = byName[s.name];
-        var t = ex || { id: WE.model.nextId("t") };
-        t.name = s.name; t.color = s.color; t.rx = s.rx; t.ry = s.ry;
-        if (s.labelSide) t.labelSide = s.labelSide; else delete t.labelSide;
-        if (s.labelPos) t.labelPos = s.labelPos; else delete t.labelPos;
-        return t;
-      });
-    });
-    // 사라진 단자를 참조하던 배선 정리
+    // 편집으로 사라진 단자를 참조하던 배선만 정리
     WE.model.project.wires = WE.model.project.wires.filter(function (w) {
       return WE.geometry.wireEndpoint(w.from) && WE.geometry.wireEndpoint(w.to);
     });
-    if (lib) { WE.library.updatePart(lib.id, { terminals: srcTerms }); renderLibrary(); }
-    setHint("단자 배치를 라이브러리 부품 " + (others.length + 1) + "개에 자동 반영했습니다.");
   }
 
   // 배경제거 편집에서 회전/크롭했을 때 단자 좌표(rx·ry)를 이미지와 똑같이 변환
@@ -357,48 +327,17 @@ WE.app = (function () {
     }
   }
 
-  // 인스턴스 이미지 편집 결과 적용 — 새 이미지 비율로 박스 보정 + 단자 좌표 변환.
-  // 라이브러리 반영은 확인창을 거침(단자 편집과 동일한 규칙)
+  // 인스턴스 이미지 편집(배경제거/회전/크롭) 결과를 '이 부품'에만 적용 — 새 이미지 비율로 박스 보정 + 단자 좌표 변환.
+  // 라이브러리 반영은 분리(부품 우클릭 → '라이브러리에 저장'). 실수해도 Ctrl+Z로 복구 가능.
   function applyInstanceImage(c, url, tf) {
     var probe = new Image();
     probe.onload = function () {
       var aspect = probe.width > 0 ? probe.height / probe.width : (c.height / c.width);
       var swap = tf && (tf.rotation === 90 || tf.rotation === 270);   // 90/270°는 가로세로가 실제로 뒤바뀜
-      function fit(x) {
-        x.image = url;
-        if (swap) x.width = Math.max(10, x.height);
-        x.height = Math.max(10, Math.round(x.width * aspect));
-        (x.terminals || []).forEach(function (t) { transformTerminal(t, tf); });
-      }
-      fit(c);
-      if (c.libraryId) {
-        var others = WE.model.project.components.filter(function (x) {
-          return x.libraryId === c.libraryId && x.id !== c.id;
-        });
-        var lib = WE.library.get(c.libraryId);
-        if ((others.length || lib) &&
-            confirm("이미지 변경을 라이브러리에도 반영할까요?\n\n[확인] 라이브러리" +
-              (others.length ? (" + 배치된 같은 부품 " + others.length + "개") : "") + "에 반영\n[취소] 이 부품에만 적용")) {
-          others.forEach(fit);
-          if (lib) {
-            var nw = swap ? lib.defaultHeight : lib.defaultWidth;
-            var libTerms = (lib.terminals || []).map(function (t) {
-              var s = { name: t.name, color: t.color, rx: t.rx, ry: t.ry };
-              if (t.labelSide) s.labelSide = t.labelSide;
-              if (t.labelPos) s.labelPos = { x: t.labelPos.x, y: t.labelPos.y };
-              transformTerminal(s, tf);
-              return s;
-            });
-            WE.library.updatePart(lib.id, {
-              image: url, defaultWidth: nw,
-              defaultHeight: Math.max(10, Math.round(nw * aspect)),
-              terminals: libTerms
-            });
-            renderLibrary();
-          }
-          setHint("이미지를 라이브러리 부품 " + (others.length + 1) + "개에 반영했습니다.");
-        }
-      }
+      c.image = url;
+      if (swap) c.width = Math.max(10, c.height);
+      c.height = Math.max(10, Math.round(c.width * aspect));
+      (c.terminals || []).forEach(function (t) { transformTerminal(t, tf); });
       WE.render.renderAll();
     };
     probe.src = url;
@@ -1490,12 +1429,13 @@ WE.app = (function () {
     var scaleOld = before.width / 1600;
     if (clientX == null) { var wr = wrap.getBoundingClientRect(); clientX = wr.left + wr.width / 2; clientY = wr.top + wr.height / 2; }
     var px = (clientX - before.left) / scaleOld, py = (clientY - before.top) / scaleOld;
-    _zoom = Math.max(0.15, Math.min(5, z));
+    _zoom = Math.max(0.15, Math.min(7, z));
     canvas.style.width = (1600 * _zoom) + "px";
     canvas.style.height = (900 * _zoom) + "px";
     var after = canvas.getBoundingClientRect();
     wrap.scrollLeft += (after.left + px * _zoom) - clientX;   // 커서 지점 고정
     wrap.scrollTop += (after.top + py * _zoom) - clientY;
+    if (WE.render.setViewZoom) WE.render.setViewZoom(_zoom);   // 단자 점 크기를 화면상 일정하게 유지
     updateZoomLabel();
   }
   function zoomBy(f, x, y) { setZoom(_zoom * f, x, y); }

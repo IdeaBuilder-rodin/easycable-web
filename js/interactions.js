@@ -77,12 +77,35 @@ WE.interactions = (function () {
   var _tipEl = null, _tipShown = false;
   function onTermTooltipMove(e) {
     if (drag) { hideTermTooltip(); return; }
+    // 1) 단자 히트영역 위에 직접 있을 때
     var termEl = e.target.closest("[data-term-id]");
-    if (!termEl) { hideTermTooltip(); return; }
-    var cmp = WE.model.getComponent(termEl.getAttribute("data-cmp-id"));
-    var t = cmp && WE.model.getTerminal(cmp, termEl.getAttribute("data-term-id"));
-    if (!t) { hideTermTooltip(); return; }
-    showTermTooltip(t.name, e.clientX, e.clientY);
+    if (termEl) {
+      var cmp = WE.model.getComponent(termEl.getAttribute("data-cmp-id"));
+      var t = cmp && WE.model.getTerminal(cmp, termEl.getAttribute("data-term-id"));
+      if (t) { showTermTooltip(t.name, e.clientX, e.clientY); return; }
+    }
+    // 2) 배선이 단자를 덮고 있을 때: 그 배선의 끝점 단자 중 마우스에 가까운 것을 표시
+    var wireEl = e.target.closest("[data-wire-id]");
+    var m = svg.getScreenCTM();
+    if (wireEl && m) {
+      var w = WE.model.getWire(wireEl.getAttribute("data-wire-id"));
+      if (w) {
+        var best = null;
+        [w.from, w.to].forEach(function (ref) {
+          var pos = WE.geometry.wireEndpoint(ref); if (!pos) return;
+          var sx = m.a * pos.x + m.c * pos.y + m.e;    // 캔버스→화면 좌표
+          var sy = m.b * pos.x + m.d * pos.y + m.f;
+          var d = Math.hypot(e.clientX - sx, e.clientY - sy);
+          if (d < 20 && (!best || d < best.d)) {
+            var c2 = WE.model.getComponent(ref.componentId);
+            var t2 = c2 && WE.model.getTerminal(c2, ref.terminalId);
+            if (t2) best = { d: d, name: t2.name };
+          }
+        });
+        if (best) { showTermTooltip(best.name, e.clientX, e.clientY); return; }
+      }
+    }
+    hideTermTooltip();
   }
   function showTermTooltip(text, clientX, clientY) {
     if (!_tipEl) _tipEl = document.getElementById("termTooltip");

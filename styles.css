@@ -588,7 +588,9 @@ body.panning #canvas, body.panning #canvas * { cursor: grabbing !important; }
 .term-label {
   font: 11px "Malgun Gothic", sans-serif; fill: #333;
   user-select: none; paint-order: stroke;
-  stroke: #fff; stroke-width: 2.5px;
+  /* 반투명: 라벨 위를 지나는 배선이 비쳐 보여 선이 끊긴 것처럼 보이지 않음 */
+  fill-opacity: .78;
+  stroke: #fff; stroke-width: 1.5px; stroke-opacity: .5;
 }
 /* 단자 마우스오버 강조: 이름 라벨을 꺼둔 부품에서도 단자 구성을 바로 확인 가능(네이티브 title 툴팁 병행) */
 .term-dot:hover .term-dot-mark { r: 7; stroke-width: 2.5px; }

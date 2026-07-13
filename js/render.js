@@ -128,24 +128,64 @@ WE.render = (function () {
     WE.model.project.components.forEach(function (cmp) { updateComponentLabel(cmp); });
   }
 
+  // ---- 단자 점 크기: 화면상 겉보기 크기를 일정하게 유지 (단자 배치 모달과 동일한 UX) ----
+  // 캔버스는 canvas.style.width = 1600*zoom 방식이라 그냥 두면 단자도 함께 스케일됨.
+  // 그래서 반지름을 (부품 스케일 × 캔버스 줌)으로 나눠, 확대해도 점이 커지지 않게 함.
+  // 단, 촘촘한 핀헤더는 이웃 거리 절반(cap)으로 상한을 둬서 히트영역이 겹치지 않게 함.
+  var _viewZoom = 1;
+  function termRadii(nearest, cscale) {
+    var k = cscale * _viewZoom;
+    var cap = nearest / 2;                              // 겹침 방지 상한(로컬 좌표)
+    var hit = Math.min(11 / k, cap); hit = Math.max(hit, Math.min(3, cap));
+    var mark = Math.min(4.5 / k, cap * 0.85); mark = Math.max(mark, Math.min(1.6, cap * 0.85));
+    var sel = Math.min(mark + 3.5 / k, cap);
+    return { hit: hit, mark: mark, sel: sel };
+  }
+  function setViewZoom(z) { _viewZoom = z || 1; applyTermSizes(); }
+  // 줌 변경 시: 이미 그려진 단자 원들의 반지름만 갱신(전체 재렌더 없이 가볍게)
+  function applyTermSizes() {
+    var gs = layerComponents.querySelectorAll(".term-dot");
+    for (var i = 0; i < gs.length; i++) {
+      var g = gs[i];
+      var r = termRadii(+g.getAttribute("data-nearest"), +g.getAttribute("data-cscale"));
+      var hit = g.querySelector("[data-term-id]"); if (hit) hit.setAttribute("r", r.hit);
+      var mk = g.querySelector(".term-dot-mark"); if (mk) mk.setAttribute("r", r.mark);
+      var sel = g.querySelector(".term-dot-sel"); if (sel) sel.setAttribute("r", r.sel);
+    }
+  }
+
   // 단자 점 + 히트영역 (라벨은 별도 화면기준 레이어에서)
   function appendTerminals(cmp, g) {
     var def = WE.model.DEFAULT_TERMINAL_COLOR;
-    cmp.terminals.forEach(function (t) {
-      var cx = t.rx * cmp.width, cy = t.ry * cmp.height;
+    var cscale = cmp.scale || 1;
+    // 각 단자의 로컬 좌표를 미리 계산 (겹침 방지용 최근접 거리 산출에 사용)
+    var pos = cmp.terminals.map(function (t) { return { x: t.rx * cmp.width, y: t.ry * cmp.height }; });
+    cmp.terminals.forEach(function (t, i) {
+      var cx = pos[i].x, cy = pos[i].y;
       var color = t.color || def;
-      // 그룹으로 묶어 CSS :hover로 마우스오버 시 강조 + 커스텀 툴팁(interactions.js)으로 단자명 표시
-      var tg = el("g", { "class": "term-dot" });
+      var nearest = Infinity;
+      for (var j = 0; j < pos.length; j++) {
+        if (j === i) continue;
+        var d = Math.hypot(pos[j].x - cx, pos[j].y - cy);
+        if (d < nearest) nearest = d;
+      }
+      var r = termRadii(nearest, cscale);
+      // 그룹으로 묶어 CSS :hover로 마우스오버 시 강조 + 커스텀 툴팁(interactions.js)으로 단자명 표시.
+      // data-nearest/cscale를 저장해두면 줌 변경 시 재계산 없이 반지름만 갱신 가능
+      var tg = el("g", { "class": "term-dot", "data-nearest": nearest, "data-cscale": cscale });
       tg.appendChild(el("circle", {
-        cx: cx, cy: cy, r: 10, fill: "#000", "fill-opacity": 0,
+        cx: cx, cy: cy, r: r.hit, fill: "#000", "fill-opacity": 0,
         "data-term-id": t.id, "data-cmp-id": cmp.id, style: "pointer-events:all;cursor:pointer"
       }));
       if (WE.model.ui.selectedTerminalId === t.id) {
-        tg.appendChild(el("circle", { cx: cx, cy: cy, r: 8, fill: "none", stroke: "#1e88e5", "stroke-width": 2, "pointer-events": "none" }));
+        tg.appendChild(el("circle", {
+          cx: cx, cy: cy, r: r.sel, fill: "none", stroke: "#1e88e5", "stroke-width": 2,
+          "vector-effect": "non-scaling-stroke", "pointer-events": "none", "class": "term-dot-sel"
+        }));
       }
       tg.appendChild(el("circle", {
-        cx: cx, cy: cy, r: 4.5, fill: color, stroke: "#fff", "stroke-width": 1.5, "pointer-events": "none",
-        "class": "term-dot-mark"
+        cx: cx, cy: cy, r: r.mark, fill: color, stroke: "#fff", "stroke-width": 1.5,
+        "vector-effect": "non-scaling-stroke", "pointer-events": "none", "class": "term-dot-mark"
       }));
       g.appendChild(tg);
     });
@@ -704,6 +744,7 @@ WE.render = (function () {
     setNetHighlight: setNetHighlight,
     setWireLabelGuide: setWireLabelGuide,
     setAlignGuides: setAlignGuides,
+    setViewZoom: setViewZoom,
     setWireLabelHover: setWireLabelHover,
     componentBBox: componentBBox,
     annoBBox: annoBBox,
