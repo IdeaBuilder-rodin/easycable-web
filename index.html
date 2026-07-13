@@ -39,10 +39,12 @@
       <button id="btnOpen" class="menu-item" title="프로젝트 파일 열기"><span><i>📂</i>열기</span><kbd>Ctrl+O</kbd></button>
       <button id="btnSaveMenu" class="menu-item" title="프로젝트를 파일로 저장"><span><i>💾</i>저장</span><kbd>Ctrl+S</kbd></button>
       <button id="btnShareMenu" class="menu-item" title="프로젝트 + 사용된 부품을 한 파일로 내보내기"><span><i>🔗</i>공유</span></button>
-      <button id="btnExport" class="menu-item" title="PDF 또는 이미지로 내보내기"><span><i>📤</i>내보내기</span><kbd id="exportArrow">▸</kbd></button>
-      <div id="exportSub" class="menu-sub" hidden>
-        <button id="btnPdf" class="menu-item" title="PDF로 인쇄">PDF 문서</button>
-        <button id="btnPng" class="menu-item" title="배선도를 PNG 이미지로 저장 (카페·블로그·메신저 공유용)">이미지 (PNG)</button>
+      <div class="menu-flyout">
+        <button id="btnExport" class="menu-item" title="PDF 또는 이미지로 내보내기"><span><i>📤</i>내보내기</span><kbd>▸</kbd></button>
+        <div id="exportSub" class="menu-sub">
+          <button id="btnPdf" class="menu-item" title="PDF로 인쇄">PDF 문서</button>
+          <button id="btnPng" class="menu-item" title="배선도를 PNG 이미지로 저장 (카페·블로그·메신저 공유용)">이미지 (PNG)</button>
+        </div>
       </div>
       <button id="btnSample" class="menu-item" title="예제 배선도를 열어봅니다"><span><i>💡</i>샘플 프로젝트</span></button>
       <button id="btnHistory" class="menu-item" title="자동 보관된 이전 스냅샷으로 되돌립니다"><span><i>🕘</i>이전 버전 복구</span></button>
@@ -603,21 +605,26 @@
   <!-- 방문 안내 모달: 매번 접속할 때마다 표시(1회성 아님) -->
   <div id="welcomeModal" class="modal" hidden>
     <div class="modal-box welcome-box">
-      <div class="welcome-head">
-        <h3>🔌 이지케이블 <span class="beta-badge">BETA</span></h3>
-        <p>이미지로 부품을 올리고, 단자를 찍고, 선을 이어<br /><b>배선도를 가장 쉽게</b> 그리는 도구입니다.</p>
+      <div class="welcome-body">
+        <div class="welcome-head">
+          <h3>🔌 이지케이블 <span class="beta-badge">BETA</span></h3>
+          <p>이미지로 부품을 올리고, 단자를 찍고, 선을 이어<br /><b>배선도를 가장 쉽게</b> 그리는 도구입니다.</p>
+        </div>
+
+        <ol class="welcome-steps">
+          <li><span class="ws-num">1</span><span>좌측 <b>부품 라이브러리 ＋ 부품 추가</b> — 부품 사진을 올리면 배경 제거까지</span></li>
+          <li><span class="ws-num">2</span><span>부품의 <b>⋯ 메뉴 → 단자 배치</b>로 단자를 찍고</span></li>
+          <li><span class="ws-num">3</span><span><b>╱ 배선</b> 모드로 단자끼리 클릭 연결 — <b>BOM·배선 리스트·PDF는 자동</b></span></li>
+        </ol>
+
+        <p class="welcome-beta">현재 <b>베타 테스트 중</b>입니다. 작업물은 이 브라우저에 자동 저장됩니다.<br />의견은 언제든 <b>피드백</b>으로 남겨주세요.</p>
+
+        <button id="welcomeStart" class="primary welcome-start">시작하기</button>
       </div>
-
-      <ol class="welcome-steps">
-        <li><span class="ws-num">1</span><span>좌측 <b>부품 라이브러리 ＋ 부품 추가</b> — 부품 사진을 올리면 배경 제거까지</span></li>
-        <li><span class="ws-num">2</span><span>부품의 <b>⋯ 메뉴 → 단자 배치</b>로 단자를 찍고</span></li>
-        <li><span class="ws-num">3</span><span><b>╱ 배선</b> 모드로 단자끼리 클릭 연결 — <b>BOM·배선 리스트·PDF는 자동</b></span></li>
-      </ol>
-
-      <p class="welcome-beta">현재 <b>베타 테스트 중</b>입니다. 작업물은 이 브라우저에 자동 저장됩니다.<br />의견은 언제든 <b>피드백</b>으로 남겨주세요.</p>
-
-      <button id="welcomeStart" class="primary welcome-start">시작하기</button>
-      <p class="welcome-privacy">이용 시 <a href="privacy.html" target="_blank" rel="noopener">개인정보처리방침</a>에 동의한 것으로 간주됩니다.</p>
+      <div class="welcome-foot">
+        <label class="welcome-dismiss"><input type="checkbox" id="welcomeDismiss" /> 24시간 동안 보지 않기</label>
+        <p class="welcome-privacy">이용 시 <a href="privacy.html" target="_blank" rel="noopener">개인정보처리방침</a>에 동의한 것으로 간주됩니다.</p>
+      </div>
     </div>
   </div>
 

@@ -1543,11 +1543,16 @@ WE.app = (function () {
     }).catch(function () { cb(false); });
   }
 
-  // ---- 방문 안내 모달: 베타 기간이라 접속할 때마다 항상 표시(1회성 아님, 저장 안 함) ----
+  // ---- 방문 안내 모달: 베타 기간이라 접속할 때마다 표시. 단 '24시간 보지 않기' 체크 시 하루 숨김 ----
   function bindWelcome() {
     var modal = document.getElementById("welcomeModal");
-    modal.hidden = false;
+    var hideUntil = 0;
+    try { hideUntil = Number(localStorage.getItem("we_welcomeHideUntil") || 0); } catch (e) { /* 무시 */ }
+    if (Date.now() >= hideUntil) modal.hidden = false;
     document.getElementById("welcomeStart").addEventListener("click", function () {
+      if (document.getElementById("welcomeDismiss").checked) {
+        try { localStorage.setItem("we_welcomeHideUntil", String(Date.now() + 24 * 60 * 60 * 1000)); } catch (e) { /* 무시 */ }
+      }
       modal.hidden = true;
       track("welcome_start");   // 안내 모달에서 '시작하기' = 실제 진입
     });
@@ -1970,16 +1975,9 @@ WE.app = (function () {
     btn.addEventListener("click", function (e) {
       e.stopPropagation();
       menu.hidden = !menu.hidden;
-      if (!menu.hidden) closeExportSub();   // 메뉴를 새로 열면 하위 옵션은 접힌 상태로
     });
-    // 내보내기 = 하위 옵션(PDF/PNG) 펼침 토글 — 드로어를 닫지 않음
-    var exportSub = document.getElementById("exportSub");
-    function closeExportSub() { exportSub.hidden = true; document.getElementById("exportArrow").textContent = "▸"; }
-    document.getElementById("btnExport").addEventListener("click", function () {
-      exportSub.hidden = !exportSub.hidden;
-      document.getElementById("exportArrow").textContent = exportSub.hidden ? "▸" : "▾";
-    });
-    // 항목 클릭(각자의 핸들러 실행 후) / 바깥 클릭 / Esc → 닫기 (내보내기 토글 제외)
+    // 내보내기 하위 옵션(PDF/PNG)은 CSS 우측 플라이아웃(:hover)으로 펼침 — '내보내기' 자체 클릭은 드로어를 닫지 않음
+    // 항목 클릭(각자의 핸들러 실행 후) / 바깥 클릭 / Esc → 닫기
     menu.addEventListener("click", function (e) {
       if (e.target.closest("#btnExport")) return;
       if (e.target.closest(".menu-item")) menu.hidden = true;

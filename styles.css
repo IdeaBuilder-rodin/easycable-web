@@ -84,10 +84,17 @@ body { display: flex; flex-direction: column; }
 #toolbar button.tb-accent:hover { background: var(--primary-d); }
 .app-menu .menu-link { font-size: var(--fs-sm); color: var(--tx3); }
 .app-menu .menu-divider { height: 1px; background: var(--bd2); margin: 5px 8px; }
-/* 내보내기 하위 옵션 (들여쓰기 + 왼쪽 가이드선) */
-.app-menu .menu-sub { display: flex; flex-direction: column; margin-left: 24px; padding-left: 6px; border-left: 2px solid var(--bd2); }
-.app-menu .menu-sub[hidden] { display: none; }
-#toolbar .app-menu .menu-sub .menu-item { padding: 6px 12px; font-size: var(--fs-sm); }
+/* 하위 메뉴 = 우측 플라이아웃 (마우스 올리면 오른쪽으로 펼쳐짐, 데스크톱 앱 표준) */
+.app-menu .menu-flyout { position: relative; }
+.app-menu .menu-flyout > .menu-item > kbd { color: var(--tx3); }
+.app-menu .menu-sub {
+  position: absolute; left: 100%; top: -6px; z-index: 310;
+  display: none; flex-direction: column; min-width: 150px;
+  background: var(--bg); border: 1px solid var(--bd); border-radius: var(--r-lg);
+  box-shadow: 0 8px 28px rgba(0,0,0,.28); padding: 6px;
+}
+.app-menu .menu-flyout:hover > .menu-sub { display: flex; }
+#toolbar .app-menu .menu-sub .menu-item { font-size: var(--fs-sm); }
 
 /* 이전 버전 복구 목록 */
 .history-list { max-height: 320px; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; }
@@ -113,7 +120,8 @@ body { display: flex; flex-direction: column; }
   color: #fff; background: #f6b100; border-radius: 8px; vertical-align: 2px;
 }
 /* 방문 안내 모달 — 여백을 넉넉히 */
-.welcome-box { width: min(500px, 92vw); padding: 26px 28px 20px; }
+.welcome-box { width: min(500px, 92vw); padding: 0; overflow: hidden; }
+.welcome-body { padding: 26px 28px 22px; }
 .welcome-head { text-align: center; margin-bottom: 20px; }
 .welcome-box h3 { font-size: 22px; margin: 0 0 10px; }
 .welcome-head p { margin: 0; color: var(--tx2); line-height: 1.6; font-size: 14px; }
@@ -140,7 +148,18 @@ body { display: flex; flex-direction: column; }
   border-radius: var(--r); cursor: pointer; font-family: inherit;
 }
 .welcome-start:hover { background: var(--primary-d); }
-.welcome-privacy { margin: 12px 0 0; text-align: center; font-size: 11px; color: var(--tx3); }
+/* 하단 바: 본문과 구분선·옅은 배경으로 분리 */
+.welcome-foot {
+  border-top: 1px solid var(--bd2); background: var(--bg2);
+  padding: 12px 28px 14px;
+  display: flex; flex-direction: column; align-items: center; gap: 6px;
+}
+.welcome-dismiss {
+  display: flex; align-items: center; gap: 6px;
+  margin: 0; font-size: 12.5px; color: var(--tx2); cursor: pointer;
+}
+.welcome-dismiss input { margin: 0; cursor: pointer; }
+.welcome-privacy { margin: 0; text-align: center; font-size: 11px; color: var(--tx3); }
 .welcome-privacy a { color: var(--tx3); }
 #projName {
   background: #3d434d; color: #eee; border: 1px solid #555;
