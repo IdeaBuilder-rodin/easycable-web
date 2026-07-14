@@ -1995,7 +1995,7 @@ WE.app = (function () {
           box.innerHTML = list.map(function (s, i) {
             return "<div class='history-row'>" +
               "<div class='history-info'><b>" + fmtSnapTime(s.t) + "</b>" +
-              "<span class='muted'> — " + esc(s.name || "이름없는 배선도") +
+              "<span class='muted'> — " + esc(s.name || WE.i18n.t("이지케이블 배선도")) +
               " (부품 " + s.comps + " · 배선 " + s.wires + ")</span></div>" +
               "<button class='history-restore' data-i='" + i + "'>복구</button></div>";
           }).join("");

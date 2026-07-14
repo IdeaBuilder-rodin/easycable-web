@@ -50,6 +50,13 @@
       <button id="btnSample" class="menu-item" title="예제 배선도를 열어봅니다"><span><i>💡</i>샘플 프로젝트</span></button>
       <button id="btnHistory" class="menu-item" title="자동 보관된 이전 스냅샷으로 되돌립니다"><span><i>🕘</i>이전 버전 복구</span></button>
       <div class="menu-divider"></div>
+      <div class="menu-flyout">
+        <button id="btnLang" class="menu-item" title="Language"><span><i>🌐</i>Language</span><kbd>▸</kbd></button>
+        <div id="langSub" class="menu-sub">
+          <button class="menu-item" data-setlang="ko">한국어</button>
+          <button class="menu-item" data-setlang="en">English</button>
+        </div>
+      </div>
       <button id="btnSettings" class="menu-item"><span><i>⚙</i>설정</span></button>
       <button id="btnHelpMenu" class="menu-item"><span><i>?</i>단축키 도움말</span><kbd>?</kbd></button>
       <div class="menu-divider"></div>
@@ -689,6 +696,7 @@
   </div>
 
   <!-- 스크립트: file:// 호환 위해 일반 script (모듈 아님), 순서 중요 -->
+  <script src="js/i18n.js"></script>   <!-- 가장 먼저: DOMContentLoaded 번역이 app.js 초기화보다 앞서야 함 -->
   <script src="js/awg.js"></script>
   <script src="js/model.js"></script>
   <script src="js/presets.js"></script>

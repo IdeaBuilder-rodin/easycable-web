@@ -95,6 +95,8 @@ body { display: flex; flex-direction: column; }
 }
 .app-menu .menu-flyout:hover > .menu-sub { display: flex; }
 #toolbar .app-menu .menu-sub .menu-item { font-size: var(--fs-sm); }
+/* 언어 메뉴: 현재 언어에 체크 표시 */
+.menu-sub .menu-item.lang-active::after { content: "✓"; margin-left: auto; color: var(--primary, #1e88e5); font-weight: 700; }
 
 /* 이전 버전 복구 목록 */
 .history-list { max-height: 320px; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; }

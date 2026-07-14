@@ -11,7 +11,8 @@ WE.model = (function () {
     { color: "#0000ff", label: "통신 (I2C 등)" }
   ];
   function defaultMeta() {
-    return { name: "이름없는 배선도", version: 1, canvas: { width: 1600, height: 900, grid: 10, snap: true } };
+    var defName = (WE.i18n ? WE.i18n.t("이지케이블 배선도") : "이지케이블 배선도");
+    return { name: defName, version: 1, canvas: { width: 1600, height: 900, grid: 10, snap: true } };
   }
 
   // 전체 프로젝트 상태
