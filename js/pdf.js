@@ -16,6 +16,8 @@ WE.pdf = (function () {
     // 인쇄 종료 후 원래 탭 제목으로 복원
     window.addEventListener("afterprint", function () {
       if (_savedTitle !== null) { document.title = _savedTitle; _savedTitle = null; }
+      // 인쇄(내보내기) 마친 뒤 = 가치를 준 순간 → 출시 알림 슬쩍 제안(세션 1회, 구독자 제외)
+      if (WE.app && WE.app.offerNotifyAfterValue) WE.app.offerNotifyAfterValue();
     });
   }
 

@@ -46,6 +46,7 @@ WE.app = (function () {
     bindModalBackdrops();
     bindWelcome();
     bindFeedback();
+    bindNotify();
     bindQuickColorPicker();
     bindHelp();
     bindAppMenu();
@@ -1574,6 +1575,76 @@ WE.app = (function () {
     });
     document.getElementById("feedbackSend").addEventListener("click", sendFeedback);
   }
+
+  // ---- 출시 알림(이메일 수집) — Web3Forms 재사용. '가치를 준 뒤'에만 제안(내보내기/저장 완료 후) ----
+  var _notifyOfferedThisSession = false;
+  function hasNotifySubscribed() {
+    try { return localStorage.getItem("we_notify_done") === "1"; } catch (e) { return false; }
+  }
+  function openNotifyModal(reason) {
+    var lead = document.getElementById("notifyLead");
+    // 완료 직후 제안이면 축하 문구, 링크로 직접 열면 기본 문구
+    lead.textContent = reason === "after_export"
+      ? "완성됐어요! 🎉 정식 출시·새 기능 소식을 이메일로 가장 먼저 알려드릴까요? (스팸 없이 큰 소식만)"
+      : "정식 출시·새 기능 소식을 이메일로 가장 먼저 알려드릴게요. (스팸 없이 큰 소식만)";
+    document.getElementById("notifyEmail").value = "";
+    document.getElementById("notifyStatus").textContent = "";
+    document.getElementById("notifyBotcheck").checked = false;
+    document.getElementById("notifyModal").hidden = false;
+    document.getElementById("notifyEmail").focus();
+    track("notify_open", { reason: reason || "manual" });
+  }
+  // 내보내기/저장 완료 후 호출 — 이미 구독했거나 이번 세션에 한 번 제안했으면 다시 안 뜸(벽 방지)
+  function offerNotifyAfterValue() {
+    if (hasNotifySubscribed() || _notifyOfferedThisSession) return;
+    _notifyOfferedThisSession = true;
+    setTimeout(function () { openNotifyModal("after_export"); }, 700);   // 저장/다운로드 끝난 뒤 살짝 여유
+  }
+  function bindNotify() {
+    document.getElementById("btnNotify").addEventListener("click", function () { openNotifyModal("manual"); });
+    document.getElementById("notifyClose").addEventListener("click", function () {
+      document.getElementById("notifyModal").hidden = true;
+    });
+    document.getElementById("notifySend").addEventListener("click", sendNotify);
+    document.getElementById("notifyEmail").addEventListener("keydown", function (e) {
+      if (e.key === "Enter") sendNotify();
+    });
+  }
+  function sendNotify() {
+    var emailEl = document.getElementById("notifyEmail");
+    var email = emailEl.value.trim();
+    var statusEl = document.getElementById("notifyStatus");
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { statusEl.textContent = "올바른 이메일 주소를 입력해주세요."; emailEl.focus(); return; }
+    if (document.getElementById("notifyBotcheck").checked) { statusEl.textContent = "감사합니다!"; return; }   // 허니팟
+    var btn = document.getElementById("notifySend");
+    btn.disabled = true; statusEl.textContent = "등록 중…";
+    fetch("https://api.web3forms.com/submit", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      body: JSON.stringify({
+        access_key: WEB3FORMS_KEY,
+        subject: "[이지케이블] 출시 알림 신청",
+        from_name: "이지케이블 출시알림",
+        message: "출시 알림 신청 이메일: " + email,
+        email: email,
+        botcheck: false
+      })
+    }).then(function (r) { return r.json(); }).then(function (res) {
+      btn.disabled = false;
+      if (res.success) {
+        try { localStorage.setItem("we_notify_done", "1"); } catch (e) { /* 무시 */ }
+        track("notify_subscribe");
+        statusEl.textContent = "등록됐습니다. 소식이 있을 때 알려드릴게요. 감사합니다! 🙌";
+        setTimeout(function () { document.getElementById("notifyModal").hidden = true; }, 1200);
+      } else {
+        statusEl.textContent = "등록 실패: " + (res.message || "잠시 후 다시 시도해주세요.");
+      }
+    }).catch(function () {
+      btn.disabled = false;
+      statusEl.textContent = "네트워크 오류로 등록하지 못했습니다.";
+    });
+  }
+
   var FEEDBACK_EMAIL = "qksekftkd@gmail.com";
   var FB_COOLDOWN_MS = 60 * 1000;   // 연타 방지: 1분에 1건
   var FB_DAILY_MAX = 5;             // 실수/장난 유입으로 무료 한도가 타는 것 방지
@@ -1673,7 +1744,8 @@ WE.app = (function () {
     welcomeModal: "welcomeStart",
     helpModal: "helpClose",
     feedbackModal: "feedbackClose",
-    historyModal: "historyClose"
+    historyModal: "historyClose",
+    notifyModal: "notifyClose"
   };
   function bindModalBackdrops() {
     Object.keys(MODAL_CLOSE_MAP).forEach(function (mid) {
@@ -1897,6 +1969,7 @@ WE.app = (function () {
         setTimeout(function () { URL.revokeObjectURL(a.href); }, 1000);
         track("export", { method: "png" });
         setHint("이미지 저장 완료 (PNG)");
+        offerNotifyAfterValue();
       }, "image/png");
     };
     img.onerror = function () { URL.revokeObjectURL(svgUrl); setHint("이미지 생성에 실패했습니다."); };
@@ -2824,7 +2897,8 @@ WE.app = (function () {
     powerSummaryRows: powerSummaryRows,
     handleShortcut: handleShortcut,
     setMode: setMode,
-    track: track, trackOnce: trackOnce
+    track: track, trackOnce: trackOnce,
+    offerNotifyAfterValue: offerNotifyAfterValue
   };
 })();
 

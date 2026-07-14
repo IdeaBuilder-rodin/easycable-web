@@ -30,6 +30,7 @@
         <button id="btnShare" title="프로젝트 + 사용된 부품을 한 파일로 내보내기 (받는 사람은 파일 하나로 열림)">🔗 공유</button>
       </div>
       <div class="tb-divider"></div>
+      <button id="btnNotify" title="정식 출시·새 기능 소식을 이메일로 받기">🔔 출시 알림</button>
       <button id="btnFeedback" class="tb-accent" title="의견·버그 제보 보내기">💬 피드백</button>
       <input type="file" id="fileOpen" accept=".ezc,.json,application/json" hidden />
     </div>
@@ -662,6 +663,23 @@
         <button id="feedbackClose">취소</button>
         <button id="feedbackSend" class="primary">보내기</button>
       </div>
+    </div>
+  </div>
+
+  <!-- 출시 알림(이메일 수집) 모달 — 내보내기/저장 완료 후 또는 '🔔 출시 알림' 링크로 표시 -->
+  <div id="notifyModal" class="modal" hidden>
+    <div class="modal-box" style="width:min(430px,92vw)">
+      <h3>🔔 출시 소식 받기</h3>
+      <p class="muted" id="notifyLead" style="margin:0 0 14px">정식 출시·새 기능 소식을 이메일로 가장 먼저 알려드릴게요. (스팸 없이 큰 소식만)</p>
+      <div class="notify-row">
+        <input type="email" id="notifyEmail" placeholder="예: myname@gmail.com" autocomplete="email" />
+        <button id="notifySend" class="primary">알림 받기</button>
+      </div>
+      <!-- 허니팟 -->
+      <input type="checkbox" id="notifyBotcheck" style="display:none" tabindex="-1" autocomplete="off" />
+      <p id="notifyStatus" class="muted" style="margin:8px 0 0"></p>
+      <button id="notifyClose" class="notify-later">나중에 볼게요</button>
+      <p class="muted" style="margin:8px 0 0;font-size:11px;text-align:center">입력하신 이메일은 소식 안내에만 사용됩니다. <a href="privacy.html" target="_blank" rel="noopener" style="color:inherit">개인정보처리방침</a></p>
     </div>
   </div>
 

@@ -781,6 +781,29 @@ body.term-mode #canvas { cursor: crosshair; }
 .modal-actions button.primary { background: #1e88e5; color: #fff; border-color: #1565c0; }
 .modal-actions button.primary:hover { background: #1976d2; }
 
+/* 출시 알림(이메일 수집) 모달 — 뉴스레터 표준 패턴: 입력창+버튼 한 줄, 아래엔 텍스트형 닫기 */
+.notify-row { display: flex; gap: 8px; }
+.notify-row input {
+  flex: 1; min-width: 0; padding: 9px 10px;
+  border: 1px solid #ccc; border-radius: 6px;
+  font-family: inherit; font-size: 13px;
+}
+.notify-row input:focus { outline: none; border-color: #1e88e5; box-shadow: 0 0 0 2px rgba(30,136,229,.15); }
+.notify-row button.primary {
+  flex: none; padding: 9px 16px; white-space: nowrap;
+  background: #1e88e5; color: #fff; border: 1px solid #1565c0; border-radius: 6px;
+  cursor: pointer; font-family: inherit; font-size: 13px; font-weight: 600;
+}
+.notify-row button.primary:hover { background: #1976d2; }
+.notify-later {
+  display: block; margin: 14px auto 0;
+  background: none; border: none; padding: 2px 6px;
+  color: #999; font-size: 12px; cursor: pointer;
+  text-decoration: underline; font-family: inherit;
+}
+.notify-later:hover { color: #555; }
+#notifyStatus:empty { display: none; }   /* 상태 문구 없을 땐 자리 차지 안 함(빈 줄 방지) */
+
 /* 설정 모달 */
 .set-tabs { display: flex; gap: 4px; border-bottom: 1px solid #e2e6ea; margin: 4px 0 12px; }
 .set-tab {
