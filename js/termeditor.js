@@ -433,7 +433,7 @@ WE.termeditor = (function () {
     var prev = sel.value;
     sel.innerHTML = "";
     var gen = document.createElement("option");
-    gen.value = ""; gen.textContent = "(기본 T#)";
+    gen.value = ""; gen.textContent = WE.i18n.t("(기본 T#)");
     sel.appendChild(gen);
     WE.presets.getAll().forEach(function (p) {
       var o = document.createElement("option");
@@ -455,7 +455,7 @@ WE.termeditor = (function () {
     list.innerHTML = "";
     if (cmp.terminals.length === 0) {
       var p = document.createElement("p");
-      p.className = "muted"; p.textContent = "단자 없음. 이미지를 클릭해 추가하세요.";
+      p.className = "muted"; p.textContent = WE.i18n.t("단자 없음. 이미지를 클릭해 추가하세요.");
       list.appendChild(p); return;
     }
     cmp.terminals.forEach(function (t) {
@@ -472,7 +472,7 @@ WE.termeditor = (function () {
       var sel = document.createElement("select");
       sel.className = "tpreset";
       var head = document.createElement("option");
-      head.value = ""; head.textContent = "프리셋…";
+      head.value = ""; head.textContent = WE.i18n.t("프리셋…");
       sel.appendChild(head);
       WE.presets.getAll().forEach(function (ps) {
         var o = document.createElement("option");
@@ -481,7 +481,7 @@ WE.termeditor = (function () {
       });
 
       var del = document.createElement("button");
-      del.className = "tdel"; del.textContent = "×"; del.title = "삭제";
+      del.className = "tdel"; del.textContent = "×"; del.title = WE.i18n.t("삭제");
 
       row.appendChild(color); row.appendChild(name); row.appendChild(sel); row.appendChild(del);
       list.appendChild(row);

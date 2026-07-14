@@ -51,7 +51,7 @@ WE.library = (function () {
   function addPart(p) {
     var part = {
       id: WE.model.nextId("lib"),
-      name: p.name || "부품",
+      name: p.name || WE.i18n.t("부품"),
       spec: p.spec || "",
       link: p.link || "",
       image: p.image || null,

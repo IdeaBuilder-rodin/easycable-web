@@ -7,7 +7,7 @@ window.WE = WE;
 WE.io = (function () {
   var _supportsFS = "showSaveFilePicker" in window && "showOpenFilePicker" in window;
   var _fileHandle = null;   // 현재 연결된 파일(FileSystemFileHandle) — 있으면 Ctrl+S가 여기로 조용히 저장됨
-  var FILE_TYPES = [{ description: "이지케이블 프로젝트", accept: { "application/json": [".ezc", ".json"] } }];
+  var FILE_TYPES = [{ description: WE.i18n.t("이지케이블 프로젝트"), accept: { "application/json": [".ezc", ".json"] } }];
 
   function init() {
     document.getElementById("btnSave").addEventListener("click", save);
@@ -17,7 +17,7 @@ WE.io = (function () {
   }
 
   function safeName(s) {
-    return (s || "배선도").replace(/[\\/:*?"<>|]/g, "_").slice(0, 60);
+    return (s || WE.i18n.t("배선도")).replace(/[\\/:*?"<>|]/g, "_").slice(0, 60);
   }
 
   function download(dataStr, filename) {
@@ -47,11 +47,11 @@ WE.io = (function () {
     var data = JSON.stringify(WE.model.project);
     var fn = safeName(WE.model.project.meta.name) + ".ezc";
 
-    if (!_supportsFS) { download(data, fn); WE.app.setHint("저장됨: " + fn); return; }
+    if (!_supportsFS) { download(data, fn); WE.app.setHint(WE.i18n.t("저장됨: ") + fn); return; }
 
     if (_fileHandle) {
       writeToHandle(_fileHandle, data).then(function () {
-        WE.app.setHint("저장됨: " + _fileHandle.name);
+        WE.app.setHint(WE.i18n.t("저장됨: ") + _fileHandle.name);
       }).catch(function () {
         _fileHandle = null;   // 파일이 삭제/이동된 경우 등 → 새로 지정하도록 폴백
         saveAsNewHandle(data, fn);
@@ -66,11 +66,11 @@ WE.io = (function () {
       _fileHandle = handle;
       return writeToHandle(handle, data);
     }).then(function () {
-      WE.app.setHint("저장됨: " + _fileHandle.name);
+      WE.app.setHint(WE.i18n.t("저장됨: ") + _fileHandle.name);
     }).catch(function (err) {
       if (err && err.name === "AbortError") return;   // 사용자가 저장창 취소
       download(data, fn);                              // 그 외 실패 시 구식 다운로드로 폴백
-      WE.app.setHint("저장됨: " + fn);
+      WE.app.setHint(WE.i18n.t("저장됨: ") + fn);
     });
   }
 
@@ -87,9 +87,9 @@ WE.io = (function () {
       }
     });
     var bundle = { format: "easycable-share", version: 1, project: proj, libraryParts: usedParts };
-    var fn = safeName(proj.meta.name) + "_공유.ezc";
+    var fn = safeName(proj.meta.name) + WE.i18n.t("_공유.ezc");
     download(JSON.stringify(bundle), fn);
-    WE.app.setHint("공유 파일 저장: " + fn + " (부품 " + usedParts.length + "개 포함)");
+    WE.app.setHint(WE.i18n.t("공유 파일 저장: ") + fn + WE.i18n.t(" (부품 ") + usedParts.length + WE.i18n.t("개 포함)"));
   }
 
   // 열기: 지원 브라우저는 File System Access API로 파일을 "연결"(이후 Ctrl+S가 이 파일로 저장됨),
@@ -140,9 +140,9 @@ WE.io = (function () {
       WE.app.reloadUI();
       if (WE.history) WE.history.reset();
       if (WE.store) WE.store.saveNow(); // 연 내용을 즉시 임시저장에 반영
-      WE.app.setHint("열기 완료: " + displayName + (added ? (" · 새 부품 " + added + "개를 라이브러리에 추가") : ""));
+      WE.app.setHint(WE.i18n.t("열기 완료: ") + displayName + (added ? (WE.i18n.t(" · 새 부품 ") + added + WE.i18n.t("개를 라이브러리에 추가")) : ""));
     } catch (err) {
-      alert("파일을 읽을 수 없습니다: " + err.message);
+      alert(WE.i18n.t("파일을 읽을 수 없습니다: ") + err.message);
     }
   }
 

@@ -50,7 +50,7 @@ WE.presets = (function () {
     return null;
   }
   function add(label, color) {
-    var p = { id: nextId(), label: label || "새 단자", color: color || "#1e88e5" };
+    var p = { id: nextId(), label: label || WE.i18n.t("새 단자"), color: color || "#1e88e5" };
     list.push(p); save(); return p;
   }
   function update(id, fields) {

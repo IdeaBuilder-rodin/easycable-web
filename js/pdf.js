@@ -10,7 +10,7 @@ WE.pdf = (function () {
     window.addEventListener("beforeprint", function () {
       populate();
       _savedTitle = document.title;
-      var name = (WE.model.project.meta.name || "").trim() || "배선도";
+      var name = (WE.model.project.meta.name || "").trim() || WE.i18n.t("배선도");
       document.title = name;   // 브라우저 인쇄 대화상자의 기본 PDF 파일명이 이 값이 됨
     });
     // 인쇄 종료 후 원래 탭 제목으로 복원
@@ -48,7 +48,7 @@ WE.pdf = (function () {
       switch (col.id) {
         case "name": return r.name;
         case "spec": return r.spec || "";
-        case "qty": return r.qty + "개";
+        case "qty": return r.qty + WE.i18n.t("개");
         case "price": return r.price ? Math.round(Number(r.price)).toLocaleString() : "";
         case "sum": return won(r.sum);
       }
@@ -59,7 +59,7 @@ WE.pdf = (function () {
 
     if (data.rows.length) {
       var bt = document.createElement("div");
-      bt.className = "bom-title pdf-page-break"; bt.textContent = "부품 목록 (BOM)";   // 1페이지는 배선도만 — BOM부터 다음 페이지 시작
+      bt.className = "bom-title pdf-page-break"; bt.textContent = WE.i18n.t("부품 목록 (BOM)");   // 1페이지는 배선도만 — BOM부터 다음 페이지 시작
       bomBox.appendChild(bt);
 
       var table = document.createElement("table");
@@ -110,8 +110,8 @@ WE.pdf = (function () {
       trT.className = "bom-total";
       trT.appendChild(td(""));
       cols.forEach(function (col) {
-        if (col.id === "name") trT.appendChild(td("합계"));
-        else if (col.id === "qty") trT.appendChild(td(data.totalQty + "개", "qty"));
+        if (col.id === "name") trT.appendChild(td(WE.i18n.t("합계")));
+        else if (col.id === "qty") trT.appendChild(td(data.totalQty + WE.i18n.t("개"), "qty"));
         else if (col.id === "sum") trT.appendChild(td(won(data.total), "qty"));
         else trT.appendChild(td("", col.kind === "num" ? "qty" : ""));
       });
@@ -124,12 +124,12 @@ WE.pdf = (function () {
     var wl = WE.app.wireListData ? WE.app.wireListData() : [];
     if (wl.length) {
       var wt = document.createElement("div");
-      wt.className = "bom-title pdf-page-break"; wt.textContent = "배선 리스트";
+      wt.className = "bom-title pdf-page-break"; wt.textContent = WE.i18n.t("배선 리스트");
       bomBox.appendChild(wt);
       var wtbl = document.createElement("table");
       wtbl.className = "bom";
       var whead = document.createElement("thead");
-      whead.innerHTML = "<tr><th>번호</th><th>색</th><th>AWG</th><th>출발</th><th>도착</th></tr>";
+      whead.innerHTML = WE.i18n.t("<tr><th>번호</th><th>색</th><th>AWG</th><th>출발</th><th>도착</th></tr>");
       wtbl.appendChild(whead);
       var wbody = document.createElement("tbody");
       wl.forEach(function (r) {
@@ -154,7 +154,7 @@ WE.pdf = (function () {
     var rows = WE.app.powerSummaryRows ? WE.app.powerSummaryRows() : [];
     if (rows.length) {
       var pt = document.createElement("div");
-      pt.className = "bom-title"; pt.style.marginTop = "10px"; pt.textContent = "전력 / 배터리 요약";
+      pt.className = "bom-title"; pt.style.marginTop = "10px"; pt.textContent = WE.i18n.t("전력 / 배터리 요약");
       bomBox.appendChild(pt);
       var ptbl = document.createElement("table");
       ptbl.className = "bom"; ptbl.style.width = "auto";

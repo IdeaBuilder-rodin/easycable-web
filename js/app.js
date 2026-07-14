@@ -94,13 +94,13 @@ WE.app = (function () {
     var part;
     if (existing) {
       var overwrite = confirm(
-        "이미 '" + name + "' 부품이 라이브러리에 있습니다.\n\n" +
-        "[확인] 기존 부품 덮어쓰기\n[취소] 새 부품으로 추가");
-      if (overwrite) { part = WE.library.updatePart(existing.id, buildData()); setHint("덮어썼습니다: " + name); }
-      else { part = WE.library.addPart(buildData()); setHint("새 부품으로 추가: " + name); }
+        WE.i18n.t("이미 '") + name + WE.i18n.t("' 부품이 라이브러리에 있습니다.\n\n") +
+        WE.i18n.t("[확인] 기존 부품 덮어쓰기\n[취소] 새 부품으로 추가"));
+      if (overwrite) { part = WE.library.updatePart(existing.id, buildData()); setHint(WE.i18n.t("덮어썼습니다: ") + name); }
+      else { part = WE.library.addPart(buildData()); setHint(WE.i18n.t("새 부품으로 추가: ") + name); }
     } else {
       part = WE.library.addPart(buildData());
-      setHint("라이브러리에 저장: " + name);
+      setHint(WE.i18n.t("라이브러리에 저장: ") + name);
     }
     renderLibrary();
     return part;
@@ -127,12 +127,12 @@ WE.app = (function () {
   // 데이터시트 편집 목록 렌더
   function renderDsList() {
     var box = document.getElementById("libDsList");
-    if (!_editDatasheets.length) { box.innerHTML = "<span class='muted'>첨부된 파일 없음</span>"; return; }
+    if (!_editDatasheets.length) { box.innerHTML = WE.i18n.t("<span class='muted'>첨부된 파일 없음</span>"); return; }
     box.innerHTML = _editDatasheets.map(function (d, i) {
       var icon = d.type === "application/pdf" ? "📄" : "🖼️";
       return "<div class='ds-item'><span class='ds-name' title='" + esc(d.name) + "'>" + icon + " " + esc(d.name) + "</span>" +
-        "<button type='button' class='ds-item-view' data-i='" + i + "'>보기</button>" +
-        "<button type='button' class='ds-item-del' data-i='" + i + "' title='삭제'>×</button></div>";
+        "<button type='button' class='ds-item-view' data-i='" + i + WE.i18n.t("'>보기</button>") +
+        "<button type='button' class='ds-item-del' data-i='" + i + WE.i18n.t("' title='삭제'>×</button></div>");
     }).join("");
   }
   function updateLibRoleRows() {
@@ -169,7 +169,7 @@ WE.app = (function () {
     document.getElementById("libDsInput").addEventListener("change", function (e) {
       var files = Array.prototype.slice.call(e.target.files || []);
       files.forEach(function (f) {
-        if (f.size > 20 * 1024 * 1024) { alert("파일이 너무 큽니다(20MB 초과): " + f.name); return; }
+        if (f.size > 20 * 1024 * 1024) { alert(WE.i18n.t("파일이 너무 큽니다(20MB 초과): ") + f.name); return; }
         var reader = new FileReader();
         reader.onload = function () {
           _editDatasheets.push({ id: WE.model.nextId("ds"), name: f.name, type: f.type || "application/octet-stream", data: reader.result });
@@ -181,7 +181,7 @@ WE.app = (function () {
     });
     document.getElementById("libDsList").addEventListener("click", function (e) {
       var v = e.target.closest(".ds-item-view");
-      if (v) { openDatasheetViewer(_editDatasheets, gv("libName") || "데이터시트", +v.dataset.i); return; }
+      if (v) { openDatasheetViewer(_editDatasheets, gv("libName") || WE.i18n.t("데이터시트"), +v.dataset.i); return; }
       var d = e.target.closest(".ds-item-del");
       if (d) { _editDatasheets.splice(+d.dataset.i, 1); renderDsList(); }
     });
@@ -191,7 +191,7 @@ WE.app = (function () {
     });
     document.getElementById("libEditSave").addEventListener("click", function () {
       if (_editLibId) {
-        var newName = gv("libName").trim() || "부품";
+        var newName = gv("libName").trim() || WE.i18n.t("부품");
         WE.library.updatePart(_editLibId, {
           name: newName,
           spec: gv("libSpec").trim(), link: gv("libLink").trim(), price: gv("libPrice"),
@@ -231,7 +231,7 @@ WE.app = (function () {
   function openDatasheetViewer(list, title, startIdx) {
     if (!list || !list.length) return;
     _dsList = list; _dsIdx = startIdx || 0;
-    document.getElementById("dsViewerTitle").textContent = title || "데이터시트";
+    document.getElementById("dsViewerTitle").textContent = title || WE.i18n.t("데이터시트");
     document.getElementById("dsViewerModal").hidden = false;
     document.getElementById("dsViewerTabs").innerHTML = _dsList.map(function (d, i) {
       return "<button class='ds-tab" + (i === _dsIdx ? " active" : "") + "' data-i='" + i + "'>" + esc(d.name) + "</button>";
@@ -257,7 +257,7 @@ WE.app = (function () {
     box.classList.toggle("img-mode", isImg);
     if (d.type === "application/pdf") box.innerHTML = "<iframe src='" + _dsUrl + "' title='" + esc(d.name) + "'></iframe>";
     else if (isImg) { box.innerHTML = "<img class='ds-img' src='" + _dsUrl + "' alt='" + esc(d.name) + "' />"; applyDsTransform(); }
-    else box.innerHTML = "<p class='muted'>미리보기를 지원하지 않는 형식입니다. 다운로드해서 확인하세요.</p>";
+    else box.innerHTML = WE.i18n.t("<p class='muted'>미리보기를 지원하지 않는 형식입니다. 다운로드해서 확인하세요.</p>");
   }
   function closeDatasheetViewer() {
     document.getElementById("dsViewerModal").hidden = true;
@@ -283,7 +283,7 @@ WE.app = (function () {
     document.getElementById("dsMax").addEventListener("click", function () {
       var mbox = document.querySelector("#dsViewerModal .ds-viewer-box");
       var on = mbox.classList.toggle("maximized");
-      this.textContent = on ? "🗗 축소" : "⛶ 최대화";
+      this.textContent = on ? WE.i18n.t("🗗 축소") : WE.i18n.t("⛶ 최대화");
     });
 
     // ---- 이미지 확대/축소·이동(뷰어 안에서만, 페이지 확대 방지) ----
@@ -414,7 +414,7 @@ WE.app = (function () {
     document.getElementById("btnLibExport").addEventListener("click", function () {
       var blob = new Blob([WE.library.exportJson()], { type: "application/json" });
       var a = document.createElement("a");
-      a.href = URL.createObjectURL(blob); a.download = "부품라이브러리.ezclib";
+      a.href = URL.createObjectURL(blob); a.download = WE.i18n.t("부품라이브러리.ezclib");
       document.body.appendChild(a); a.click(); document.body.removeChild(a);
       setTimeout(function () { URL.revokeObjectURL(a.href); }, 1000);
     });
@@ -430,10 +430,10 @@ WE.app = (function () {
           var relinked = relinkOrphanComponents();   // 연결 끊겼던 배치 부품을 이름으로 복구
           renderLibrary();
           WE.render.renderAll();   // BOM·도면 다시 그림
-          setHint("라이브러리 불러오기: 새 부품 " + r.added + "개" +
-            (r.updated ? (" · 기존 부품 " + r.updated + "개 갱신") : "") +
-            (relinked ? (" · 배치 부품 " + relinked + "개 재연결") : ""));
-        } catch (err) { alert("가져오기 실패: " + err.message); }
+          setHint(WE.i18n.t("라이브러리 불러오기: 새 부품 ") + r.added + WE.i18n.t("개") +
+            (r.updated ? (WE.i18n.t(" · 기존 부품 ") + r.updated + WE.i18n.t("개 갱신")) : "") +
+            (relinked ? (WE.i18n.t(" · 배치 부품 ") + relinked + WE.i18n.t("개 재연결")) : ""));
+        } catch (err) { alert(WE.i18n.t("가져오기 실패: ") + err.message); }
       };
       reader.readAsText(file); e.target.value = "";
     });
@@ -444,7 +444,7 @@ WE.app = (function () {
       var item = e.target.closest(".lib-item"); if (!item) return;
       var part = WE.library.get(item.dataset.id); if (!part) return;
       if (e.target.closest(".lib-del")) {
-        if (confirm("‘" + part.name + "’ 부품을 라이브러리에서 삭제할까요?")) {
+        if (confirm("‘" + part.name + WE.i18n.t("’ 부품을 라이브러리에서 삭제할까요?"))) {
           WE.library.remove(part.id); renderLibrary();
         }
         return;
@@ -549,7 +549,7 @@ WE.app = (function () {
     var parts = WE.library.getAll();
     if (!parts.length) {
       var p = document.createElement("p");
-      p.className = "muted"; p.textContent = "등록된 부품이 없습니다.";
+      p.className = "muted"; p.textContent = WE.i18n.t("등록된 부품이 없습니다.");
       list.appendChild(p); return;
     }
     var q = _libQuery;
@@ -560,7 +560,7 @@ WE.app = (function () {
     });
     if (!shown.length) {
       var np = document.createElement("p");
-      np.className = "muted"; np.textContent = "'" + q + "' 검색 결과가 없습니다.";
+      np.className = "muted"; np.textContent = "'" + q + WE.i18n.t("' 검색 결과가 없습니다.");
       list.appendChild(np); return;
     }
     // 정렬: ★즐겨찾기 최상단 → 최근 사용 순 → 기존(수동) 순서
@@ -575,11 +575,11 @@ WE.app = (function () {
       var item = document.createElement("div");
       item.className = "lib-item" + (part.fav ? " fav" : ""); item.dataset.id = part.id;
       item.setAttribute("draggable", "true");
-      item.title = "클릭: 캔버스에 배치 · 드래그: 순서 변경";
+      item.title = WE.i18n.t("클릭: 캔버스에 배치 · 드래그: 순서 변경");
       var fav = document.createElement("button");
       fav.className = "lib-fav" + (part.fav ? " on" : "");
       fav.textContent = part.fav ? "★" : "☆";
-      fav.title = part.fav ? "즐겨찾기 해제" : "즐겨찾기";
+      fav.title = part.fav ? WE.i18n.t("즐겨찾기 해제") : WE.i18n.t("즐겨찾기");
       item.appendChild(fav);
       var thumbWrap = document.createElement("div"); thumbWrap.className = "lib-thumb-wrap";
       var thumb = document.createElement(part.image ? "img" : "div");
@@ -587,7 +587,7 @@ WE.app = (function () {
       if (part.image) thumb.src = part.image;
       thumbWrap.appendChild(thumb);
       if (part.link) {
-        var lk = document.createElement("span"); lk.className = "lib-haslink"; lk.textContent = "🔗"; lk.title = "구매 링크 있음";
+        var lk = document.createElement("span"); lk.className = "lib-haslink"; lk.textContent = "🔗"; lk.title = WE.i18n.t("구매 링크 있음");
         thumbWrap.appendChild(lk);
       }
       var info = document.createElement("div"); info.className = "lib-info";
@@ -599,8 +599,8 @@ WE.app = (function () {
         meta.innerHTML = hlHtml(part.spec, q);
         info.appendChild(meta);
       }
-      var edit = document.createElement("button"); edit.className = "lib-edit"; edit.textContent = "✎"; edit.title = "정보/구매링크 편집";
-      var del = document.createElement("button"); del.className = "lib-del"; del.textContent = "×"; del.title = "삭제";
+      var edit = document.createElement("button"); edit.className = "lib-edit"; edit.textContent = "✎"; edit.title = WE.i18n.t("정보/구매링크 편집");
+      var del = document.createElement("button"); del.className = "lib-del"; del.textContent = "×"; del.title = WE.i18n.t("삭제");
       item.appendChild(thumbWrap); item.appendChild(info); item.appendChild(edit); item.appendChild(del);
       list.appendChild(item);
     });
@@ -687,7 +687,7 @@ WE.app = (function () {
     if (n(lib.volt)) a.push(n(lib.volt) + "V");
     if (n(lib.current)) a.push(n(lib.current) + "A");
     if (partPower(lib)) a.push(round(partPower(lib)) + "W");
-    if ((lib.role || "load") === "load" && n(lib.minPerHour) && n(lib.minPerHour) !== 60) a.push("가동 " + n(lib.minPerHour) + "분/시간");
+    if ((lib.role || "load") === "load" && n(lib.minPerHour) && n(lib.minPerHour) !== 60) a.push(WE.i18n.t("가동 ") + n(lib.minPerHour) + WE.i18n.t("분/시간"));
     if (lib.role === "battery" && n(lib.capacityAh)) a.push(n(lib.capacityAh) + "Ah");
     return a.join(" · ");
   }
@@ -718,8 +718,8 @@ WE.app = (function () {
   function renderWireListView() {
     var rows = wireListData();
     var t = document.getElementById("wireListTable");
-    if (!rows.length) { t.innerHTML = "<tr><td class='muted' style='border:none'>배선이 없습니다.</td></tr>"; return; }
-    var html = "<thead><tr><th>번호</th><th>색</th><th>AWG</th><th>전류(A)</th><th>출발</th><th>도착</th></tr></thead><tbody>";
+    if (!rows.length) { t.innerHTML = WE.i18n.t("<tr><td class='muted' style='border:none'>배선이 없습니다.</td></tr>"); return; }
+    var html = WE.i18n.t("<thead><tr><th>번호</th><th>색</th><th>AWG</th><th>전류(A)</th><th>출발</th><th>도착</th></tr></thead><tbody>");
     rows.forEach(function (r) {
       html += "<tr><td>" + esc(r.no) + "</td>" +
         "<td><span style='display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:4px;vertical-align:middle;background:" + esc(r.colorHex) + "'></span>" + esc(r.color) + "</td>" +
@@ -757,13 +757,13 @@ WE.app = (function () {
   }
   function colDescriptor(key) {
     switch (key) {
-      case "name": return { id: "name", label: "부품명", kind: "text" };
-      case "spec": return { id: "spec", label: "스펙", kind: "text" };
-      case "qty": return { id: "qty", label: "수량", kind: "num" };
-      case "price": return { id: "price", label: "단가", kind: "num" };
-      case "sum": return { id: "sum", label: "합계", kind: "num" };
-      case "link": return { id: "link", label: "구매링크", kind: "link" };
-      case "ds": return { id: "ds", label: "데이터시트", kind: "ds" };
+      case "name": return { id: "name", label: WE.i18n.t("부품명"), kind: "text" };
+      case "spec": return { id: "spec", label: WE.i18n.t("스펙"), kind: "text" };
+      case "qty": return { id: "qty", label: WE.i18n.t("수량"), kind: "num" };
+      case "price": return { id: "price", label: WE.i18n.t("단가"), kind: "num" };
+      case "sum": return { id: "sum", label: WE.i18n.t("합계"), kind: "num" };
+      case "link": return { id: "link", label: WE.i18n.t("구매링크"), kind: "link" };
+      case "ds": return { id: "ds", label: WE.i18n.t("데이터시트"), kind: "ds" };
       default:
         var cid = key.slice(2), c = (WE.model.project.bomExtraCols || []).filter(function (x) { return x.id === cid; })[0];
         return c ? { id: "custom", colId: cid, label: c.name, kind: "custom" } : null;
@@ -826,10 +826,10 @@ WE.app = (function () {
   function linkCell(link) {
     var url = (link || "").trim();
     if (/^https?:\/\//i.test(url)) {
-      return "<a class='bom-link' data-url='" + esc(url) + "' title='" + esc(url) + " (더블클릭: 수정)'>" + esc(linkLabel(url)) + "</a>";
+      return "<a class='bom-link' data-url='" + esc(url) + "' title='" + esc(url) + WE.i18n.t(" (더블클릭: 수정)'>") + esc(linkLabel(url)) + "</a>";
     }
-    if (url) return "<span class='bom-link-plain' title='더블클릭: 수정'>" + esc(url) + "</span>";
-    return "<span class='bom-link-empty' title='더블클릭: 링크 입력'>—</span>";
+    if (url) return WE.i18n.t("<span class='bom-link-plain' title='더블클릭: 수정'>") + esc(url) + "</span>";
+    return WE.i18n.t("<span class='bom-link-empty' title='더블클릭: 링크 입력'>—</span>");
   }
 
   // 한 행의 한 열 셀 HTML
@@ -850,14 +850,14 @@ WE.app = (function () {
         if (r.kind === "manual") return "<td class='num editable' data-f='price'>" + priceTxt + "</td>";
         var pCls = "num editable" + (r.overridden ? " overridden" : "");
         var pTitle = (r.overridden && n(r.basePrice)) ?
-          " title='라이브러리 기본단가 ₩" + Math.round(n(r.basePrice)).toLocaleString() + " → 이 배선도에서 수정됨 (비우면 기본값 복귀)'" : "";
+          WE.i18n.t(" title='라이브러리 기본단가 ₩") + Math.round(n(r.basePrice)).toLocaleString() + WE.i18n.t(" → 이 배선도에서 수정됨 (비우면 기본값 복귀)'") : "";
         return "<td class='" + pCls + "' data-f='price'" + pTitle + ">" + priceTxt + "</td>";
       case "sum": return "<td class='num'>" + won(r.sum) + "</td>";
       case "link": return "<td class='bom-link-cell' data-f='link'>" + linkCell(r.link) + "</td>";
       case "ds":
         var nn = (r.dsNames || []).length;
-        if (nn) return "<td class='ds-cell'><button class='ds-view' data-lib='" + esc(r.libraryId || "") + "' title='데이터시트 보기'>📎 " + nn + "</button></td>";
-        if (r.libraryId) return "<td class='ds-cell'><button class='ds-add' data-lib='" + esc(r.libraryId) + "' title='데이터시트 첨부'>＋</button></td>";
+        if (nn) return "<td class='ds-cell'><button class='ds-view' data-lib='" + esc(r.libraryId || "") + WE.i18n.t("' title='데이터시트 보기'>📎 ") + nn + "</button></td>";
+        if (r.libraryId) return "<td class='ds-cell'><button class='ds-add' data-lib='" + esc(r.libraryId) + WE.i18n.t("' title='데이터시트 첨부'>＋</button></td>");
         return "<td class='ds-cell'></td>";
     }
     return "<td></td>";
@@ -879,13 +879,13 @@ WE.app = (function () {
     });
     cg += "</colgroup>";
 
-    var resize = "<span class='col-resize' title='드래그로 너비 조절'></span>";
+    var resize = WE.i18n.t("<span class='col-resize' title='드래그로 너비 조절'></span>");
     var html = cg + "<thead><tr><th class='bom-gutter-h'></th><th class='num'>#</th>";
     cols.forEach(function (col) {
       var key = esc(colKey(col));
       if (col.kind === "custom") {
-        html += "<th class='custom-col reorder' draggable='true' data-colkey='" + key + "'><span class='col-name' data-col='" + esc(col.colId) + "' title='더블클릭: 열 이름 변경'>" + esc(col.label) + "</span>" +
-          "<button class='col-del' data-col='" + esc(col.colId) + "' title='열 삭제'>×</button>" + resize + "</th>";
+        html += "<th class='custom-col reorder' draggable='true' data-colkey='" + key + "'><span class='col-name' data-col='" + esc(col.colId) + WE.i18n.t("' title='더블클릭: 열 이름 변경'>") + esc(col.label) + "</span>" +
+          "<button class='col-del' data-col='" + esc(col.colId) + WE.i18n.t("' title='열 삭제'>×</button>") + resize + "</th>";
       } else {
         html += "<th class='reorder" + (col.kind === "num" ? " num" : "") + "' draggable='true' data-colkey='" + key + "'>" + esc(col.label) + resize + "</th>";
       }
@@ -897,8 +897,8 @@ WE.app = (function () {
       if (r.kind === "auto") attrs += " data-key='" + esc(r.key) + "' data-lib='" + esc(r.libraryId || "") + "'";
       else attrs += " data-manid='" + esc(r.manId) + "'";
       html += "<tr class='" + (r.kind === "manual" ? "manual" : "") + "' " + attrs + ">";
-      html += "<td class='bom-gutter'><span class='row-grip' draggable='true' title='드래그로 행 이동'>⠿</span>" +
-        (r.kind === "manual" ? "<button class='row-del' title='행 삭제'>×</button>" : "") + "</td>";
+      html += WE.i18n.t("<td class='bom-gutter'><span class='row-grip' draggable='true' title='드래그로 행 이동'>⠿</span>") +
+        (r.kind === "manual" ? WE.i18n.t("<button class='row-del' title='행 삭제'>×</button>") : "") + "</td>";
       html += "<td class='num'>" + r.no + "</td>";
       cols.forEach(function (col) { html += bomCellHtml(col, r); });
       html += "</tr>";
@@ -907,7 +907,7 @@ WE.app = (function () {
     // 합계 행
     html += "<tr class='total-row'><td class='bom-gutter'></td><td></td>";
     cols.forEach(function (col) {
-      if (col.id === "name") html += "<td>합계</td>";
+      if (col.id === "name") html += WE.i18n.t("<td>합계</td>");
       else if (col.id === "qty") html += "<td class='num'>" + data.totalQty + "</td>";
       else if (col.id === "sum") html += "<td class='num'>" + won(data.total) + "</td>";
       else html += "<td" + (col.kind === "num" ? " class='num'" : "") + "></td>";
@@ -981,13 +981,13 @@ WE.app = (function () {
   }
   function addBomColumn() {
     var cols = WE.model.project.bomExtraCols;
-    cols.push({ id: WE.model.nextId("col"), name: "열 " + (cols.length + 1) });
+    cols.push({ id: WE.model.nextId("col"), name: WE.i18n.t("열 ") + (cols.length + 1) });
     renderBOMView();
   }
   function renameBomColumn(colId) {
     var col = WE.model.project.bomExtraCols.filter(function (c) { return c.id === colId; })[0];
     if (!col) return;
-    var name = prompt("열 이름", col.name);
+    var name = prompt(WE.i18n.t("열 이름"), col.name);
     if (name == null) return; name = name.trim(); if (!name) return;
     col.name = name; renderBOMView();
   }
@@ -1043,7 +1043,7 @@ WE.app = (function () {
     });
     var tot = [""];
     cols.forEach(function (c) {
-      if (c.id === "name") tot.push("합계");
+      if (c.id === "name") tot.push(WE.i18n.t("합계"));
       else if (c.id === "qty") tot.push(data.totalQty);
       else if (c.id === "sum") tot.push(data.total);
       else tot.push("");
@@ -1098,7 +1098,7 @@ WE.app = (function () {
   function refreshLayoutSel() {
     var sel = document.getElementById("bomLayoutSel"); if (!sel) return;
     var arr = getSavedLayouts(), cur = sel.value;
-    sel.innerHTML = "<option value=''>레이아웃…</option>" +
+    sel.innerHTML = WE.i18n.t("<option value=''>레이아웃…</option>") +
       arr.map(function (l, i) { return "<option value='" + i + "'>" + esc(l.name) + "</option>"; }).join("");
     if (cur && +cur < arr.length) sel.value = cur;
   }
@@ -1288,15 +1288,15 @@ WE.app = (function () {
       if (l) { applyBomLayout(l.layout); saveDefaultLayout(); renderBOMView(); }
     });
     document.getElementById("bomLayoutSave").addEventListener("click", function () {
-      var name = prompt("이 레이아웃을 저장할 이름"); if (name == null) return;
+      var name = prompt(WE.i18n.t("이 레이아웃을 저장할 이름")); if (name == null) return;
       name = name.trim(); if (!name) return;
       var arr = getSavedLayouts(), ex = arr.filter(function (l) { return l.name === name; })[0];
       if (ex) ex.layout = getBomLayout(); else arr.push({ name: name, layout: getBomLayout() });
-      setSavedLayouts(arr); refreshLayoutSel(); setHint("레이아웃 저장: " + name);
+      setSavedLayouts(arr); refreshLayoutSel(); setHint(WE.i18n.t("레이아웃 저장: ") + name);
     });
     document.getElementById("bomLayoutDel").addEventListener("click", function () {
       var sel = document.getElementById("bomLayoutSel");
-      if (sel.value === "") { alert("삭제할 레이아웃을 목록에서 먼저 고르세요."); return; }
+      if (sel.value === "") { alert(WE.i18n.t("삭제할 레이아웃을 목록에서 먼저 고르세요.")); return; }
       var arr = getSavedLayouts(); arr.splice(+sel.value, 1);
       setSavedLayouts(arr); sel.value = ""; refreshLayoutSel();
     });
@@ -1345,22 +1345,22 @@ WE.app = (function () {
   // 지속시간을 "며칠 (몇시간)" 형태로
   function fmtRuntime(h) {
     if (h <= 0) return "-";
-    if (h < 1) return Math.round(h * 60) + "분";
+    if (h < 1) return Math.round(h * 60) + WE.i18n.t("분");
     var days = h / 24;
-    if (days >= 1) return fmt(days, 1) + "일 (" + fmt(h, 0) + "시간)";
-    return fmt(h, 1) + "시간 (" + fmt(days, 2) + "일)";
+    if (days >= 1) return fmt(days, 1) + WE.i18n.t("일 (") + fmt(h, 0) + WE.i18n.t("시간)");
+    return fmt(h, 1) + WE.i18n.t("시간 (") + fmt(days, 2) + WE.i18n.t("일)");
   }
   // PDF용: 요약을 [라벨, 값] 배열로
   function powerSummaryRows() {
     var s = buildPowerSummary();
     if (!s.hasLoad && !s.hasBatt) return [];
-    var rows = [["총 소비전력(평균)", fmt(s.loadW, 2) + " W"]];
-    if (s.hasConv) rows.push(["변환효율(평균)", fmt(s.effPct, 0) + "%"]);
+    var rows = [[WE.i18n.t("총 소비전력(평균)"), fmt(s.loadW, 2) + " W"]];
+    if (s.hasConv) rows.push([WE.i18n.t("변환효율(평균)"), fmt(s.effPct, 0) + "%"]);
     if (s.hasBatt) {
-      rows.push(["배터리 소비", fmt(s.inW, 2) + " W" + (s.battV > 0 ? " / " + fmt(s.battA, 2) + " A" : "")]);
-      rows.push(["하루 소비 에너지", fmt(s.inW * 24, 1) + " Wh/일"]);
-      rows.push(["배터리 가용용량", fmt(s.battWh, 1) + " Wh"]);
-      rows.push(["배터리 지속", fmtRuntime(s.hours)]);
+      rows.push([WE.i18n.t("배터리 소비"), fmt(s.inW, 2) + " W" + (s.battV > 0 ? " / " + fmt(s.battA, 2) + " A" : "")]);
+      rows.push([WE.i18n.t("하루 소비 에너지"), fmt(s.inW * 24, 1) + WE.i18n.t(" Wh/일")]);
+      rows.push([WE.i18n.t("배터리 가용용량"), fmt(s.battWh, 1) + " Wh"]);
+      rows.push([WE.i18n.t("배터리 지속"), fmtRuntime(s.hours)]);
     }
     return rows;
   }
@@ -1368,26 +1368,26 @@ WE.app = (function () {
     var box = document.getElementById("powerSummary");
     var s = buildPowerSummary();
     if (!s.hasLoad && !s.hasBatt) {
-      box.innerHTML = '<p class="muted">부품 정보(✎)에 역할·전압·전류(부하는 하루 가동시간)를 입력하면 소비전력과 배터리 지속시간이 계산됩니다.</p>';
+      box.innerHTML = WE.i18n.t('<p class="muted">부품 정보(✎)에 역할·전압·전류(부하는 하루 가동시간)를 입력하면 소비전력과 배터리 지속시간이 계산됩니다.</p>');
       return;
     }
     var html = "";
-    html += '<div class="pw-row"><span>총 소비전력(평균)</span><b class="pw-big">' + fmt(s.loadW, 2) + " W</b></div>";
-    if (s.hasConv) html += '<div class="pw-row"><span>변환효율(평균)</span><b>' + fmt(s.effPct, 0) + "%</b></div>";
+    html += WE.i18n.t('<div class="pw-row"><span>총 소비전력(평균)</span><b class="pw-big">') + fmt(s.loadW, 2) + " W</b></div>";
+    if (s.hasConv) html += WE.i18n.t('<div class="pw-row"><span>변환효율(평균)</span><b>') + fmt(s.effPct, 0) + "%</b></div>";
     if (s.hasBatt) {
-      html += '<div class="pw-row"><span>배터리 소비</span><b>' + fmt(s.inW, 2) + " W" + (s.battV > 0 ? " / " + fmt(s.battA, 2) + " A" : "") + "</b></div>";
-      html += '<div class="pw-row"><span>하루 소비</span><b>' + fmt(s.inW * 24, 1) + " Wh/일</b></div>";
-      html += '<div class="pw-row"><span>배터리 가용용량</span><b>' + fmt(s.battWh, 1) + " Wh</b></div>";
-      html += '<div class="pw-runtime"><span>배터리 지속</span><br><b class="pw-big">' + fmtRuntime(s.hours) + "</b></div>";
+      html += WE.i18n.t('<div class="pw-row"><span>배터리 소비</span><b>') + fmt(s.inW, 2) + " W" + (s.battV > 0 ? " / " + fmt(s.battA, 2) + " A" : "") + "</b></div>";
+      html += WE.i18n.t('<div class="pw-row"><span>하루 소비</span><b>') + fmt(s.inW * 24, 1) + WE.i18n.t(" Wh/일</b></div>");
+      html += WE.i18n.t('<div class="pw-row"><span>배터리 가용용량</span><b>') + fmt(s.battWh, 1) + " Wh</b></div>";
+      html += WE.i18n.t('<div class="pw-runtime"><span>배터리 지속</span><br><b class="pw-big">') + fmtRuntime(s.hours) + "</b></div>";
     } else {
-      html += '<p class="muted" style="margin-top:6px">배터리 역할 부품을 넣으면 지속시간이 계산됩니다.</p>';
+      html += WE.i18n.t('<p class="muted" style="margin-top:6px">배터리 역할 부품을 넣으면 지속시간이 계산됩니다.</p>');
     }
     box.innerHTML = html;
   }
 
   function bindFileButtons() {
     document.getElementById("btnNew").addEventListener("click", function () {
-      if (!confirm("현재 작업을 비우고 새 프로젝트를 시작할까요?\n(저장 안 한 내용은 사라집니다)")) return;
+      if (!confirm(WE.i18n.t("현재 작업을 비우고 새 프로젝트를 시작할까요?\n(저장 안 한 내용은 사라집니다)"))) return;
       WE.model.newProject();
       applyDefaultLayoutToProject();   // 새 배선도도 마지막 BOM 레이아웃 유지
       applyDefaultPaletteToProject();  // 새 배선도도 마지막 배선색 팔레트 유지
@@ -1417,8 +1417,8 @@ WE.app = (function () {
     document.body.classList.toggle("text-mode", mode === "text");
     if (mode !== "select") { WE.model.clearSelection(); WE.render.renderOverlay(); refreshProps(); }
     setHint(
-      mode === "wire" ? "단자를 클릭하고 다른 단자를 클릭하면 배선이 이어집니다." :
-      mode === "text" ? "캔버스를 클릭해 텍스트를 추가하세요. (더블클릭으로 편집)" : ""
+      mode === "wire" ? WE.i18n.t("단자를 클릭하고 다른 단자를 클릭하면 배선이 이어집니다.") :
+      mode === "text" ? WE.i18n.t("캔버스를 클릭해 텍스트를 추가하세요. (더블클릭으로 편집)") : ""
     );
   }
 
@@ -1538,7 +1538,7 @@ WE.app = (function () {
       return r.text();
     }).then(function (text) {
       JSON.parse(text);   // 손상된 파일이면 여기서 throw → 조용히 빈 화면으로 시작(알림창 없이)
-      WE.io.loadProjectText(text, "샘플 프로젝트");
+      WE.io.loadProjectText(text, WE.i18n.t("샘플 프로젝트"));
       try { localStorage.setItem("we_sampleShown", "1"); } catch (e) { /* 무시 */ }
       cb(true);
     }).catch(function () { cb(false); });
@@ -1585,8 +1585,8 @@ WE.app = (function () {
     var lead = document.getElementById("notifyLead");
     // 완료 직후 제안이면 축하 문구, 링크로 직접 열면 기본 문구
     lead.innerHTML = reason === "after_export"
-      ? "완성됐어요! 🎉 정식 출시·새 기능 소식을 이메일로 가장 먼저 알려드릴까요?<br />(스팸 없이 큰 소식만)"
-      : "정식 출시·새 기능 소식을 이메일로 가장 먼저 알려드릴게요.<br />(스팸 없이 큰 소식만)";
+      ? WE.i18n.t("완성됐어요! 🎉 정식 출시·새 기능 소식을 이메일로 가장 먼저 알려드릴까요?<br />(스팸 없이 큰 소식만)")
+      : WE.i18n.t("정식 출시·새 기능 소식을 이메일로 가장 먼저 알려드릴게요.<br />(스팸 없이 큰 소식만)");
     document.getElementById("notifyEmail").value = "";
     document.getElementById("notifyStatus").textContent = "";
     document.getElementById("notifyBotcheck").checked = false;
@@ -1614,18 +1614,18 @@ WE.app = (function () {
     var emailEl = document.getElementById("notifyEmail");
     var email = emailEl.value.trim();
     var statusEl = document.getElementById("notifyStatus");
-    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { statusEl.textContent = "올바른 이메일 주소를 입력해주세요."; emailEl.focus(); return; }
-    if (document.getElementById("notifyBotcheck").checked) { statusEl.textContent = "감사합니다!"; return; }   // 허니팟
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { statusEl.textContent = WE.i18n.t("올바른 이메일 주소를 입력해주세요."); emailEl.focus(); return; }
+    if (document.getElementById("notifyBotcheck").checked) { statusEl.textContent = WE.i18n.t("감사합니다!"); return; }   // 허니팟
     var btn = document.getElementById("notifySend");
-    btn.disabled = true; statusEl.textContent = "등록 중…";
+    btn.disabled = true; statusEl.textContent = WE.i18n.t("등록 중…");
     fetch("https://api.web3forms.com/submit", {
       method: "POST",
       headers: { "Content-Type": "application/json", Accept: "application/json" },
       body: JSON.stringify({
         access_key: WEB3FORMS_KEY,
-        subject: "[이지케이블] 출시 알림 신청",
-        from_name: "이지케이블 출시알림",
-        message: "출시 알림 신청 이메일: " + email,
+        subject: WE.i18n.t("[이지케이블] 출시 알림 신청"),
+        from_name: WE.i18n.t("이지케이블 출시알림"),
+        message: WE.i18n.t("출시 알림 신청 이메일: ") + email,
         email: email,
         botcheck: false
       })
@@ -1634,14 +1634,14 @@ WE.app = (function () {
       if (res.success) {
         try { localStorage.setItem("we_notify_done", "1"); } catch (e) { /* 무시 */ }
         track("notify_subscribe");
-        statusEl.textContent = "등록됐습니다. 소식이 있을 때 알려드릴게요. 감사합니다! 🙌";
+        statusEl.textContent = WE.i18n.t("등록됐습니다. 소식이 있을 때 알려드릴게요. 감사합니다! 🙌");
         setTimeout(function () { document.getElementById("notifyModal").hidden = true; }, 1200);
       } else {
-        statusEl.textContent = "등록 실패: " + (res.message || "잠시 후 다시 시도해주세요.");
+        statusEl.textContent = WE.i18n.t("등록 실패: ") + (res.message || WE.i18n.t("잠시 후 다시 시도해주세요."));
       }
     }).catch(function () {
       btn.disabled = false;
-      statusEl.textContent = "네트워크 오류로 등록하지 못했습니다.";
+      statusEl.textContent = WE.i18n.t("네트워크 오류로 등록하지 못했습니다.");
     });
   }
 
@@ -1656,12 +1656,12 @@ WE.app = (function () {
       var last = Number(localStorage.getItem("we_fb_last") || 0);
       if (now - last < FB_COOLDOWN_MS) {
         var sec = Math.ceil((FB_COOLDOWN_MS - (now - last)) / 1000);
-        return "잠시 후 다시 보내주세요. (" + sec + "초)";
+        return WE.i18n.t("잠시 후 다시 보내주세요. (") + sec + WE.i18n.t("초)");
       }
       var today = new Date().toDateString();
       if (localStorage.getItem("we_fb_day") === today &&
           Number(localStorage.getItem("we_fb_count") || 0) >= FB_DAILY_MAX) {
-        return "오늘은 더 보낼 수 없습니다. 급하시면 " + FEEDBACK_EMAIL + " 으로 보내주세요.";
+        return WE.i18n.t("오늘은 더 보낼 수 없습니다. 급하시면 ") + FEEDBACK_EMAIL + WE.i18n.t(" 으로 보내주세요.");
       }
     } catch (e) { /* localStorage 불가 브라우저는 그냥 통과 */ }
     return null;
@@ -1678,18 +1678,18 @@ WE.app = (function () {
   // 전송 실패(한도 초과·네트워크 오류 등) 시 메일로 직접 보낼 수 있게 안내
   function showMailFallback(statusEl, text) {
     var href = "mailto:" + FEEDBACK_EMAIL +
-      "?subject=" + encodeURIComponent("[이지케이블] 피드백") +
+      "?subject=" + encodeURIComponent(WE.i18n.t("[이지케이블] 피드백")) +
       "&body=" + encodeURIComponent(text);
-    statusEl.innerHTML += ' <a href="' + href + '">메일로 보내기</a>';
+    statusEl.innerHTML += ' <a href="' + href + WE.i18n.t('">메일로 보내기</a>');
   }
 
   function sendFeedback() {
     var text = document.getElementById("feedbackText").value.trim();
     var statusEl = document.getElementById("feedbackStatus");
-    if (!text) { statusEl.textContent = "내용을 입력해주세요."; return; }
+    if (!text) { statusEl.textContent = WE.i18n.t("내용을 입력해주세요."); return; }
     // 허니팟: 사람은 절대 체크할 수 없는 숨은 필드 → 채워져 있으면 봇으로 보고 조용히 무시
     if (document.getElementById("feedbackBotcheck").checked) {
-      statusEl.textContent = "전달됐습니다. 감사합니다!";
+      statusEl.textContent = WE.i18n.t("전달됐습니다. 감사합니다!");
       return;
     }
     var blocked = feedbackBlockReason();
@@ -1700,14 +1700,14 @@ WE.app = (function () {
     }
     var btn = document.getElementById("feedbackSend");
     btn.disabled = true;
-    statusEl.textContent = "보내는 중…";
+    statusEl.textContent = WE.i18n.t("보내는 중…");
     fetch("https://api.web3forms.com/submit", {
       method: "POST",
       headers: { "Content-Type": "application/json", Accept: "application/json" },
       body: JSON.stringify({
         access_key: WEB3FORMS_KEY,
-        subject: "[이지케이블] 피드백",
-        from_name: "이지케이블 피드백",
+        subject: WE.i18n.t("[이지케이블] 피드백"),
+        from_name: WE.i18n.t("이지케이블 피드백"),
         message: text,
         botcheck: false,
         브라우저: navigator.userAgent
@@ -1717,16 +1717,16 @@ WE.app = (function () {
       if (res.success) {
         feedbackMarkSent();
         track("feedback_sent");
-        statusEl.textContent = "전달됐습니다. 감사합니다!";
+        statusEl.textContent = WE.i18n.t("전달됐습니다. 감사합니다!");
         setTimeout(function () { document.getElementById("feedbackModal").hidden = true; }, 900);
       } else {
         // 무료 한도 초과 등으로 실패해도 의견이 유실되지 않도록 메일 경로 안내
-        statusEl.textContent = "전송 실패: " + (res.message || "다시 시도해주세요.");
+        statusEl.textContent = WE.i18n.t("전송 실패: ") + (res.message || WE.i18n.t("다시 시도해주세요."));
         showMailFallback(statusEl, text);
       }
     }).catch(function () {
       btn.disabled = false;
-      statusEl.textContent = "네트워크 오류로 전송하지 못했습니다.";
+      statusEl.textContent = WE.i18n.t("네트워크 오류로 전송하지 못했습니다.");
       showMailFallback(statusEl, text);
     });
   }
@@ -1814,7 +1814,7 @@ WE.app = (function () {
     catch (e) { /* 무시 */ }
   }
   function saveShortcuts() { try { localStorage.setItem("we_shortcuts", JSON.stringify(_shortcuts)); } catch (e) {} }
-  function scLabel(k) { return k ? (k.length === 1 ? k.toUpperCase() : k) : "(없음)"; }
+  function scLabel(k) { return k ? (k.length === 1 ? k.toUpperCase() : k) : WE.i18n.t("(없음)"); }
   function bindShortcuts() {
     var inputs = document.querySelectorAll(".sc-input");
     for (var i = 0; i < inputs.length; i++) {
@@ -1922,7 +1922,7 @@ WE.app = (function () {
         }
       } catch (e) { /* 빈 레이어 무시 */ }
     });
-    if (x1 === Infinity) { setHint("내보낼 내용이 없습니다. 부품을 먼저 배치하세요."); return; }
+    if (x1 === Infinity) { setHint(WE.i18n.t("내보낼 내용이 없습니다. 부품을 먼저 배치하세요.")); return; }
     var PAD = 30;
     x1 -= PAD; y1 -= PAD; x2 += PAD; y2 += PAD;
 
@@ -1961,18 +1961,18 @@ WE.app = (function () {
       ctx.drawImage(img, 0, 0, cv.width, cv.height);
       URL.revokeObjectURL(svgUrl);
       cv.toBlob(function (blob) {
-        if (!blob) { setHint("이미지 생성에 실패했습니다."); return; }
+        if (!blob) { setHint(WE.i18n.t("이미지 생성에 실패했습니다.")); return; }
         var a = document.createElement("a");
         a.href = URL.createObjectURL(blob);
-        a.download = ((WE.model.project.meta.name || "배선도").replace(/[\\/:*?"<>|]/g, "_")) + ".png";
+        a.download = ((WE.model.project.meta.name || WE.i18n.t("배선도")).replace(/[\\/:*?"<>|]/g, "_")) + ".png";
         document.body.appendChild(a); a.click(); document.body.removeChild(a);
         setTimeout(function () { URL.revokeObjectURL(a.href); }, 1000);
         track("export", { method: "png" });
-        setHint("이미지 저장 완료 (PNG)");
+        setHint(WE.i18n.t("이미지 저장 완료 (PNG)"));
         offerNotifyAfterValue();
       }, "image/png");
     };
-    img.onerror = function () { URL.revokeObjectURL(svgUrl); setHint("이미지 생성에 실패했습니다."); };
+    img.onerror = function () { URL.revokeObjectURL(svgUrl); setHint(WE.i18n.t("이미지 생성에 실패했습니다.")); };
     img.src = svgUrl;
   }
 
@@ -1990,14 +1990,14 @@ WE.app = (function () {
         _snapList = list;
         var box = document.getElementById("historyList");
         if (!list.length) {
-          box.innerHTML = "<p class='muted'>아직 보관된 스냅샷이 없습니다. 작업을 시작하면 5분 간격으로 자동 보관됩니다.</p>";
+          box.innerHTML = WE.i18n.t("<p class='muted'>아직 보관된 스냅샷이 없습니다. 작업을 시작하면 5분 간격으로 자동 보관됩니다.</p>");
         } else {
           box.innerHTML = list.map(function (s, i) {
             return "<div class='history-row'>" +
               "<div class='history-info'><b>" + fmtSnapTime(s.t) + "</b>" +
               "<span class='muted'> — " + esc(s.name || WE.i18n.t("이지케이블 배선도")) +
-              " (부품 " + s.comps + " · 배선 " + s.wires + ")</span></div>" +
-              "<button class='history-restore' data-i='" + i + "'>복구</button></div>";
+              WE.i18n.t(" (부품 ") + s.comps + WE.i18n.t(" · 배선 ") + s.wires + ")</span></div>" +
+              "<button class='history-restore' data-i='" + i + WE.i18n.t("'>복구</button></div>");
           }).join("");
         }
         modal.hidden = false;
@@ -2007,16 +2007,16 @@ WE.app = (function () {
     document.getElementById("historyList").addEventListener("click", function (e) {
       var btn = e.target.closest(".history-restore"); if (!btn) return;
       var s = _snapList[+btn.dataset.i]; if (!s) return;
-      if (!confirm(fmtSnapTime(s.t) + " 시점으로 되돌릴까요?\n(지금 화면의 작업은 사라집니다)")) return;
+      if (!confirm(fmtSnapTime(s.t) + WE.i18n.t(" 시점으로 되돌릴까요?\n(지금 화면의 작업은 사라집니다)"))) return;
       try {
         WE.model.loadProject(JSON.parse(s.json));
-      } catch (err) { alert("스냅샷을 읽을 수 없습니다: " + err.message); return; }
+      } catch (err) { alert(WE.i18n.t("스냅샷을 읽을 수 없습니다: ") + err.message); return; }
       WE.io.clearFileHandle();   // 옛 버전이 연결된 파일을 조용히 덮어쓰지 않도록 연결 해제
       reloadUI();
       if (WE.history) WE.history.reset();
       WE.store.saveNow();
       modal.hidden = true;
-      setHint("복구 완료: " + fmtSnapTime(s.t) + " 시점");
+      setHint(WE.i18n.t("복구 완료: ") + fmtSnapTime(s.t) + WE.i18n.t(" 시점"));
     });
   }
 
@@ -2071,32 +2071,32 @@ WE.app = (function () {
 
     // 샘플 프로젝트 열기 (사이트에 올려둔 sample.ezc — 공유 번들이라 부품·스펙까지 온전)
     document.getElementById("btnSample").addEventListener("click", function () {
-      if (!confirm("현재 작업을 비우고 샘플 프로젝트를 열까요?\n(저장 안 한 내용은 사라집니다)")) return;
+      if (!confirm(WE.i18n.t("현재 작업을 비우고 샘플 프로젝트를 열까요?\n(저장 안 한 내용은 사라집니다)"))) return;
       fetch("sample.ezc").then(function (r) {
         if (!r.ok) throw 0;
         return r.text();
       }).then(function (text) {
         JSON.parse(text);
         track("open_sample");
-        WE.io.loadProjectText(text, "샘플 프로젝트");
+        WE.io.loadProjectText(text, WE.i18n.t("샘플 프로젝트"));
       }).catch(function () {
-        setHint("샘플 프로젝트가 아직 준비되지 않았습니다.");
+        setHint(WE.i18n.t("샘플 프로젝트가 아직 준비되지 않았습니다."));
       });
     });
   }
   function renderHelpShortcuts() {
     var rows = [
-      ["선택 모드", scLabel(_shortcuts["mode-select"])],
-      ["배선 모드 (진입 시 배선색 팝업 자동 표시)", scLabel(_shortcuts["mode-wire"])],
-      ["텍스트 모드", scLabel(_shortcuts["mode-text"])],
-      ["실행 취소 / 다시 실행", "Ctrl+Z / Ctrl+Shift+Z"],
-      ["부품 복제", "Ctrl+D"],
-      ["화면 이동(팬)", "Space 드래그 · 휠클릭 드래그"],
-      ["확대 / 축소", "Ctrl+휠"],
-      ["선택 항목 삭제", "Delete / Backspace"],
-      ["즉시 저장", "Ctrl+S"],
-      ["파일 열기", "Ctrl+O"],
-      ["이 도움말", "?"]
+      [WE.i18n.t("선택 모드"), scLabel(_shortcuts["mode-select"])],
+      [WE.i18n.t("배선 모드 (진입 시 배선색 팝업 자동 표시)"), scLabel(_shortcuts["mode-wire"])],
+      [WE.i18n.t("텍스트 모드"), scLabel(_shortcuts["mode-text"])],
+      [WE.i18n.t("실행 취소 / 다시 실행"), "Ctrl+Z / Ctrl+Shift+Z"],
+      [WE.i18n.t("부품 복제"), "Ctrl+D"],
+      [WE.i18n.t("화면 이동(팬)"), WE.i18n.t("Space 드래그 · 휠클릭 드래그")],
+      [WE.i18n.t("확대 / 축소"), WE.i18n.t("Ctrl+휠")],
+      [WE.i18n.t("선택 항목 삭제"), "Delete / Backspace"],
+      [WE.i18n.t("즉시 저장"), "Ctrl+S"],
+      [WE.i18n.t("파일 열기"), "Ctrl+O"],
+      [WE.i18n.t("이 도움말"), "?"]
     ];
     document.getElementById("helpShortcutList").innerHTML = rows.map(function (r) {
       return "<div class='sc-row'><span>" + esc(r[0]) + "</span><b>" + esc(r[1]) + "</b></div>";
@@ -2145,7 +2145,7 @@ WE.app = (function () {
     var pm = document.getElementById("paletteModal");
     document.getElementById("palClose").addEventListener("click", function () { pm.hidden = true; });
     document.getElementById("btnAddPal").addEventListener("click", function () {
-      var label = document.getElementById("newPalLabel").value.trim() || "색";
+      var label = document.getElementById("newPalLabel").value.trim() || WE.i18n.t("색");
       var color = document.getElementById("newPalColor").value;
       WE.model.project.palette.push({ color: color, label: label });
       document.getElementById("newPalLabel").value = "";
@@ -2233,7 +2233,7 @@ WE.app = (function () {
       var label = document.createElement("input");
       label.type = "text"; label.className = "plabel"; label.value = p.label;
       var del = document.createElement("button");
-      del.className = "pdel"; del.textContent = "삭제";
+      del.className = "pdel"; del.textContent = WE.i18n.t("삭제");
       row.appendChild(color); row.appendChild(label); row.appendChild(del);
       pl.appendChild(row);
     });
@@ -2323,13 +2323,13 @@ WE.app = (function () {
       var checked = document.querySelectorAll("#wireLoadList input:checked");
       var totalP = 0, cnt = 0;
       Array.prototype.forEach.call(checked, function (cb) { totalP += parseFloat(cb.dataset.p) || 0; cnt++; });
-      if (!cnt) { setHint("합산할 부하를 선택하세요."); return; }
-      if (!(V > 0)) { setHint("구간 전압(V)을 입력하세요."); return; }
+      if (!cnt) { setHint(WE.i18n.t("합산할 부하를 선택하세요.")); return; }
+      if (!(V > 0)) { setHint(WE.i18n.t("구간 전압(V)을 입력하세요.")); return; }
       var I = totalP / V;
       document.getElementById("wireCurrent").value = Math.round(I * 1000) / 1000;
       applyWireGauge(w, I); updateWireAwgOut(w);
       document.getElementById("wireCalcOut").textContent =
-        "부하 " + cnt + "개 = " + round(totalP) + "W ÷ " + V + "V = " + (Math.round(I * 100) / 100) + "A";
+        WE.i18n.t("부하 ") + cnt + WE.i18n.t("개 = ") + round(totalP) + "W ÷ " + V + "V = " + (Math.round(I * 100) / 100) + "A";
     });
     document.getElementById("wireDelete").addEventListener("click", function () {
       var ws = selectedWires(); if (!ws.length) return;
@@ -2362,8 +2362,8 @@ WE.app = (function () {
     var out = document.getElementById("wireAwgOut");
     if (w && w.current > 0 && w.awg) {
       var e = WE.awg.get(w.awg);
-      out.textContent = "권장 AWG " + w.awg + " · Ø" + e.dia + "mm · 허용 " + e.ampEff + "A (여유 ×" + WE.awg.MARGIN + ")";
-    } else out.textContent = "신호선(기본 두께). 전류를 입력하면 규격을 자동 계산합니다.";
+      out.textContent = WE.i18n.t("권장 AWG ") + w.awg + " · Ø" + e.dia + WE.i18n.t("mm · 허용 ") + e.ampEff + WE.i18n.t("A (여유 ×") + WE.awg.MARGIN + ")";
+    } else out.textContent = WE.i18n.t("신호선(기본 두께). 전류를 입력하면 규격을 자동 계산합니다.");
   }
   // 부하 부품(전력 있는 load) 체크박스 목록
   function renderWireLoadList() {
@@ -2380,7 +2380,7 @@ WE.app = (function () {
       var name = lib ? lib.name : c.name;
       html += "<label class='wg-load'><input type='checkbox' data-p='" + P + "' /> " + esc(name) + " (" + round(P) + "W)</label>";
     });
-    box.innerHTML = html || "<span class='muted'>전력이 입력된 부하 부품이 없습니다.</span>";
+    box.innerHTML = html || WE.i18n.t("<span class='muted'>전력이 입력된 부하 부품이 없습니다.</span>");
   }
 
   // 배선의 가장 긴 세로(vertical=true)/가로 구간 → {i, coord}
@@ -2452,12 +2452,12 @@ WE.app = (function () {
       setWireSeg(o.w, o.pts, o.idx, vertical, target);
     });
     WE.render.renderAll(); WE.render.renderOverlay(); refreshProps();
-    setHint((vertical ? "세로선" : "가로선") + " 정렬: " + others.length + "개" + (gap > 0 ? (" · 간격 " + gap + "px") : ""));
+    setHint((vertical ? WE.i18n.t("세로선") : WE.i18n.t("가로선")) + WE.i18n.t(" 정렬: ") + others.length + WE.i18n.t("개") + (gap > 0 ? (WE.i18n.t(" · 간격 ") + gap + "px") : ""));
   }
   // 균등 배치: alongX=true → 세로선들의 x를 균등 간격 / false → 가로선들의 y를 균등
   function distributeSelectedWires(alongX) {
     var ids = WE.model.getMultiWire();
-    if (!ids || ids.length < 3) { setHint("균등 배치는 배선 3개 이상 선택하세요."); return; }
+    if (!ids || ids.length < 3) { setHint(WE.i18n.t("균등 배치는 배선 3개 이상 선택하세요.")); return; }
     var items = [];
     ids.forEach(function (id) {
       var w = WE.model.getWire(id); if (!w) return;
@@ -2466,14 +2466,14 @@ WE.app = (function () {
       if (segIsVertical(pts, idx) !== alongX) { var s = wireMainSeg(pts, alongX); if (!s) return; idx = s.i; }
       items.push({ w: w, pts: pts, idx: idx, coord: alongX ? pts[idx].x : pts[idx].y });
     });
-    if (items.length < 3) { setHint("균등 배치할 " + (alongX ? "세로" : "가로") + " 구간이 부족합니다."); return; }
+    if (items.length < 3) { setHint(WE.i18n.t("균등 배치할 ") + (alongX ? WE.i18n.t("세로") : WE.i18n.t("가로")) + WE.i18n.t(" 구간이 부족합니다.")); return; }
     items.sort(function (a, b) { return a.coord - b.coord; });
     var first = items[0].coord, step = (items[items.length - 1].coord - first) / (items.length - 1);
     items.forEach(function (it, i) {
       setWireSeg(it.w, it.pts, it.idx, alongX, first + step * i);
     });
     WE.render.renderAll(); WE.render.renderOverlay(); refreshProps();
-    setHint((alongX ? "가로" : "세로") + " 균등 배치: " + items.length + "개");
+    setHint((alongX ? WE.i18n.t("가로") : WE.i18n.t("세로")) + WE.i18n.t(" 균등 배치: ") + items.length + WE.i18n.t("개"));
   }
 
   function wireConnText(w) {
@@ -2511,19 +2511,19 @@ WE.app = (function () {
   }
   function exportWireListCSV() {
     var rows = wireListData();
-    if (!rows.length) { setHint("배선이 없습니다."); return; }
+    if (!rows.length) { setHint(WE.i18n.t("배선이 없습니다.")); return; }
     function cell(v) { v = (v == null ? "" : String(v)); return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; }
-    var lines = [["번호", "색", "AWG", "전류(A)", "출발 부품", "출발 단자", "도착 부품", "도착 단자"].map(cell).join(",")];
+    var lines = [[WE.i18n.t("번호"), WE.i18n.t("색"), "AWG", WE.i18n.t("전류(A)"), WE.i18n.t("출발 부품"), WE.i18n.t("출발 단자"), WE.i18n.t("도착 부품"), WE.i18n.t("도착 단자")].map(cell).join(",")];
     rows.forEach(function (r) {
       lines.push([r.no, r.color, r.awg, r.current, r.fromCmp, r.fromTerm, r.toCmp, r.toTerm].map(cell).join(","));
     });
     var csv = "﻿" + lines.join("\r\n");   // UTF-8 BOM: 엑셀 한글 깨짐 방지
     var blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
     var url = URL.createObjectURL(blob), a = document.createElement("a");
-    a.href = url; a.download = (WE.model.project.meta.name || "배선도") + "_배선리스트.csv";
+    a.href = url; a.download = (WE.model.project.meta.name || WE.i18n.t("배선도")) + WE.i18n.t("_배선리스트.csv");
     document.body.appendChild(a); a.click(); document.body.removeChild(a);
     setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
-    setHint("배선 리스트 내보내기: " + rows.length + "개");
+    setHint(WE.i18n.t("배선 리스트 내보내기: ") + rows.length + WE.i18n.t("개"));
   }
 
   // ---- 단자 편집 ----
@@ -2585,7 +2585,7 @@ WE.app = (function () {
       var label = document.createElement("input");
       label.type = "text"; label.className = "plabel"; label.value = p.label;
       var del = document.createElement("button");
-      del.className = "pdel"; del.textContent = "삭제";
+      del.className = "pdel"; del.textContent = WE.i18n.t("삭제");
       row.appendChild(color); row.appendChild(label); row.appendChild(del);
       pl.appendChild(row);
     });
@@ -2759,7 +2759,7 @@ WE.app = (function () {
     var multi = WE.model.getMulti();
     if (multi.length > 1) {
       empty.hidden = true; body.hidden = true; wp.hidden = true; ap.hidden = true; al.hidden = false;
-      document.getElementById("alignCount").textContent = "부품 " + multi.length + "개 선택됨";
+      document.getElementById("alignCount").textContent = WE.i18n.t("부품 ") + multi.length + WE.i18n.t("개 선택됨");
       return;
     }
     al.hidden = true;
@@ -2782,7 +2782,7 @@ WE.app = (function () {
       empty.hidden = true; body.hidden = true; wp.hidden = false;
       var mw = WE.model.getMultiWire();
       document.getElementById("wireConn").textContent =
-        (mw && mw.length > 1) ? ("배선 " + mw.length + "개 선택됨 (색·두께 일괄 변경)") : wireConnText(wire);
+        (mw && mw.length > 1) ? (WE.i18n.t("배선 ") + mw.length + WE.i18n.t("개 선택됨 (색·두께 일괄 변경)")) : wireConnText(wire);
       document.getElementById("wireAlign").hidden = !(mw && mw.length >= 2);
       document.getElementById("wireAllowOverlap").checked = !!wire.allowOverlap;
       setIfNotFocused("wireColor", wire.color);
@@ -2819,19 +2819,19 @@ WE.app = (function () {
     var box = document.getElementById("compElec");
     var lib = c.libraryId ? WE.library.get(c.libraryId) : null;
     if (!lib) { box.hidden = true; return; }
-    var roleMap = { battery: "배터리(소스)", load: "부하", converter: "변환기" };
+    var roleMap = { battery: WE.i18n.t("배터리(소스)"), load: WE.i18n.t("부하"), converter: WE.i18n.t("변환기") };
     var role = lib.role || "load";
     function row(k, v) { return "<div class='ce-row'><span>" + k + "</span><b>" + v + "</b></div>"; }
-    var html = row("역할", roleMap[role] || role);
-    if (n(lib.volt)) html += row("전압", n(lib.volt) + " V");
-    if (n(lib.current)) html += row("전류", n(lib.current) + " A");
-    if (partPower(lib)) html += row("전력", round(partPower(lib)) + " W");
-    if (role === "battery" && n(lib.capacityAh)) html += row("용량", n(lib.capacityAh) + " Ah" + (n(lib.dod) ? (" · DoD " + n(lib.dod) + "%") : ""));
-    if (role === "load" && n(lib.minPerHour) && n(lib.minPerHour) !== 60) html += row("가동", n(lib.minPerHour) + " 분/시간");
-    if (role === "converter" && n(lib.efficiency)) html += row("효율", n(lib.efficiency) + " %");
+    var html = row(WE.i18n.t("역할"), roleMap[role] || role);
+    if (n(lib.volt)) html += row(WE.i18n.t("전압"), n(lib.volt) + " V");
+    if (n(lib.current)) html += row(WE.i18n.t("전류"), n(lib.current) + " A");
+    if (partPower(lib)) html += row(WE.i18n.t("전력"), round(partPower(lib)) + " W");
+    if (role === "battery" && n(lib.capacityAh)) html += row(WE.i18n.t("용량"), n(lib.capacityAh) + " Ah" + (n(lib.dod) ? (" · DoD " + n(lib.dod) + "%") : ""));
+    if (role === "load" && n(lib.minPerHour) && n(lib.minPerHour) !== 60) html += row(WE.i18n.t("가동"), n(lib.minPerHour) + WE.i18n.t(" 분/시간"));
+    if (role === "converter" && n(lib.efficiency)) html += row(WE.i18n.t("효율"), n(lib.efficiency) + " %");
     var hasVal = n(lib.volt) || n(lib.current) || partPower(lib) || n(lib.capacityAh);
     document.getElementById("compElecBody").innerHTML = hasVal ? html
-      : "<span class='muted'>전기값 미입력 — ⚙ 부품 정보에서 입력</span>";
+      : WE.i18n.t("<span class='muted'>전기값 미입력 — ⚙ 부품 정보에서 입력</span>");
     box.hidden = false;
   }
 
@@ -2848,7 +2848,7 @@ WE.app = (function () {
   // 저장 안내(날짜·시간, 작은 글씨)
   function setSavedHint() {
     var d = new Date();
-    var s = "💾 저장됨 " + d.getFullYear() + "-" + pad2(d.getMonth() + 1) + "-" + pad2(d.getDate()) +
+    var s = WE.i18n.t("💾 저장됨 ") + d.getFullYear() + "-" + pad2(d.getMonth() + 1) + "-" + pad2(d.getDate()) +
       " " + pad2(d.getHours()) + ":" + pad2(d.getMinutes()) + ":" + pad2(d.getSeconds());
     var h = document.getElementById("hint");
     h.textContent = s; h.classList.add("hint-save");

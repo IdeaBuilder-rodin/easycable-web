@@ -110,7 +110,7 @@ WE.interactions = (function () {
   function showTermTooltip(text, clientX, clientY) {
     if (!_tipEl) _tipEl = document.getElementById("termTooltip");
     var rect = document.getElementById("centerCol").getBoundingClientRect();
-    _tipEl.textContent = text || "(이름 없음)";
+    _tipEl.textContent = text || WE.i18n.t("(이름 없음)");
     _tipEl.style.left = (clientX - rect.left) + "px";
     _tipEl.style.top = (clientY - rect.top) + "px";
     if (!_tipShown) { _tipEl.hidden = false; _tipShown = true; }

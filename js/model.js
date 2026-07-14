@@ -4,15 +4,14 @@ window.WE = WE;
 
 WE.model = (function () {
   var DEFAULT_PALETTE = [   // 색상 + 의미(범례에 사용)
-    { color: "#e53935", label: "+ (전원)" },
+    { color: "#e53935", label: WE.i18n.t("+ (전원)") },
     { color: "#111111", label: "GND" },
-    { color: "#ffffff", label: "중성" },
-    { color: "#fbc02d", label: "신호" },
-    { color: "#0000ff", label: "통신 (I2C 등)" }
+    { color: "#ffffff", label: WE.i18n.t("중성") },
+    { color: "#fbc02d", label: WE.i18n.t("신호") },
+    { color: "#0000ff", label: WE.i18n.t("통신 (I2C 등)") }
   ];
   function defaultMeta() {
-    var defName = (WE.i18n ? WE.i18n.t("이지케이블 배선도") : "이지케이블 배선도");
-    return { name: defName, version: 1, canvas: { width: 1600, height: 900, grid: 10, snap: true } };
+    return { name: WE.i18n.t("이지케이블 배선도"), version: 1, canvas: { width: 1600, height: 900, grid: 10, snap: true } };
   }
 
   // 전체 프로젝트 상태
@@ -65,7 +64,7 @@ WE.model = (function () {
     var cmp = {
       id: nextId("cmp"),
       libraryId: opts.libraryId || null,
-      name: opts.name || "부품",
+      name: opts.name || WE.i18n.t("부품"),
       x: opts.x != null ? opts.x : 100,
       y: opts.y != null ? opts.y : 100,
       rotation: 0,
@@ -217,7 +216,7 @@ WE.model = (function () {
     opts = opts || {};
     var a = {
       id: nextId("a"),
-      text: opts.text != null ? opts.text : "텍스트",
+      text: opts.text != null ? opts.text : WE.i18n.t("텍스트"),
       x: opts.x != null ? opts.x : 100,
       y: opts.y != null ? opts.y : 100,
       color: opts.color || "#e53935",
