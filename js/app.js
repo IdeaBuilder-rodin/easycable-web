@@ -343,14 +343,18 @@ WE.app = (function () {
 
   // 인스턴스 이미지 편집(배경제거/회전/크롭) 결과를 '이 부품'에만 적용 — 새 이미지 비율로 박스 보정 + 단자 좌표 변환.
   // 라이브러리 반영은 분리(부품 우클릭 → '라이브러리에 저장'). 실수해도 Ctrl+Z로 복구 가능.
-  function applyInstanceImage(c, url, tf) {
+  function applyInstanceImage(c, url, tf, size) {
     var probe = new Image();
     probe.onload = function () {
       var aspect = probe.width > 0 ? probe.height / probe.width : (c.height / c.width);
       var swap = tf && (tf.rotation === 90 || tf.rotation === 270);   // 90/270°는 가로세로가 실제로 뒤바뀜
       c.image = url;
-      if (swap) c.width = Math.max(10, c.height);
-      c.height = Math.max(10, Math.round(c.width * aspect));
+      if (size) {                       // 모달의 '배치 크기' 입력값 우선
+        c.width = size.width; c.height = size.height;
+      } else {
+        if (swap) c.width = Math.max(10, c.height);
+        c.height = Math.max(10, Math.round(c.width * aspect));
+      }
       (c.terminals || []).forEach(function (t) { transformTerminal(t, tf); });
       WE.render.renderAll();
     };
@@ -365,11 +369,17 @@ WE.app = (function () {
     var name = file.name.replace(/\.[^.]+$/, "");
     var reader = new FileReader();
     reader.onload = function (ev) {
-      WE.bgremove.open(ev.target.result, function (url) {
+      WE.bgremove.open(ev.target.result, function (url, tf, size) {
         var probe = new Image();
         probe.onload = function () {
-          var maxSide = 160, w = probe.width, h = probe.height, r = w / h;
-          if (w >= h) { w = maxSide; h = Math.round(maxSide / r); } else { h = maxSide; w = Math.round(maxSide * r); }
+          // 모달의 '배치 크기' 입력값 우선, 없으면 기존 규칙(긴 변 160px)
+          var w, h;
+          if (size) { w = size.width; h = size.height; }
+          else {
+            var maxSide = 160, r = probe.width / probe.height;
+            w = probe.width; h = probe.height;
+            if (w >= h) { w = maxSide; h = Math.round(maxSide / r); } else { h = maxSide; w = Math.round(maxSide * r); }
+          }
           var np = saveToLibrary(name, function () {
             return { name: name, image: url, defaultWidth: w, defaultHeight: h, terminals: [] };
           });
@@ -1529,6 +1539,22 @@ WE.app = (function () {
   // sample.ezc는 "공유(🔗)" 버튼으로 내보낸 번들 파일을 그대로 사이트에 올린 것 —
   // 프로젝트+사용 부품(스펙·가격·데이터시트 포함)이 한 파일이라 DB 없이도 완전한 샘플이 되고,
   // 열면서 부품들이 방문자의 라이브러리(IndexedDB)에 병합되어 바로 재사용 가능.
+  // 샘플 프로젝트 번역: 영어 UI에서는 도면 데이터(프로젝트명·부품명·팔레트 라벨)도 사전으로 치환
+  // (데이터는 t()를 안 거치므로 로드 전에 한 번 변환 — 사전에 없는 이름은 그대로 유지)
+  function translateSampleText(text) {
+    if (WE.i18n.lang() === "ko") return text;
+    try {
+      var d = JSON.parse(text);
+      var t = WE.i18n.t;
+      var p = d.project || {};
+      if (p.meta && p.meta.name) p.meta.name = t(p.meta.name);
+      (p.components || []).forEach(function (c) { if (c.name) c.name = t(c.name); });
+      (p.palette || []).forEach(function (x) { if (x.label) x.label = t(x.label); });
+      (d.libraryParts || []).forEach(function (lp) { if (lp.name) lp.name = t(lp.name); });
+      return JSON.stringify(d);
+    } catch (e) { return text; }
+  }
+
   function tryLoadSample(cb) {
     var seen;
     try { seen = localStorage.getItem("we_sampleShown"); } catch (e) { /* 무시 */ }
@@ -1538,7 +1564,7 @@ WE.app = (function () {
       return r.text();
     }).then(function (text) {
       JSON.parse(text);   // 손상된 파일이면 여기서 throw → 조용히 빈 화면으로 시작(알림창 없이)
-      WE.io.loadProjectText(text, WE.i18n.t("샘플 프로젝트"));
+      WE.io.loadProjectText(translateSampleText(text), WE.i18n.t("샘플 프로젝트"));
       try { localStorage.setItem("we_sampleShown", "1"); } catch (e) { /* 무시 */ }
       cb(true);
     }).catch(function () { cb(false); });
@@ -2078,7 +2104,7 @@ WE.app = (function () {
       }).then(function (text) {
         JSON.parse(text);
         track("open_sample");
-        WE.io.loadProjectText(text, WE.i18n.t("샘플 프로젝트"));
+        WE.io.loadProjectText(translateSampleText(text), WE.i18n.t("샘플 프로젝트"));
       }).catch(function () {
         setHint(WE.i18n.t("샘플 프로젝트가 아직 준비되지 않았습니다."));
       });
@@ -2611,7 +2637,7 @@ WE.app = (function () {
       if (act === "terminals") {
         WE.termeditor.open(c);
       } else if (act === "bg" && c.image) {
-        WE.bgremove.open(c.image, function (url, tf) { applyInstanceImage(c, url, tf); });
+        WE.bgremove.open(c.image, function (url, tf, size) { applyInstanceImage(c, url, tf, size); }, { width: c.width, height: c.height });
       } else if (act === "tolib") {
         var savedPart = saveToLibrary(c.name, function () {
           return {
@@ -2689,10 +2715,23 @@ WE.app = (function () {
         }, true);
       });
     });
+    // 비율 고정 계산은 '입력 시작 시점'의 비율로 — 타이핑 중간값(예: "300" 입력 중 "30")이
+    // 부품에 반영되고 최소치(10) 클램프까지 겹치면서 비율이 오염되는 것 방지
+    var _propRatio = null;   // { id, r: height/width }
+    function propRatioFor(c) {
+      if (_propRatio && _propRatio.id === c.id && _propRatio.r > 0) return _propRatio.r;
+      return c.height / c.width;
+    }
+    ["propW", "propH"].forEach(function (fid) {
+      document.getElementById(fid).addEventListener("focus", function () {
+        var c = WE.model.getSelectedComponent();
+        if (c && c.width > 0) _propRatio = { id: c.id, r: c.height / c.width };
+      });
+    });
     document.getElementById("propW").addEventListener("input", function (e) {
       var v = parseFloat(e.target.value); if (isNaN(v) || v < 10) return;
       applyProp(function (c) {
-        if (WE.model.ui.lockAspect) c.height = Math.max(10, Math.round(v * c.height / c.width));
+        if (WE.model.ui.lockAspect) c.height = Math.max(10, Math.round(v * propRatioFor(c)));
         c.width = v;
       }, true);
       refreshProps(); // 비율 고정 시 높이 값도 반영
@@ -2700,7 +2739,7 @@ WE.app = (function () {
     document.getElementById("propH").addEventListener("input", function (e) {
       var v = parseFloat(e.target.value); if (isNaN(v) || v < 10) return;
       applyProp(function (c) {
-        if (WE.model.ui.lockAspect) c.width = Math.max(10, Math.round(v * c.width / c.height));
+        if (WE.model.ui.lockAspect) c.width = Math.max(10, Math.round(v / propRatioFor(c)));
         c.height = v;
       }, true);
       refreshProps();
@@ -2722,7 +2761,7 @@ WE.app = (function () {
     document.getElementById("propBgRemove").addEventListener("click", function () {
       var c = WE.model.getSelectedComponent();
       if (!c || !c.image) return;
-      WE.bgremove.open(c.image, function (url, tf) { applyInstanceImage(c, url, tf); });
+      WE.bgremove.open(c.image, function (url, tf, size) { applyInstanceImage(c, url, tf, size); }, { width: c.width, height: c.height });
     });
     document.getElementById("propDuplicate").addEventListener("click", function () {
       var c = WE.model.getSelectedComponent();

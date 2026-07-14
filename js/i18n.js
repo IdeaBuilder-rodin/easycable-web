@@ -162,7 +162,7 @@ WE.i18n = (function () {
     "단자": "Terminals",
     "🔍 단자 배치 편집…": "🔍 Edit terminal layout…",
     "단자 이름 숨기기 (도면에서)": "Hide terminal names (on diagram)",
-    "배경 제거 편집…": "Edit background removal…",
+    "이미지 편집…": "Edit image…",
     "복제": "Duplicate",
     "전기 정보": "Electrical info",
     "· 라이브러리": "· Library",
@@ -263,29 +263,21 @@ WE.i18n = (function () {
     // ===== 단자 프리셋 =====
     "단자 프리셋 관리": "Terminal Preset Manager",
     "자주 쓰는 단자(라벨+색상)를 등록하면 다음에도 재사용됩니다. 브라우저에 저장돼요.": "Register frequently used terminals (label + color) to reuse later. Stored in this browser.",
-    "클릭해도 아무 변화 없음 — 그냥 보기/확인용": "Clicking does nothing — view only",
-
-    // ===== 배경 제거 =====
-    "배경 제거": "Background Removal",
-    "배경(제거할 부분)을 클릭해 색을 추가하세요. 기본으로 네 모서리 색이 잡혀 있습니다.": "Click the background (parts to remove) to add colors. The four corner colors are picked by default.",
-    "캔버스를 클릭하면 그 위치 색을 배경으로 추가해 제거합니다": "Click the canvas to add that color as background to remove",
+    // ===== 이미지 편집 (배경 제거·자르기·회전) =====
+    "이미지 편집": "Edit Image",
+    "이미지를 확인하고 필요하면 배경 제거·자르기·회전으로 다듬은 뒤 배치하세요.": "Check the image, and if needed clean it up with background removal, crop or rotation before placing.",
+    "배경 제거": "Remove background",
     "배경 제거·자르기·회전 등 모든 편집을 원본 상태로 되돌립니다": "Reset all edits (removal, crop, rotation) back to the original",
     "Ctrl+휠: 확대/축소 · 휠클릭(가운데버튼) 드래그: 화면 이동": "Ctrl+wheel: zoom · Middle-button drag: pan",
-    "켜면 배경(제거할 부분)이 투명하게 지워집니다": "When on, the background is erased to transparent",
-    "숫자가 클수록 클릭한 색과 비슷한 범위의 색까지 넓게 배경으로 지웁니다. 너무 크면 부품 자체도 지워질 수 있어요.": "Higher values erase a wider range of colors similar to the clicked one. Too high may erase the part itself.",
+    "켜면 배경(부품 주변)이 자동으로 투명하게 지워집니다": "When on, the background around the part is automatically erased to transparent",
     "켜면 사각형 테두리를 지정해 그 안쪽만 남기고 잘라냅니다": "When on, draw a rectangle to crop to its inside",
     "왼쪽 90° 회전": "Rotate 90° left",
     "오른쪽 90° 회전": "Rotate 90° right",
-    "🖐 보기": "🖐 View",
-    "🎯 배경 선택": "🎯 Pick background",
-    "↺ 원본으로": "↺ Reset",
-    "배경 제거 켜기": "Enable removal",
-    "허용오차": "Tolerance",
-    "경계 부드럽게": "Soften edges",
-    "색 초기화(모서리)": "Reset colors (corners)",
+    "↺ 초기화": "↺ Reset",
     "자르기(테두리)": "Crop (border)",
+    "배치 크기": "Placed size",
+    "도면에 배치될 부품 크기(px). 한쪽을 바꾸면 비율에 맞춰 다른 쪽도 바뀝니다.": "Part size on the diagram (px). Changing one side adjusts the other to keep the ratio.",
     "파란 사각형의 모서리를 드래그해 크기 조절, 안쪽을 드래그해 이동. 사각형 안만 남깁니다.": "Drag the blue rectangle's corners to resize, inside to move. Only the inside is kept.",
-    "원본 그대로": "Keep original",
     "적용해서 배치": "Apply & place",
 
     // ===== 웰컴 모달 =====
@@ -336,6 +328,12 @@ WE.i18n = (function () {
 
     // ===== JS 동적 문구 =====
     "이지케이블 배선도": "EasyCable Diagram",
+
+    // --- 샘플 프로젝트 데이터 (로드 시 치환) ---
+    "샘플 배선도": "Sample Wiring Diagram",
+    "배터리 12.6V 10Ah": "Battery 12.6V 10Ah",
+    "스텝다운모듈": "Step-down module",
+    "Micro SD 카드 모듈": "Micro SD card module",
 
     // --- 라이브러리 (library.js / app.js) ---
     "이미 '": "The part '",

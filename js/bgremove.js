@@ -4,6 +4,7 @@ window.WE = WE;
 
 WE.bgremove = (function () {
   var MAX_SIDE = 800; // 처리/저장 해상도 상한 (용량 관리)
+  var TOL = 30;       // 배경 제거 허용오차 (고정 — UI 조절 제거)
 
   var modal, canvas, ctx;
   var srcImageData;      // 원본 픽셀 (처리 전 기준)
@@ -17,18 +18,16 @@ WE.bgremove = (function () {
   var rotation = 0;      // 0/90/180/270
   var _bgFit = 1;        // 캔버스 원본 픽셀 → 뷰포트에 맞춘 배율(맞춤 기준)
   var _bgZoom = 1;       // 맞춤 배율 대비 사용자 확대/축소 배수
-  var _bgMode = "view";  // "view"(그냥 보기, 클릭해도 무반응) | "pick"(클릭 = 배경색 추가)
   var _bgEnable = false; // 배경 제거 켜짐 여부(버튼 토글, 기본 꺼짐 — 사용자가 직접 켜야 함)
   var _bgCropOn = false; // 자르기 켜짐 여부(버튼 토글)
   var _bgPan = null;     // 휠클릭 드래그로 화면 이동 중 상태
+  var _maxSide = 160;    // 배치 크기 기준(긴 변 px) — 사용자가 입력하면 갱신, 회전/자르기 시 비율만 다시 계산
 
   function init() {
     modal = document.getElementById("bgModal");
     canvas = document.getElementById("bgCanvas");
     ctx = canvas.getContext("2d");
 
-    document.getElementById("bgModeView").addEventListener("click", function () { setBgMode("view"); });
-    document.getElementById("bgModePick").addEventListener("click", function () { setBgMode("pick"); });
     document.getElementById("bgResetAll").addEventListener("click", resetAll);
 
     // 화면 이동/확대축소: 단자 배치 편집기·메인 캔버스와 동일한 조작(Ctrl+휠 확대, 휠클릭 드래그 이동)
@@ -58,17 +57,12 @@ WE.bgremove = (function () {
       wrap.style.cursor = "";
     });
 
-    document.getElementById("bgTol").addEventListener("input", function (e) {
-      document.getElementById("bgTolVal").textContent = e.target.value;
-      renderPreview();
-    });
     document.getElementById("bgEnable").addEventListener("click", function () {
       setBgEnable(!_bgEnable);
     });
-    document.getElementById("bgFeather").addEventListener("change", renderPreview);
-    document.getElementById("bgReset").addEventListener("click", function () {
-      setCornerSeeds(); renderPreview();
-    });
+    // 배치 크기: 한쪽을 입력하면 현재 결과물 비율로 다른 쪽을 맞춤
+    document.getElementById("bgSizeW").addEventListener("input", function () { onSizeInput("w"); });
+    document.getElementById("bgSizeH").addEventListener("input", function () { onSizeInput("h"); });
     document.getElementById("bgCrop").addEventListener("click", function () {
       setBgCropOn(!_bgCropOn);
     });
@@ -79,9 +73,6 @@ WE.bgremove = (function () {
     document.getElementById("bgRotR").addEventListener("click", function () { rotation = (rotation + 90) % 360; drawSource(); });
 
     document.getElementById("bgCancel").addEventListener("click", close);
-    document.getElementById("bgUseOriginal").addEventListener("click", function () {
-      finish(exportOriginal());
-    });
     document.getElementById("bgApply").addEventListener("click", function () {
       finish(exportPng());
     });
@@ -94,34 +85,21 @@ WE.bgremove = (function () {
     return canvasEl.toDataURL("image/png");
   }
 
-  // "원본 사용": 회전/크롭/배경제거 없이 원본 그대로 쓰되, 용량 관리를 위해 MAX_SIDE로 리사이즈 후 압축
-  function exportOriginal() {
-    var w = origImg.width, h = origImg.height;
-    if (Math.max(w, h) > MAX_SIDE) {
-      var r = MAX_SIDE / Math.max(w, h);
-      w = Math.round(w * r); h = Math.round(h * r);
-    }
-    var tmp = document.createElement("canvas");
-    tmp.width = w; tmp.height = h;
-    tmp.getContext("2d").drawImage(origImg, 0, 0, w, h);
-    return encodeForStorage(tmp);
-  }
-
-  // 공개: 이미지 dataURL을 받아 모달 열기, 완료 시 콜백(결과 dataURL)
-  function open(dataUrl, callback) {
+  // 공개: 이미지 dataURL을 받아 모달 열기, 완료 시 콜백(결과 dataURL, 변환정보, 배치크기)
+  // initSize: 기존 배치 부품 재편집 시 {width, height} — 배치 크기 입력의 초기값 기준
+  function open(dataUrl, callback, initSize) {
     origDataUrl = dataUrl;
     onDone = callback;
+    _maxSide = (initSize && initSize.width > 0) ? Math.max(initSize.width, initSize.height) : 160;
     origImg = new Image();
     origImg.onload = function () {
       rotation = 0; _bgEnable = false; _bgCropOn = false;
       document.getElementById("bgEnable").classList.remove("active");
       document.getElementById("bgCrop").classList.remove("active");
       document.getElementById("bgCropHint").hidden = true;
-      document.getElementById("bgFeather").checked = false;
       cropRect = null; cropDrag = null;
       modal.hidden = false;   // 먼저 화면에 보이게 해야 뷰포트 크기를 잴 수 있음
       drawSource();           // W/H/srcImageData를 여기서 초기화 → 그 다음에 상태 관련 함수를 불러야 안전
-      setBgMode("view");      // 열자마자 클릭-지우기 모드가 아니라 안전한 '보기' 모드로 시작
     };
     origImg.src = dataUrl;
   }
@@ -138,36 +116,81 @@ WE.bgremove = (function () {
     document.getElementById("bgCrop").classList.toggle("active", v);
     document.getElementById("bgCropHint").hidden = !v;
     if (v && !cropRect) {
-      cropRect = { x: Math.round(W * 0.08), y: Math.round(H * 0.08), w: Math.round(W * 0.84), h: Math.round(H * 0.84) };
+      // 이미지를 분석해 부품 최외곽에 자동으로 맞춤 (실패 시 기본 8% 여백 사각형)
+      cropRect = autoCropRect() ||
+        { x: Math.round(W * 0.08), y: Math.round(H * 0.08), w: Math.round(W * 0.84), h: Math.round(H * 0.84) };
     }
-    setBgMode(_bgMode);   // 커서 상태 갱신(자르기 켜짐 여부 반영)
     renderPreview();
   }
 
-  // 클릭 시 배경색 추가(pick)와 그냥 보기(view) 모드 전환 — 커서로도 상태를 알 수 있게 함
-  function setBgMode(m) {
-    _bgMode = m;
-    document.getElementById("bgModeView").classList.toggle("active", m === "view");
-    document.getElementById("bgModePick").classList.toggle("active", m === "pick");
-    if (canvas) canvas.style.cursor = cropOn() ? "default" : (m === "pick" ? "crosshair" : "default");
+  // 배경 마스크(모서리 flood-fill)로 부품(배경이 아닌 픽셀)의 최외곽 사각형을 계산
+  function autoCropRect() {
+    var removed = computeMask(TOL);
+    var data = srcImageData.data;
+    var minX = W, minY = H, maxX = -1, maxY = -1;
+    for (var i = 0; i < removed.length; i++) {
+      if (removed[i]) continue;              // 배경으로 지워질 픽셀
+      if (data[i * 4 + 3] === 0) continue;   // 원본부터 투명한 픽셀(투명 PNG 여백)
+      var x = i % W, y = (i - x) / W;
+      if (x < minX) minX = x;
+      if (x > maxX) maxX = x;
+      if (y < minY) minY = y;
+      if (y > maxY) maxY = y;
+    }
+    if (maxX < 0 || maxX - minX < 10 || maxY - minY < 10) return null;   // 감지 실패/너무 작음
+    var pad = Math.max(4, Math.round(Math.min(W, H) * 0.015));           // 최외곽에 살짝 여유
+    var x1 = Math.max(0, minX - pad), y1 = Math.max(0, minY - pad);
+    var x2 = Math.min(W, maxX + 1 + pad), y2 = Math.min(H, maxY + 1 + pad);
+    return { x: x1, y: y1, w: x2 - x1, h: y2 - y1 };
+  }
+
+  // ---- 배치 크기 (도면에 놓일 부품 px) ----
+  // 현재 결과물(자르기 반영) 비율 기준. 긴 변 = _maxSide 유지, 회전/자르기 시 비율만 재계산
+  function resultDims() {
+    return cropOn() ? { w: cropRect.w, h: cropRect.h } : { w: W, h: H };
+  }
+  function updateSizeInputs() {
+    var d = resultDims();
+    if (!(d.w > 0 && d.h > 0)) return;
+    var w, h;
+    if (d.w >= d.h) { w = _maxSide; h = Math.round(_maxSide * d.h / d.w); }
+    else { h = _maxSide; w = Math.round(_maxSide * d.w / d.h); }
+    document.getElementById("bgSizeW").value = Math.max(10, w);
+    document.getElementById("bgSizeH").value = Math.max(10, h);
+  }
+  function onSizeInput(which) {
+    var d = resultDims();
+    var wEl = document.getElementById("bgSizeW"), hEl = document.getElementById("bgSizeH");
+    if (which === "w") {
+      var w = parseInt(wEl.value, 10);
+      if (!(w >= 10)) return;   // 입력 중(비었거나 너무 작음)에는 그대로 둠
+      hEl.value = Math.max(10, Math.round(w * d.h / d.w));
+    } else {
+      var h = parseInt(hEl.value, 10);
+      if (!(h >= 10)) return;
+      wEl.value = Math.max(10, Math.round(h * d.w / d.h));
+    }
+    _maxSide = Math.max(parseInt(wEl.value, 10) || 10, parseInt(hEl.value, 10) || 10);
+  }
+  function currentSize() {
+    var w = parseInt(document.getElementById("bgSizeW").value, 10);
+    var h = parseInt(document.getElementById("bgSizeH").value, 10);
+    if (!(w >= 10 && h >= 10)) return null;
+    return { width: w, height: h };
   }
 
   // 배경 제거·자르기·회전 등 편집을 전부 원본 상태로 되돌림
   function resetAll() {
     rotation = 0; cropRect = null; cropDrag = null;
-    document.getElementById("bgFeather").checked = false;
-    document.getElementById("bgTol").value = 30;
-    document.getElementById("bgTolVal").textContent = "30";
     setBgEnable(false);
     setBgCropOn(false);
-    setBgMode("view");
     drawSource();   // origImg 기준으로 다시 그리며 seeds도 모서리로 초기화됨
   }
 
-  // 뷰포트(고정 460px 박스)에 원본 픽셀이 딱 맞는 배율 계산(확대는 안 함, 100% 초과 금지)
+  // 뷰포트에 원본 픽셀이 딱 맞는 배율 계산 — 작은 이미지는 확대해서 작업 영역을 채움(최대 4배)
   function computeBgFit() {
     var wrap = document.getElementById("bgCanvasWrap");
-    _bgFit = Math.min(1, wrap.clientWidth / canvas.width, wrap.clientHeight / canvas.height) || 1;
+    _bgFit = Math.min(4, wrap.clientWidth / canvas.width, wrap.clientHeight / canvas.height) || 1;
   }
   function applyBgZoom() {
     var scale = _bgFit * _bgZoom;
@@ -248,12 +271,6 @@ WE.bgremove = (function () {
       }
       return;
     }
-    if (_bgMode !== "pick") return;   // '보기' 모드에서는 클릭해도 아무 변화 없음
-    // 배경 시드 추가
-    var x = Math.max(0, Math.min(W - 1, Math.floor(p.x)));
-    var y = Math.max(0, Math.min(H - 1, Math.floor(p.y)));
-    seeds.push({ x: x, y: y });
-    renderPreview();
   }
 
   function onCanvasMove(e) {
@@ -313,20 +330,9 @@ WE.bgremove = (function () {
     out.data.set(srcImageData.data);
 
     if (_bgEnable) {
-      var tol = parseInt(document.getElementById("bgTol").value, 10);
-      var feather = document.getElementById("bgFeather").checked;
-      var removed = computeMask(tol);
-      applyMask(out.data, removed, feather);
+      applyMask(out.data, computeMask(TOL));
     }
     ctx.putImageData(out, 0, 0);
-    // 시드 마커
-    ctx.save();
-    seeds.forEach(function (s) {
-      ctx.beginPath();
-      ctx.arc(s.x, s.y, 4, 0, Math.PI * 2);
-      ctx.strokeStyle = "#1e88e5"; ctx.lineWidth = 2; ctx.stroke();
-    });
-    ctx.restore();
     // 크롭 오버레이
     if (cropOn()) {
       var c = cropRect;
@@ -343,19 +349,13 @@ WE.bgremove = (function () {
       });
       ctx.restore();
     }
+    updateSizeInputs();   // 회전·자르기 등으로 비율이 바뀌면 배치 크기도 비율에 맞춰 갱신
   }
 
-  // removed 마스크를 alpha에 적용 (feather 시 경계 픽셀 반투명)
-  function applyMask(data, removed, feather) {
+  // removed 마스크를 alpha에 적용
+  function applyMask(data, removed) {
     for (var i = 0; i < removed.length; i++) {
-      if (removed[i]) { data[i * 4 + 3] = 0; continue; }
-      if (feather) {
-        var x = i % W, y = (i - x) / W;
-        var edge =
-          (x > 0 && removed[i - 1]) || (x < W - 1 && removed[i + 1]) ||
-          (y > 0 && removed[i - W]) || (y < H - 1 && removed[i + W]);
-        if (edge) data[i * 4 + 3] = 110;
-      }
+      if (removed[i]) data[i * 4 + 3] = 0;
     }
   }
 
@@ -364,9 +364,7 @@ WE.bgremove = (function () {
     var out = ctx.createImageData(W, H);
     out.data.set(srcImageData.data);
     if (_bgEnable) {
-      var tol = parseInt(document.getElementById("bgTol").value, 10);
-      var feather = document.getElementById("bgFeather").checked;
-      applyMask(out.data, computeMask(tol), feather);
+      applyMask(out.data, computeMask(TOL));
     }
     var tmp = document.createElement("canvas");
     tmp.width = W; tmp.height = H;
@@ -391,7 +389,7 @@ WE.bgremove = (function () {
     // 받는 쪽에서 기존 단자 좌표(rx·ry)를 같은 방식으로 변환해 배치가 깨지지 않게 함
     var tf = { rotation: rotation, crop: null };
     if (cropOn()) tf.crop = { x: cropRect.x / W, y: cropRect.y / H, w: cropRect.w / W, h: cropRect.h / H };
-    if (cb) cb(dataUrl, tf);
+    if (cb) cb(dataUrl, tf, currentSize());
   }
 
   function close() {

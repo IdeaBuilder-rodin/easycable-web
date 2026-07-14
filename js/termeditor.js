@@ -15,6 +15,7 @@ WE.termeditor = (function () {
   var teMode = "place";   // 'place'(단자 배치) | 'select'(선택)
   var marqEl = null;      // 마퀴 사각형 요소
   var guidesG = null;     // 스마트 가이드(정렬 점선) 그룹
+  var ghostG = null;      // 배치 모드 호버 미리보기(고스트 단자)
   var SNAP_PX = 6;        // 스냅 임계(화면 px)
   // 지역 undo(모달 열려 있으면 전역 히스토리가 커밋 안 되므로 별도 스택)
   var teUndo = [], teRedo = [], teLast = "";
@@ -88,6 +89,7 @@ WE.termeditor = (function () {
   // ---- 모드 ----
   function setTeMode(m) {
     teMode = m;
+    if (m !== "place") removeGhost();
     document.getElementById("teModePlace").classList.toggle("active", m === "place");
     document.getElementById("teModeSelect").classList.toggle("active", m === "select");
     if (svg) svg.style.cursor = (m === "select") ? "crosshair" : "";
@@ -104,17 +106,22 @@ WE.termeditor = (function () {
 
   // ---- 스마트 가이드(정렬 스냅) ----
   // 드래그 중인 단자 t를 다른 단자의 x/y에 맞으면 스냅하고, 맞은 축에 점선 가이드를 그림
-  function applySnap(t) {
-    var x = t.rx * baseW, y = t.ry * baseH, tol = SNAP_PX / zoom;
+  // 좌표(px)가 다른 단자의 x/y와 tol 이내면 스냅될 rx/ry를 반환 (없으면 null)
+  function snapXY(x, y, excludeId) {
+    var tol = SNAP_PX / zoom;
     var bestX = null, bxd = tol, bestY = null, byd = tol;
     cmp.terminals.forEach(function (o) {
-      if (o.id === t.id) return;
+      if (o.id === excludeId) return;
       var dx = Math.abs(o.rx * baseW - x); if (dx < bxd) { bxd = dx; bestX = o.rx; }
       var dy = Math.abs(o.ry * baseH - y); if (dy < byd) { byd = dy; bestY = o.ry; }
     });
+    return { rx: bestX, ry: bestY };
+  }
+  function applySnap(t) {
+    var s = snapXY(t.rx * baseW, t.ry * baseH, t.id);
     var gx = null, gy = null;
-    if (bestX !== null) { t.rx = bestX; gx = bestX * baseW; }
-    if (bestY !== null) { t.ry = bestY; gy = bestY * baseH; }
+    if (s.rx !== null) { t.rx = s.rx; gx = s.rx * baseW; }
+    if (s.ry !== null) { t.ry = s.ry; gy = s.ry * baseH; }
     drawGuides(gx, gy);
   }
   function drawGuides(gx, gy) {
@@ -124,6 +131,32 @@ WE.termeditor = (function () {
     if (gy !== null) guidesG.appendChild(el("line", { x1: 0, y1: gy, x2: baseW, y2: gy, "class": "te-guide", "stroke-width": 1 / zoom }));
   }
   function removeGuides() { if (guidesG && guidesG.parentNode) guidesG.parentNode.removeChild(guidesG); guidesG = null; }
+
+  // ---- 배치 모드 호버 미리보기 ----
+  // 커서 위치에 반투명 고스트 단자를 띄우고, 다른 단자와 정렬되면 스냅 위치 + 점선 가이드 표시
+  function updateGhost(e) {
+    // 기존 단자 위 = 클릭해도 추가가 아니라 선택/드래그이므로 미리보기 없음
+    if (e.target.closest && e.target.closest("[data-tid]")) { removeGhost(); return; }
+    var l = clientToLocal(e.clientX, e.clientY);
+    if (l.x < 0 || l.x > baseW || l.y < 0 || l.y > baseH) { removeGhost(); return; }
+    var s = snapXY(l.x, l.y, null);
+    var x = s.rx !== null ? s.rx * baseW : l.x;
+    var y = s.ry !== null ? s.ry * baseH : l.y;
+    drawGuides(s.rx !== null ? x : null, s.ry !== null ? y : null);
+    if (!ghostG) { ghostG = el("g", { "pointer-events": "none" }); content.appendChild(ghostG); }
+    ghostG.innerHTML = "";
+    var p = placePreset();
+    var color = (p && p.color) || WE.model.DEFAULT_TERMINAL_COLOR;
+    ghostG.appendChild(el("circle", {
+      cx: x, cy: y, r: 7 / zoom, fill: color, "fill-opacity": 0.5,
+      stroke: "#fff", "stroke-width": 2 / zoom, "stroke-opacity": 0.7
+    }));
+  }
+  function removeGhost() {
+    if (ghostG && ghostG.parentNode) ghostG.parentNode.removeChild(ghostG);
+    ghostG = null;
+    removeGuides();
+  }
 
   function open(component) {
     cmp = component;
@@ -304,6 +337,7 @@ WE.termeditor = (function () {
 
   // ---- 포인터: 추가 / 단자드래그 / 팬 ----
   function onDown(e) {
+    removeGhost();   // 드래그(팬/이동/마퀴) 시작 시 미리보기 숨김
     // 마우스 가운데(휠) 버튼 = 모드와 무관하게 항상 팬(화면 이동)
     if (e.button === 1) {
       drag = { type: "pan", sx: e.clientX, sy: e.clientY, panX0: panX, panY0: panY };
@@ -342,7 +376,12 @@ WE.termeditor = (function () {
   }
 
   function onMove(e) {
-    if (!drag) return;
+    if (!drag) {
+      // 배치 모드: 커서를 따라 고스트 단자 + 정렬 가이드 미리보기
+      if (opened && teMode === "place" && svg && e.target && svg.contains(e.target)) updateGhost(e);
+      else removeGhost();
+      return;
+    }
     if (drag.type === "marq") {
       var a = clientToLocal(drag.sx, drag.sy), b = clientToLocal(e.clientX, e.clientY);
       drag.rect = { x: Math.min(a.x, b.x), y: Math.min(a.y, b.y), w: Math.abs(a.x - b.x), h: Math.abs(a.y - b.y) };
@@ -524,6 +563,7 @@ WE.termeditor = (function () {
   function close() {
     modal.hidden = true;
     opened = false;
+    removeGhost();
     if (WE.app.afterTerminalEdit) WE.app.afterTerminalEdit(cmp);
     WE.render.renderAll();
     WE.app.refreshProps();

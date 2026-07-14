@@ -5,6 +5,15 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>이지케이블 — 쉬운 배선도 에디터 (EasyCable)</title>
   <meta name="description" content="이미지로 부품을 올리고 단자를 이어 배선도를 그리는 웹 에디터. BOM·배선 리스트·PDF 자동 생성. 베타 기간 무료." />
+  <!-- 링크 공유 미리보기 (Open Graph / Twitter) -->
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="EasyCable" />
+  <meta property="og:title" content="이지케이블 — 쉬운 배선도 에디터 (EasyCable)" />
+  <meta property="og:description" content="이미지로 부품을 올리고 단자를 이어 배선도를 그리는 웹 에디터. BOM·배선 리스트·PDF 자동 생성. 베타 기간 무료." />
+  <meta property="og:url" content="https://easycable.co.kr/" />
+  <meta property="og:locale" content="ko_KR" />
+  <meta name="twitter:card" content="summary" />
+  <link rel="canonical" href="https://easycable.co.kr/" />
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔌</text></svg>" />
   <link rel="stylesheet" href="styles.css" />
   <!-- Google Analytics 4 (방문/재방문·사용 패턴 분석) -->
@@ -336,7 +345,7 @@
             <label class="chk"><input type="checkbox" id="propHideTermLabels" /> 단자 이름 숨기기 (도면에서)</label>
           </div>
 
-          <button id="propBgRemove" style="width:100%">배경 제거 편집…</button>
+          <button id="propBgRemove" style="width:100%">이미지 편집…</button>
           <div class="row2">
             <button id="propDelete" class="danger">삭제</button>
             <button id="propDuplicate">복제</button>
@@ -360,7 +369,7 @@
   <!-- 부품 옵션 컨텍스트 메뉴 -->
   <div id="cmpMenu" hidden>
     <button data-act="terminals">단자 배치 편집…</button>
-    <button data-act="bg">배경 제거 편집…</button>
+    <button data-act="bg">이미지 편집…</button>
     <button data-act="tolib">라이브러리에 저장</button>
     <button data-act="duplicate">복제 (Ctrl+D)</button>
     <hr />
@@ -579,32 +588,27 @@
   <!-- 배경 제거 모달 -->
   <div id="bgModal" class="modal" hidden>
     <div class="modal-box">
-      <h3>배경 제거</h3>
-      <p class="muted" id="bgHint">배경(제거할 부분)을 클릭해 색을 추가하세요. 기본으로 네 모서리 색이 잡혀 있습니다.</p>
-      <div class="bg-zoom-row">
-        <button id="bgModeView" class="bg-mode active" title="클릭해도 아무 변화 없음 — 그냥 보기/확인용">🖐 보기</button>
-        <button id="bgModePick" class="bg-mode" title="캔버스를 클릭하면 그 위치 색을 배경으로 추가해 제거합니다">🎯 배경 선택</button>
-        <span class="sep" style="width:1px;height:18px;background:#ddd"></span>
-        <button id="bgResetAll" class="small" title="배경 제거·자르기·회전 등 모든 편집을 원본 상태로 되돌립니다">↺ 원본으로</button>
-      </div>
-      <div id="bgCanvasWrap" class="checker" title="Ctrl+휠: 확대/축소 · 휠클릭(가운데버튼) 드래그: 화면 이동">
+      <h3>이미지 편집</h3>
+      <p class="muted" id="bgHint">이미지를 확인하고 필요하면 배경 제거·자르기·회전으로 다듬은 뒤 배치하세요.</p>
+      <div id="bgCanvasWrap" class="checker">
         <canvas id="bgCanvas"></canvas>
       </div>
+      <p class="muted" style="margin:4px 0 0;font-size:11px">Ctrl+휠: 확대/축소 · 휠클릭(가운데버튼) 드래그: 화면 이동</p>
       <div class="bg-controls">
-        <button id="bgEnable" class="bg-toggle" title="켜면 배경(제거할 부분)이 투명하게 지워집니다">배경 제거 켜기</button>
-        <label class="slider" title="숫자가 클수록 클릭한 색과 비슷한 범위의 색까지 넓게 배경으로 지웁니다. 너무 크면 부품 자체도 지워질 수 있어요.">허용오차 <input type="range" id="bgTol" min="0" max="120" value="30" />
-          <span id="bgTolVal">30</span></label>
-        <label class="chk"><input type="checkbox" id="bgFeather" /> 경계 부드럽게</label>
-        <button id="bgReset" class="small">색 초기화(모서리)</button>
+        <button id="bgEnable" class="bg-toggle" title="켜면 배경(부품 주변)이 자동으로 투명하게 지워집니다">배경 제거</button>
         <button id="bgCrop" class="bg-toggle" title="켜면 사각형 테두리를 지정해 그 안쪽만 남기고 잘라냅니다">자르기(테두리)</button>
         <span class="sep" style="width:1px;height:18px;background:#ddd"></span>
         <button id="bgRotL" class="small" title="왼쪽 90° 회전">↺ 90°</button>
         <button id="bgRotR" class="small" title="오른쪽 90° 회전">↻ 90°</button>
+        <span class="sep" style="width:1px;height:18px;background:#ddd"></span>
+        <label class="slider" title="도면에 배치될 부품 크기(px). 한쪽을 바꾸면 비율에 맞춰 다른 쪽도 바뀝니다.">배치 크기
+          <input type="number" id="bgSizeW" min="10" max="2000" style="width:58px" /> ×
+          <input type="number" id="bgSizeH" min="10" max="2000" style="width:58px" /> px</label>
+        <button id="bgResetAll" class="small" style="margin-left:auto" title="배경 제거·자르기·회전 등 모든 편집을 원본 상태로 되돌립니다">↺ 초기화</button>
       </div>
       <p class="muted" id="bgCropHint" hidden>파란 사각형의 모서리를 드래그해 크기 조절, 안쪽을 드래그해 이동. 사각형 안만 남깁니다.</p>
       <div class="modal-actions">
         <button id="bgCancel">취소</button>
-        <button id="bgUseOriginal">원본 그대로</button>
         <button id="bgApply" class="primary">적용해서 배치</button>
       </div>
     </div>
