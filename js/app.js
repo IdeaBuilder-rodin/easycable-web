@@ -1584,9 +1584,9 @@ WE.app = (function () {
   function openNotifyModal(reason) {
     var lead = document.getElementById("notifyLead");
     // 완료 직후 제안이면 축하 문구, 링크로 직접 열면 기본 문구
-    lead.textContent = reason === "after_export"
-      ? "완성됐어요! 🎉 정식 출시·새 기능 소식을 이메일로 가장 먼저 알려드릴까요? (스팸 없이 큰 소식만)"
-      : "정식 출시·새 기능 소식을 이메일로 가장 먼저 알려드릴게요. (스팸 없이 큰 소식만)";
+    lead.innerHTML = reason === "after_export"
+      ? "완성됐어요! 🎉 정식 출시·새 기능 소식을 이메일로 가장 먼저 알려드릴까요?<br />(스팸 없이 큰 소식만)"
+      : "정식 출시·새 기능 소식을 이메일로 가장 먼저 알려드릴게요.<br />(스팸 없이 큰 소식만)";
     document.getElementById("notifyEmail").value = "";
     document.getElementById("notifyStatus").textContent = "";
     document.getElementById("notifyBotcheck").checked = false;
