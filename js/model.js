@@ -49,7 +49,7 @@ WE.model = (function () {
     wireWidth: 2,
     wireRouting: "ortho",      // 'ortho'(직각) | 'straight'(직선)
     selectedWp: null,          // 선택된 꺾임점 인덱스
-    showWireNums: true         // 배선 번호(W1, W2…) 도면 표시
+    selectedWireLabel: null    // 라벨(수축튜브)을 직접 클릭해 선택한 배선 id — Delete 시 라벨만 삭제
   };
 
   var DEFAULT_TERMINAL_COLOR = "#1e88e5";

@@ -68,24 +68,86 @@ WE.geometry = (function () {
     var t = WE.model.getTerminal(cmp, ref.terminalId); if (!t) return null;
     return { cmp: cmp, t: t, pos: terminalAbs(cmp, t) };
   }
-  // 단자의 수평 탈출 방향(회전 반영).
-  // 가장 가까운 이웃 단자가 수평으로 옆에 있으면 그 "반대쪽"으로 나감(예: VCC↔GND 분리).
-  // 이웃이 위/아래로만 있으면 붙은 변(rx) 기준.
-  function exitDir(cmp, t) {
-    var rad = cmp.rotation * Math.PI / 180;
-    var nearest = null, nd = Infinity;
-    cmp.terminals.forEach(function (o) {
-      if (o.id === t.id) return;
-      var d = Math.abs(o.rx - t.rx) + Math.abs(o.ry - t.ry);
-      if (d < nd) { nd = d; nearest = o; }
-    });
-    var lx;
-    if (nearest && Math.abs(nearest.rx - t.rx) > 0.06) {
-      lx = t.rx >= nearest.rx ? 1 : -1;   // 이웃 반대쪽으로
-    } else {
-      lx = t.rx < 0.5 ? -1 : 1;           // 이웃이 위/아래면 변 기준
+  // ---- 단자 면(어느 외곽면에 붙었는지) 판정 ----
+  // 기준(사용자 확정): 수동 고정(labelSide) > 줄 클러스터링(긴 줄 우선) > 가까운 변,
+  // 애매한 고립 단자는 같은 부품에서 이미 나간 배선들의 다수 방향을 보조로 따름.
+  // 배선 탈출 방향과 라벨 자동 배치가 이 판정을 공유한다.
+  var SIDE_VEC = { L: { x: -1, y: 0 }, R: { x: 1, y: 0 }, T: { x: 0, y: -1 }, B: { x: 0, y: 1 } };
+  // 로컬 side 문자를 deg 회전했을 때의 화면 side 문자
+  function rotSide(side, deg) {
+    var v = SIDE_VEC[side], rad = deg * Math.PI / 180;
+    var x = v.x * Math.cos(rad) - v.y * Math.sin(rad), y = v.x * Math.sin(rad) + v.y * Math.cos(rad);
+    return Math.abs(x) >= Math.abs(y) ? (x >= 0 ? "R" : "L") : (y >= 0 ? "B" : "T");
+  }
+  // 핵심 분류기(부품 로컬 기준, 회전 미반영): { side, sure } 반환
+  // sure=false = 애매(줄에도 안 속하고 두 변 거리가 비슷) → 보조 규칙 대상
+  function termSideInfo(terminals, W, H, t) {
+    if (t.labelSide === "L" || t.labelSide === "R" || t.labelSide === "T" || t.labelSide === "B") {
+      return { side: t.labelSide, sure: true, manual: true };
     }
-    return { x: lx * Math.cos(rad), y: lx * Math.sin(rad) };
+    // 줄 클러스터링: 같은 y(가로줄)/같은 x(세로줄)에 놓인 이웃 수 — 더 긴 줄을 따름
+    var EPS = 0.04;   // 상대좌표 오차(부품 크기의 4%)
+    var row = 0, col = 0;
+    (terminals || []).forEach(function (o) {
+      if (o.id === t.id) return;
+      if (Math.abs(o.ry - t.ry) <= EPS) row++;
+      if (Math.abs(o.rx - t.rx) <= EPS) col++;
+    });
+    if (row > col) return { side: t.ry < 0.5 ? "T" : "B", sure: true };
+    if (col > row) return { side: t.rx < 0.5 ? "L" : "R", sure: true };
+    // 고립(또는 행/열 동수): 가까운 변 — px 환산 거리로 비교
+    var d = [t.rx * W, (1 - t.rx) * W, t.ry * H, (1 - t.ry) * H];   // L R T B
+    var sides = ["L", "R", "T", "B"];
+    var mi = 0, i;
+    for (i = 1; i < 4; i++) if (d[i] < d[mi]) mi = i;
+    var second = Infinity;
+    for (i = 0; i < 4; i++) if (i !== mi && d[i] < second) second = d[i];
+    return { side: sides[mi], sure: (second - d[mi]) >= 8 };
+  }
+  // 부품 문맥 포함 판정(로컬 기준): 애매하면 같은 부품의 다른 배선 단자 방향 다수결
+  function termSideResolved(cmp, t) {
+    var r = termSideInfo(cmp.terminals, cmp.width, cmp.height, t);
+    if (r.sure) return r.side;
+    var votes = { L: 0, R: 0, T: 0, B: 0 }, any = false;
+    WE.model.project.wires.forEach(function (w) {
+      [w.from, w.to].forEach(function (ref) {
+        if (ref.componentId !== cmp.id || ref.terminalId === t.id) return;
+        var ot = WE.model.getTerminal(cmp, ref.terminalId);
+        if (!ot) return;
+        var or = termSideInfo(cmp.terminals, cmp.width, cmp.height, ot);
+        if (or.sure && !or.manual) { votes[or.side]++; any = true; }
+      });
+    });
+    if (any) {
+      var best = null;
+      ["L", "R", "T", "B"].forEach(function (s) { if (best === null || votes[s] > votes[best]) best = s; });
+      if (votes[best] > 0) return best;
+    }
+    return r.side;
+  }
+  // 화면 기준 side (라벨 배치용): labelSide는 화면 기준이라 그대로, 자동 판정은 회전 반영
+  function termSideScreen(cmp, t) {
+    if (t.labelSide === "L" || t.labelSide === "R" || t.labelSide === "T" || t.labelSide === "B") return t.labelSide;
+    return rotSide(termSideResolved(cmp, t), cmp.rotation || 0);
+  }
+  // 배선 탈출 정보: 방향(캔버스 기준 단위벡터) + 스텁 길이(부품 외곽을 벗어날 때까지 + 여유)
+  function exitInfo(cmp, t) {
+    var localSide;
+    if (t.labelSide === "L" || t.labelSide === "R" || t.labelSide === "T" || t.labelSide === "B") {
+      localSide = rotSide(t.labelSide, -(cmp.rotation || 0));   // 화면 기준 수동 고정 → 로컬로 환산
+    } else {
+      localSide = termSideResolved(cmp, t);
+    }
+    var s = cmp.scale || 1;
+    var distEdge =
+      localSide === "T" ? t.ry * cmp.height * s :
+      localSide === "B" ? (1 - t.ry) * cmp.height * s :
+      localSide === "L" ? t.rx * cmp.width * s : (1 - t.rx) * cmp.width * s;
+    var v = SIDE_VEC[localSide], rad = (cmp.rotation || 0) * Math.PI / 180;
+    return {
+      dir: { x: v.x * Math.cos(rad) - v.y * Math.sin(rad), y: v.x * Math.sin(rad) + v.y * Math.cos(rad) },
+      stub: distEdge + STUB_BASE
+    };
   }
 
   function dedupe(pts) {
@@ -126,18 +188,57 @@ WE.geometry = (function () {
     return { i: i < 0 ? 0 : i, n: ws.length };
   }
 
+  // 같은 부품·같은 면에서 나가 같은 방향으로 꺾이는 배선 묶음 내 순번 (계단식 스텁용)
+  // 규칙(사용자 확정): 꺾임 방향에 가까운 단자일수록 안쪽(짧은 스텁) → 교차 없이 겹겹이 감싸는 하네스 묶음
+  // 반환 { i, n } — i=0이 최내측. 수동 꺾임 배선은 묶음에서 제외.
+  function bundleRank(wire, ref, cmp, t, dir) {
+    var horizExit = Math.abs(dir.x) >= Math.abs(dir.y);
+    var far0 = farOf(wire, ref);
+    if (!far0) return { i: 0, n: 1 };
+    var myPos = terminalAbs(cmp, t);
+    // 꺾임 방향: 탈출 축의 수직 축에서 상대 끝점이 어느 쪽인가
+    var sign = (horizExit ? (far0.y - myPos.y) : (far0.x - myPos.x)) >= 0 ? 1 : -1;
+    var members = [];
+    WE.model.project.wires.forEach(function (w) {
+      if (w.waypoints && w.waypoints.length) return;
+      [w.from, w.to].forEach(function (r) {
+        if (r.componentId !== cmp.id) return;
+        var ot = WE.model.getTerminal(cmp, r.terminalId);
+        if (!ot) return;
+        var oe = exitInfo(cmp, ot);
+        if (oe.dir.x * dir.x + oe.dir.y * dir.y < 0.9) return;   // 같은 면(같은 탈출 방향)만
+        var f = farOf(w, r);
+        if (!f) return;
+        var op = terminalAbs(cmp, ot);
+        var turn = horizExit ? (f.y - op.y) : (f.x - op.x);
+        if ((turn >= 0 ? 1 : -1) !== sign) return;               // 같은 방향으로 꺾이는 것만
+        members.push({ tid: r.terminalId, key: horizExit ? op.y : op.x });
+      });
+    });
+    if (members.length < 2) return { i: 0, n: 1 };
+    // 안쪽 정렬: 아래/오른쪽으로 꺾이면(sign>0) 좌표 큰 단자가 안쪽, 위/왼쪽이면 작은 단자가 안쪽
+    members.sort(function (a, b) { return sign > 0 ? (b.key - a.key) : (a.key - b.key); });
+    var rank = {}, order = 0;
+    members.forEach(function (m) { if (!(m.tid in rank)) rank[m.tid] = order++; });
+    return { i: rank[t.id] != null ? rank[t.id] : 0, n: order };
+  }
+
   // 매니폴드 직각 라우팅: 한 단자에 여러 선이면 탈출 방향으로 바를 만들어 탭마다 분기
-  // 규칙: 단자에서 좌/우(수평)로 최소 STUB_BASE(20px) 나간 뒤 꺾음. 여러 개면 +LANE_STEP(10px)씩 차등(20,30,40…)
+  // 규칙(확정 기준): 첫 구간은 단자가 붙은 부품 외곽면의 바깥 방향으로 — 부품을 벗어난 뒤(+여유) 꺾는다.
+  // 여러 개 공유 시 +LANE_STEP(10px)씩 차등.
   var STUB_BASE = 20, LANE_STEP = 10;
   function orthoStub(A, B, wire) {
     var a0 = A.pos, b0 = B.pos;
-    var da = exitDir(A.cmp, A.t), db = exitDir(B.cmp, B.t);
+    var ea = exitInfo(A.cmp, A.t), eb = exitInfo(B.cmp, B.t);
+    var da = ea.dir, db = eb.dir;
 
     var tapA = tapIndex(wire, wire.from, a0, da);
     var tapB = tapIndex(wire, wire.to, b0, db);
-    // 공유 단자 쪽은 탭 거리를 차등(바 위에서 갈라짐), 단일이면 기본 스텁
-    var sa = STUB_BASE + (tapA.n > 1 ? tapA.i * LANE_STEP : 0);
-    var sb = STUB_BASE + (tapB.n > 1 ? tapB.i * LANE_STEP : 0);
+    // 같은 면 묶음 내 계단식 차등(하네스 네스팅) — 단자 공유 분기(tap)와 합산
+    var bunA = bundleRank(wire, wire.from, A.cmp, A.t, da);
+    var bunB = bundleRank(wire, wire.to, B.cmp, B.t, db);
+    var sa = ea.stub + bunA.i * LANE_STEP + (tapA.n > 1 ? tapA.i * LANE_STEP : 0);
+    var sb = eb.stub + bunB.i * LANE_STEP + (tapB.n > 1 ? tapB.i * LANE_STEP : 0);
     var pa = { x: a0.x + da.x * sa, y: a0.y + da.y * sa };
     var pb = { x: b0.x + db.x * sb, y: b0.y + db.y * sb };
 
@@ -146,13 +247,32 @@ WE.geometry = (function () {
     var manifoldA = tapA.n >= tapB.n;
     var mDir = manifoldA ? da : db;
     var horizExit = Math.abs(mDir.x) >= Math.abs(mDir.y);   // 수평 탈출 → H-V-H
+    // 양쪽이 같은 방향으로 탈출하면 채널은 두 스텁 중 더 바깥쪽에 — 양쪽 탈출 거리 모두 보장
+    // (한쪽 기준으로만 잡으면 반대쪽 스텁이 0으로 뭉개지는 문제)
+    var aH = Math.abs(da.x) >= Math.abs(da.y), bH = Math.abs(db.x) >= Math.abs(db.y);
     var pts;
     if (horizExit) {
-      var cx = manifoldA ? pa.x : pb.x;
-      pts = [a0, pa, { x: cx, y: pa.y }, { x: cx, y: pb.y }, pb, b0];
+      if (aH && bH && da.x * db.x < 0) {
+        // 좌/우 반대 방향 탈출: 중간 y에 가로 통로 — 양쪽 스텁(최초 탈출 구간) 모두 보존
+        var my = (pa.y + pb.y) / 2;
+        pts = [a0, pa, { x: pa.x, y: my }, { x: pb.x, y: my }, pb, b0];
+      } else {
+        var cx;
+        if (aH && bH && da.x * db.x > 0) cx = da.x > 0 ? Math.max(pa.x, pb.x) : Math.min(pa.x, pb.x);
+        else cx = manifoldA ? pa.x : pb.x;
+        pts = [a0, pa, { x: cx, y: pa.y }, { x: cx, y: pb.y }, pb, b0];
+      }
     } else {
-      var cy = manifoldA ? pa.y : pb.y;
-      pts = [a0, pa, { x: pa.x, y: cy }, { x: pb.x, y: cy }, pb, b0];
+      if (!aH && !bH && da.y * db.y < 0) {
+        // 위/아래 반대 방향 탈출: 중간 x에 세로 통로 — 양쪽 스텁 모두 보존
+        var mx = (pa.x + pb.x) / 2;
+        pts = [a0, pa, { x: mx, y: pa.y }, { x: mx, y: pb.y }, pb, b0];
+      } else {
+        var cy;
+        if (!aH && !bH && da.y * db.y > 0) cy = da.y > 0 ? Math.max(pa.y, pb.y) : Math.min(pa.y, pb.y);
+        else cy = manifoldA ? pa.y : pb.y;
+        pts = [a0, pa, { x: pa.x, y: cy }, { x: pb.x, y: cy }, pb, b0];
+      }
     }
     return dedupe(pts);
   }
@@ -218,19 +338,29 @@ WE.geometry = (function () {
     separate(hors, "y");
   }
   function separate(segs, axis) {
-    var byFixed = {};
-    segs.forEach(function (s) { (byFixed[s.fixed] = byFixed[s.fixed] || []).push(s); });
-    Object.keys(byFixed).forEach(function (k) {
-      var arr = byFixed[k].sort(function (a, b) { return a.lo - b.lo; });   // 스윕용
+    if (!segs.length) return;
+    // 1) 좌표 근접 클러스터: 정확히 같지 않아도 LANE_GAP 미만으로 붙어 있으면 같은 묶음
+    //    (스텁 계산 차이로 2~4px만 어긋난 평행선도 분리 대상 — 수동 드래그의 근접 회피와 기준 통일)
+    segs.sort(function (a, b) { return a.fixed - b.fixed; });
+    var coordClusters = [], cur = null;
+    segs.forEach(function (s) {
+      if (cur && s.fixed - cur.ref <= LANE_GAP - 1) { cur.items.push(s); cur.ref = s.fixed; }
+      else { cur = { items: [s], ref: s.fixed }; coordClusters.push(cur); }
+    });
+    coordClusters.forEach(function (cc) {
+      // 2) 길이 방향 범위까지 겹치는 것끼리 스윕 클러스터 → 평균 좌표 중심으로 균등 레인 배치
+      var arr = cc.items.sort(function (a, b) { return a.lo - b.lo; });
       var cluster = [], end = -Infinity;
       function flush() {
         if (cluster.length > 1) {
-          // 레인 배정은 세그먼트 중점 순(교차 최소화)
-          var ord = cluster.slice().sort(function (a, b) { return (a.lo + a.hi) - (b.lo + b.hi); });
-          var n = ord.length;
+          // 기존 상대 순서(fixed) 우선, 동률이면 중점 순 — 교차 최소화
+          var ord = cluster.slice().sort(function (a, b) { return (a.fixed - b.fixed) || ((a.lo + a.hi) - (b.lo + b.hi)); });
+          var n = ord.length, mean = 0;
+          ord.forEach(function (s) { mean += s.fixed; });
+          mean /= n;
           ord.forEach(function (s, idx) {
-            var off = (idx - (n - 1) / 2) * LANE_GAP;
-            s.pts[s.i][axis] += off; s.pts[s.i + 1][axis] += off;
+            var target = mean + (idx - (n - 1) / 2) * LANE_GAP;
+            s.pts[s.i][axis] = target; s.pts[s.i + 1][axis] = target;
           });
         }
         cluster = [];
@@ -300,6 +430,40 @@ WE.geometry = (function () {
       if (d < bd) { bd = d; best = { x: px, y: py }; }
     }
     return best;
+  }
+
+  // ---- 경로 위 위치 ↔ 경로 길이 비율(0~1) ----
+  // 배선 라벨은 절대좌표가 아니라 '경로상의 비율'로 저장 → 부품 이동/재라우팅 시 배선을 따라옴
+  function polylinePointAt(pts, t) {
+    if (!pts || pts.length < 2) return null;
+    var lens = [], L = 0, i, l;
+    for (i = 0; i < pts.length - 1; i++) { l = Math.hypot(pts[i + 1].x - pts[i].x, pts[i + 1].y - pts[i].y); lens.push(l); L += l; }
+    var target = Math.max(0, Math.min(1, t)) * L;
+    for (i = 0; i < lens.length; i++) {
+      if (target <= lens[i] || i === lens.length - 1) {
+        var f = lens[i] > 0 ? Math.min(1, target / lens[i]) : 0;
+        return { x: pts[i].x + (pts[i + 1].x - pts[i].x) * f, y: pts[i].y + (pts[i + 1].y - pts[i].y) * f, seg: i };
+      }
+      target -= lens[i];
+    }
+    return { x: pts[pts.length - 1].x, y: pts[pts.length - 1].y, seg: pts.length - 2 };
+  }
+  function polylineRatioOf(pts, pt) {
+    if (!pts || pts.length < 2) return 0;
+    var lens = [], L = 0, i, l;
+    for (i = 0; i < pts.length - 1; i++) { l = Math.hypot(pts[i + 1].x - pts[i].x, pts[i + 1].y - pts[i].y); lens.push(l); L += l; }
+    var best = 0, bd = Infinity, acc = 0;
+    for (i = 0; i < pts.length - 1; i++) {
+      var a = pts[i], b = pts[i + 1];
+      var vx = b.x - a.x, vy = b.y - a.y, wx = pt.x - a.x, wy = pt.y - a.y;
+      var len2 = vx * vx + vy * vy;
+      var t = len2 > 0 ? (wx * vx + wy * vy) / len2 : 0;
+      t = Math.max(0, Math.min(1, t));
+      var d = Math.hypot(a.x + t * vx - pt.x, a.y + t * vy - pt.y);
+      if (d < bd) { bd = d; best = acc + t * lens[i]; }
+      acc += lens[i];
+    }
+    return L > 0 ? best / L : 0;
   }
 
   // 겹침 회피: 이동하는 배선(movingId)의 선분을 startCoord에 두려 할 때, 다른 배선의 같은 방향
@@ -386,9 +550,11 @@ WE.geometry = (function () {
       var side;
       if (t.labelSide === "L" || t.labelSide === "R" || t.labelSide === "T" || t.labelSide === "B") {
         side = t.labelSide;
+      } else if (opts.sideOf) {
+        // 배선 탈출 방향과 동일한 판정(줄 클러스터링 포함)을 공유 — 라벨과 선이 항상 같은 면
+        side = opts.sideOf(t);
       } else {
-        // 로컬(rx·ry)이 아니라 실제 표시 좌표(dot)와 외곽 박스(box)의 거리로 판정 —
-        // 부품을 회전해도 단자의 "화면상" 위치 기준으로 올바른 방향이 잡힘
+        // 폴백: 실제 표시 좌표(dot)와 외곽 박스(box)의 거리로 판정
         var dl = dot.x - box.x, dr = box.x2 - dot.x, dt = dot.y - box.y, db = box.y2 - dot.y;
         var minD = Math.min(dl, dr, dt, db);
         side = minD === dt ? "T" : minD === db ? "B" : minD === dl ? "L" : "R";
@@ -461,10 +627,14 @@ WE.geometry = (function () {
     wireRoutePoints: wireRoutePoints,
     nearestSegmentIndex: nearestSegmentIndex,
     nearestPointOnPolyline: nearestPointOnPolyline,
+    polylinePointAt: polylinePointAt,
+    polylineRatioOf: polylineRatioOf,
     simplify: simplify,
     avoidOverlapCoord: avoidOverlapCoord,
     netFrom: netFrom,
     wirePath: wirePath,
-    layoutTermLabels: layoutTermLabels
+    layoutTermLabels: layoutTermLabels,
+    termSideScreen: termSideScreen,
+    termSideOf: function (terminals, W, H, t) { return termSideInfo(terminals, W, H, t).side; }
   };
 })();

@@ -360,6 +360,25 @@ WE.i18n = (function () {
     "정보/구매링크 편집": "Edit info / buy link",
     "부품": "Part",
 
+    // --- 라이브러리 폴더 ---
+    "클릭: 캔버스에 배치 · 드래그: 순서 변경/폴더 이동": "Click: place on canvas · Drag: reorder / move to folder",
+    "새 폴더 만들기 (부품 분류용)": "New folder (organize parts)",
+    "새 폴더 이름 (예: 센서류, MCU)": "New folder name (e.g. Sensors, MCU)",
+    "새 폴더": "New folder",
+    "폴더 이름": "Folder name",
+    "폴더 이름 변경": "Rename folder",
+    "하위 폴더 추가": "Add subfolder",
+    "하위 폴더 이름 (예: 온도센서)": "Subfolder name (e.g. Temperature sensors)",
+    "폴더 삭제 (부품은 남음)": "Delete folder (parts are kept)",
+    "’ 폴더를 삭제할까요?\n(부품은 삭제되지 않고 상위/미분류로 이동합니다)": "’ — delete this folder?\n(Parts are not deleted; they move to the parent folder / Unfiled)",
+    "최근 사용": "Recent",
+    "표시 개수 줄이기 (0이면 목록 숨김)": "Show fewer (0 hides the list)",
+    "표시 개수 늘리기": "Show more",
+    "미분류": "Unfiled",
+    "(미분류)": "(Unfiled)",
+    "비어 있음 — 부품을 끌어다 놓으세요": "Empty — drag parts here",
+    "폴더": "Folder",
+
     // --- 데이터시트 뷰어 ---
     "<span class='muted'>첨부된 파일 없음</span>": "<span class='muted'>No files attached</span>",
     "'>보기</button>": "'>View</button>",
@@ -544,7 +563,19 @@ WE.i18n = (function () {
     "새 단자": "New terminal",
     "(기본 T#)": "(default T#)",
     "단자 없음. 이미지를 클릭해 추가하세요.": "No terminals. Click the image to add.",
-    "프리셋…": "Presets…"
+    "프리셋…": "Presets…",
+
+    // --- 배선 라벨(수축튜브) ---
+    "배선을 클릭해 라벨(수축튜브) 부착": "Click a wire to attach a label (shrink tube)",
+    "▭ 라벨": "▭ Label",
+    "라벨": "Label",
+    "예: W1, B1, C1…": "e.g. W1, B1, C1…",
+    "이 배선의 라벨 제거": "Remove this wire's label",
+    "라벨 제거": "Remove label",
+    "▭ 라벨 모드에서 배선을 클릭해 부착. 라벨은 드래그로 이동, 더블클릭으로 수정합니다.": "Attach in ▭ Label mode by clicking a wire. Drag to move, double-click to edit.",
+    "라벨을 붙일 배선을 클릭하세요. 번호는 자동으로 매겨집니다. (더블클릭: 수정)": "Click a wire to attach a label. Numbers are assigned automatically. (Double-click: edit)",
+    "라벨 문구 (비우면 라벨 삭제)": "Label text (blank = remove label)",
+    "라벨 모드": "Label mode"
   };
 
   var MAPS = { en: EN };

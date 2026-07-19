@@ -76,6 +76,7 @@
       <div class="tb-group modes">
         <button id="modeSelect" class="mode active" title="선택/이동">▣ 선택</button>
         <button id="modeWire" class="mode" title="단자끼리 배선">╱ 배선</button>
+        <button id="modeLabel" class="mode" title="배선을 클릭해 라벨(수축튜브) 부착">▭ 라벨</button>
         <button id="modeText" class="mode" title="주석 텍스트 추가">T 텍스트</button>
       </div>
       <div class="tb-group" id="paletteGroup" title="새 배선 색상">
@@ -91,7 +92,6 @@
       <div class="tb-group">
         <label class="chk"><input type="checkbox" id="chkGrid" checked /> 그리드</label>
         <label class="chk"><input type="checkbox" id="chkSnap" checked /> 스냅</label>
-        <label class="chk" title="배선마다 W1, W2… 번호를 도면에 표시"><input type="checkbox" id="chkWireNums" checked /> 배선번호</label>
       </div>
       <div class="tb-spacer"></div>
       <span id="hint" class="hint">부품을 추가해 시작하세요.</span>
@@ -107,7 +107,10 @@
       <button id="btnLibAdd" class="lib-add-btn">＋ 부품 추가 (이미지)</button>
       <input type="file" id="fileLibAdd" accept="image/*" hidden />
       <input type="file" id="fileLibImport" accept=".ezclib,.json,application/json" hidden />
-      <input type="search" id="libSearch" placeholder="🔍 부품 검색 (이름·스펙)" autocomplete="off" />
+      <div class="lib-search-row">
+        <input type="search" id="libSearch" placeholder="🔍 부품 검색 (이름·스펙)" autocomplete="off" />
+        <button id="btnFolderAdd" class="lib-folder-add" title="새 폴더 만들기 (부품 분류용)">＋📁</button>
+      </div>
       <div id="libList" class="lib-list"></div>
       <div class="lib-footer">
         <button id="btnLibExport" class="lib-io-btn" title="라이브러리 전체를 .json 파일로 저장 (다른 PC·브라우저로 옮길 때)">⤓ 저장</button>
@@ -271,20 +274,19 @@
 
         <!-- 배선 속성 -->
         <div id="wireProps" hidden>
-          <div id="wireConn" class="wp-conn muted"></div>
+          <div id="wireConn" class="wp-conn muted" hidden></div>
 
           <!-- 스타일 -->
           <div class="wp-row2">
             <label>색상 <input type="color" id="wireColor" /></label>
             <label>두께 <input type="number" id="wireWidth" min="1" max="30" /></label>
           </div>
-          <label class="chk"><input type="checkbox" id="wireAllowOverlap" /> 겹침 허용(회피 안 함)</label>
-
-          <div class="wp-row2">
-            <label>번호 표시 <input type="text" id="wireLabelText" placeholder="예: W17 (비우면 자동)" /></label>
-            <button id="wireLabelReset" class="small" title="드래그로 옮긴 라벨 위치를 자동 배치로 되돌림">위치 초기화</button>
+          <label>라벨 <input type="text" id="wireLabelText" placeholder="예: W1, B1, C1…" /></label>
+          <div class="wp-btn-row">
+            <button id="wireLabelReset" title="드래그로 옮긴 라벨 위치를 자동 배치로 되돌림">위치 초기화</button>
+            <button id="wireLabelRemove" title="이 배선의 라벨 제거">라벨 제거</button>
           </div>
-          <p class="muted wp-hint">번호 라벨을 드래그하면 위치를 직접 옮길 수 있습니다.</p>
+          <label class="chk"><input type="checkbox" id="wireAllowOverlap" /> 겹침 허용(회피 안 함)</label>
 
           <!-- 규격(AWG) -->
           <div id="wireGauge" class="wp-section">
@@ -313,7 +315,6 @@
               <button data-walign="distH" title="세로 구간들을 가로로 균등 간격">▦ 가로 균등</button>
               <button data-walign="distV" title="가로 구간들을 세로로 균등 간격">▤ 세로 균등</button>
             </div>
-            <p class="muted wp-hint">기준=처음 클릭한 배선. 각 배선에서 <b>맞출 구간을 클릭</b>해 선택(굵게 표시). 균등은 3개↑.</p>
           </div>
 
           <button id="wireDelete" class="btn btn-danger btn-block">배선 삭제</button>
@@ -382,6 +383,7 @@
       <h3>부품 정보 (BOM · 전력)</h3>
       <div class="set-row"><label>이름<input type="text" id="libName" style="width:100%" /></label></div>
       <div class="set-row"><label>스펙/설명<input type="text" id="libSpec" style="width:100%" placeholder="예: 2.1채널 D급 앰프" /></label></div>
+      <div class="set-row"><label>폴더<select id="libFolderSel" style="width:100%"></select></label></div>
       <div class="set-row"><label>구매 링크<input type="text" id="libLink" style="width:100%" placeholder="https://..." /></label></div>
       <div class="set-row"><label>단가(원)<input type="number" id="libPrice" step="any" min="0" style="width:150px" placeholder="예: 12000" /></label></div>
 
@@ -491,6 +493,7 @@
         <div class="sc-list">
           <div class="sc-row"><span>선택 모드</span><input class="sc-input" data-action="mode-select" readonly /></div>
           <div class="sc-row"><span>배선 모드</span><input class="sc-input" data-action="mode-wire" readonly /></div>
+          <div class="sc-row"><span>라벨 모드</span><input class="sc-input" data-action="mode-label" readonly /></div>
           <div class="sc-row"><span>텍스트 모드</span><input class="sc-input" data-action="mode-text" readonly /></div>
         </div>
         <p class="muted" style="margin:8px 0 0">배선 모드로 전환할 때마다 마우스 위치 근처에 배선색 팝업이 자동으로 뜹니다.</p>

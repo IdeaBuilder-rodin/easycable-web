@@ -99,7 +99,10 @@ WE.app = (function () {
       if (overwrite) { part = WE.library.updatePart(existing.id, buildData()); setHint(WE.i18n.t("덮어썼습니다: ") + name); }
       else { part = WE.library.addPart(buildData()); setHint(WE.i18n.t("새 부품으로 추가: ") + name); }
     } else {
-      part = WE.library.addPart(buildData());
+      var data = buildData();
+      // 새 부품은 마지막 사용 폴더에 넣어 제안 (바로 열리는 편집 모달에서 변경 가능)
+      if (data.folderId === undefined) data.folderId = libLastFolder();
+      part = WE.library.addPart(data);
       setHint(WE.i18n.t("라이브러리에 저장: ") + name);
     }
     renderLibrary();
@@ -112,9 +115,44 @@ WE.app = (function () {
   function sv(id, v) { document.getElementById(id).value = v == null ? "" : v; }
 
   var _editDatasheets = [];   // 라이브러리 모달 편집 중인 데이터시트 작업본
+
+  // 마지막으로 지정한 폴더 — 새 부품 등록 시 기본 폴더로 제안 (연속 등록 편의)
+  function libLastFolder() {
+    var fid = null;
+    try { fid = localStorage.getItem("we_libLastFolder"); } catch (e) { /* 무시 */ }
+    return (fid && WE.library.getFolder(fid)) ? fid : null;
+  }
+  function setLibLastFolder(fid) {
+    try {
+      if (fid) localStorage.setItem("we_libLastFolder", fid);
+      else localStorage.removeItem("we_libLastFolder");
+    } catch (e) { /* 무시 */ }
+  }
+
+  // 편집 모달의 폴더 드롭다운 채우기 (미분류 + 대분류/└하위)
+  function fillLibFolderSel(selectedId) {
+    var sel = document.getElementById("libFolderSel");
+    sel.innerHTML = "";
+    function opt(v, label) {
+      var o = document.createElement("option");
+      o.value = v; o.textContent = label; sel.appendChild(o);
+    }
+    opt("", WE.i18n.t("(미분류)"));
+    var folders = WE.library.getFolders();
+    folders.forEach(function (f) {
+      if (f.parentId) return;
+      opt(f.id, "📁 " + f.name);
+      folders.forEach(function (s) {
+        if (s.parentId === f.id) opt(s.id, "   └ " + s.name);
+      });
+    });
+    sel.value = (selectedId && WE.library.getFolder(selectedId)) ? selectedId : "";
+  }
+
   function openLibEdit(id) {
     var p = WE.library.get(id); if (!p) return;
     _editLibId = id;
+    fillLibFolderSel(p.folderId);
     sv("libName", p.name); sv("libSpec", p.spec); sv("libLink", p.link); sv("libPrice", p.price);
     document.getElementById("libRole").value = p.role || "load";
     sv("libVolt", p.volt); sv("libCurrent", p.current); sv("libPower", p.power);
@@ -192,8 +230,10 @@ WE.app = (function () {
     document.getElementById("libEditSave").addEventListener("click", function () {
       if (_editLibId) {
         var newName = gv("libName").trim() || WE.i18n.t("부품");
+        var selFolder = gv("libFolderSel") || null;
+        setLibLastFolder(selFolder);
         WE.library.updatePart(_editLibId, {
-          name: newName,
+          name: newName, folderId: selFolder,
           spec: gv("libSpec").trim(), link: gv("libLink").trim(), price: gv("libPrice"),
           role: gv("libRole"),
           volt: gv("libVolt"), current: gv("libCurrent"), power: gv("libPower"),
@@ -450,7 +490,45 @@ WE.app = (function () {
 
     bindLibraryDnD();
 
+    // 새 폴더 (대분류)
+    document.getElementById("btnFolderAdd").addEventListener("click", function () {
+      var name = prompt(WE.i18n.t("새 폴더 이름 (예: 센서류, MCU)"));
+      if (name == null) return;
+      name = name.trim(); if (!name) return;
+      WE.library.addFolder(name, null);
+      renderLibrary();
+    });
+
     document.getElementById("libList").addEventListener("click", function (e) {
+      // 폴더 헤더: 접기/펼치기 · 이름변경 · 하위폴더 · 삭제
+      var fh = e.target.closest(".lib-folder");
+      if (fh) {
+        var fid = fh.dataset.fid;
+        if (fid.indexOf("__") === 0) {   // 가상 섹션: 최근사용 개수 조절 + 접기/펼치기
+          if (e.target.closest(".lib-f-minus")) { setLibRecentCount(libRecentCount() - 1); renderLibrary(); return; }
+          if (e.target.closest(".lib-f-plus")) { setLibRecentCount(libRecentCount() + 1); renderLibrary(); return; }
+          toggleVfCollapsed(fid); renderLibrary(); return;
+        }
+        var folder = WE.library.getFolder(fid); if (!folder) return;
+        if (e.target.closest(".lib-f-ren")) {
+          var nn = prompt(WE.i18n.t("폴더 이름"), folder.name);
+          if (nn != null && nn.trim()) { WE.library.renameFolder(fid, nn.trim()); renderLibrary(); }
+          return;
+        }
+        if (e.target.closest(".lib-f-sub")) {
+          var sn = prompt(WE.i18n.t("하위 폴더 이름 (예: 온도센서)"));
+          if (sn != null && sn.trim()) { WE.library.addFolder(sn.trim(), fid); renderLibrary(); }
+          return;
+        }
+        if (e.target.closest(".lib-f-del")) {
+          if (confirm("‘" + folder.name + WE.i18n.t("’ 폴더를 삭제할까요?\n(부품은 삭제되지 않고 상위/미분류로 이동합니다)"))) {
+            WE.library.removeFolder(fid); renderLibrary();
+          }
+          return;
+        }
+        WE.library.toggleFolder(fid); renderLibrary();
+        return;
+      }
       var item = e.target.closest(".lib-item"); if (!item) return;
       var part = WE.library.get(item.dataset.id); if (!part) return;
       if (e.target.closest(".lib-del")) {
@@ -478,15 +556,21 @@ WE.app = (function () {
     });
   }
 
-  // 라이브러리 드래그 순서 변경 (드롭 위치 표시)
+  // 라이브러리 드래그: 부품 순서 변경 + 폴더 이동
+  // - 폴더 헤더 위에 놓으면 그 폴더로 이동 (미분류 헤더 = 폴더 해제)
+  // - 폴더 본문/목록 사이에 놓으면 그 위치로 순서 변경 (다른 폴더 본문이면 이동 겸)
+  // - 즐겨찾기·최근사용 가상 섹션 본문은 자동 정렬이라 드롭 대상에서 제외
   function bindLibraryDnD() {
     var list = document.getElementById("libList");
     var dragId = null;
     var indicator = document.createElement("div");
     indicator.className = "lib-drop-line";
 
-    function afterElement(y) {
-      var items = [].slice.call(list.querySelectorAll(".lib-item:not(.dragging)"));
+    // container 직속 부품 카드 중, y 아래에 오는 첫 카드
+    function afterElement(container, y) {
+      var items = [].filter.call(container.children, function (c) {
+        return c.classList && c.classList.contains("lib-item") && !c.classList.contains("dragging");
+      });
       var closest = { offset: -Infinity, el: null };
       items.forEach(function (child) {
         var box = child.getBoundingClientRect();
@@ -496,6 +580,28 @@ WE.app = (function () {
       return closest.el;
     }
     function clearInd() { if (indicator.parentNode) indicator.parentNode.removeChild(indicator); }
+    function clearFolderHl() {
+      var h = list.querySelector(".lib-folder.drop-into");
+      if (h) h.classList.remove("drop-into");
+    }
+    // 드롭 지점 해석 → { folderHeader } 또는 { container }
+    function dropTarget(e) {
+      var fh = e.target.closest(".lib-folder");
+      if (fh) {
+        var fid = fh.dataset.fid;
+        // 실제 폴더 또는 미분류(드롭 허용 표시)만 대상
+        if (fid.indexOf("__") !== 0 || fh.dataset.drop) return { header: fh, fid: fid };
+        return null;
+      }
+      var body = e.target.closest(".lib-folder-body");
+      if (body) {
+        var bfid = body.dataset.fid;
+        if (bfid === "__fav" || bfid === "__recent") return null;   // 자동 정렬 섹션
+        return { container: body, fid: bfid };
+      }
+      if (e.target === list || e.target.closest("#libList")) return { container: list, fid: null };
+      return null;
+    }
 
     list.addEventListener("dragstart", function (e) {
       var item = e.target.closest(".lib-item"); if (!item) return;
@@ -506,21 +612,46 @@ WE.app = (function () {
     });
     list.addEventListener("dragover", function (e) {
       if (dragId == null) return;
+      var t = dropTarget(e);
+      if (!t) { clearInd(); clearFolderHl(); return; }
       e.preventDefault();
       e.dataTransfer.dropEffect = "move";
-      var after = afterElement(e.clientY);
-      if (after) list.insertBefore(indicator, after); else list.appendChild(indicator);
+      if (t.header) {
+        clearInd(); clearFolderHl();
+        t.header.classList.add("drop-into");
+      } else {
+        clearFolderHl();
+        var after = afterElement(t.container, e.clientY);
+        if (after) t.container.insertBefore(indicator, after);
+        else t.container.appendChild(indicator);
+      }
     });
     list.addEventListener("drop", function (e) {
       if (dragId == null) return;
+      var t = dropTarget(e);
+      clearInd(); clearFolderHl();
+      if (!t) { dragId = null; return; }
       e.preventDefault();
-      var after = afterElement(e.clientY);
-      WE.library.reorderBefore(dragId, after ? after.dataset.id : null);
-      clearInd(); dragId = null;
+      var part = WE.library.get(dragId);
+      if (part) {
+        if (t.header) {
+          // 폴더 헤더에 드롭 → 그 폴더로 이동 (미분류면 해제)
+          var hfid = t.fid === "__none" ? null : t.fid;
+          WE.library.movePart(dragId, hfid);
+          setLibLastFolder(hfid);
+        } else {
+          // 본문에 드롭 → 폴더가 다르면 이동, 위치까지 반영
+          var destFid = t.fid === "__none" ? null : t.fid;
+          if ((part.folderId || null) !== destFid) { WE.library.movePart(dragId, destFid); setLibLastFolder(destFid); }
+          var after = afterElement(t.container, e.clientY);
+          WE.library.reorderBefore(dragId, after ? after.dataset.id : null);
+        }
+      }
+      dragId = null;
       renderLibrary();
     });
     list.addEventListener("dragend", function () {
-      clearInd(); dragId = null;
+      clearInd(); clearFolderHl(); dragId = null;
       var d = list.querySelector(".dragging"); if (d) d.classList.remove("dragging");
     });
   }
@@ -529,6 +660,20 @@ WE.app = (function () {
   var _libQuery = "";
   function libRecentMap() {
     try { return JSON.parse(localStorage.getItem("we_libRecent") || "{}"); } catch (e) { return {}; }
+  }
+  // 🕘 최근 사용 섹션 표시 개수 (0~20, 0이면 헤더만 남기고 목록 숨김)
+  var LIB_RECENT_DEFAULT = 8, LIB_RECENT_MAX = 20;
+  function libRecentCount() {
+    var n = LIB_RECENT_DEFAULT;
+    try {
+      var v = localStorage.getItem("we_libRecentCount");
+      if (v != null && v !== "" && !isNaN(+v)) n = +v;
+    } catch (e) { /* 무시 */ }
+    return Math.max(0, Math.min(LIB_RECENT_MAX, Math.round(n)));
+  }
+  function setLibRecentCount(n) {
+    n = Math.max(0, Math.min(LIB_RECENT_MAX, Math.round(n)));
+    try { localStorage.setItem("we_libRecentCount", String(n)); } catch (e) { /* 무시 */ }
   }
   function touchLibRecent(id) {
     try {
@@ -553,67 +698,201 @@ WE.app = (function () {
     return out;
   }
 
+  // 부품 카드 한 장 생성 (pathText: 검색 결과에서 소속 폴더 경로 뱃지)
+  function buildPartItem(part, q, pathText) {
+    var item = document.createElement("div");
+    item.className = "lib-item" + (part.fav ? " fav" : ""); item.dataset.id = part.id;
+    item.setAttribute("draggable", "true");
+    item.title = WE.i18n.t("클릭: 캔버스에 배치 · 드래그: 순서 변경/폴더 이동");
+    var fav = document.createElement("button");
+    fav.className = "lib-fav" + (part.fav ? " on" : "");
+    fav.textContent = part.fav ? "★" : "☆";
+    fav.title = part.fav ? WE.i18n.t("즐겨찾기 해제") : WE.i18n.t("즐겨찾기");
+    item.appendChild(fav);
+    var thumbWrap = document.createElement("div"); thumbWrap.className = "lib-thumb-wrap";
+    var thumb = document.createElement(part.image ? "img" : "div");
+    thumb.className = "lib-thumb";
+    if (part.image) thumb.src = part.image;
+    thumbWrap.appendChild(thumb);
+    if (part.link) {
+      var lk = document.createElement("span"); lk.className = "lib-haslink"; lk.textContent = "🔗"; lk.title = WE.i18n.t("구매 링크 있음");
+      thumbWrap.appendChild(lk);
+    }
+    var info = document.createElement("div"); info.className = "lib-info";
+    var nm = document.createElement("div"); nm.className = "lib-name";
+    nm.innerHTML = hlHtml(part.name, q);
+    info.appendChild(nm);
+    if (part.spec) {
+      var meta = document.createElement("div"); meta.className = "lib-meta";
+      meta.innerHTML = hlHtml(part.spec, q);
+      info.appendChild(meta);
+    }
+    if (pathText) {
+      var pb = document.createElement("div"); pb.className = "lib-path";
+      pb.textContent = "📁 " + pathText;
+      info.appendChild(pb);
+    }
+    var edit = document.createElement("button"); edit.className = "lib-edit"; edit.textContent = "✎"; edit.title = WE.i18n.t("정보/구매링크 편집");
+    var del = document.createElement("button"); del.className = "lib-del"; del.textContent = "×"; del.title = WE.i18n.t("삭제");
+    item.appendChild(thumbWrap); item.appendChild(info); item.appendChild(edit); item.appendChild(del);
+    return item;
+  }
+
+  // 부품이 속한 폴더 경로 문구 ("대분류 > 소분류")
+  function folderPathText(part) {
+    var f = part.folderId ? WE.library.getFolder(part.folderId) : null;
+    if (!f) return "";
+    var pf = f.parentId ? WE.library.getFolder(f.parentId) : null;
+    return pf ? pf.name + " > " + f.name : f.name;
+  }
+
+  // 가상 섹션(즐겨찾기·최근사용·미분류) 접힘 상태 — 실제 폴더와 달리 localStorage에 보관
+  function vfCollapsedMap() {
+    try { return JSON.parse(localStorage.getItem("we_libVfCollapse") || "{}"); } catch (e) { return {}; }
+  }
+  function toggleVfCollapsed(id) {
+    var m = vfCollapsedMap(); m[id] = !m[id];
+    try { localStorage.setItem("we_libVfCollapse", JSON.stringify(m)); } catch (e) { /* 무시 */ }
+  }
+
+  // 폴더 헤더 한 줄 생성. fid: 실제 폴더 id 또는 "__fav"/"__recent"/"__none"
+  function buildFolderHeader(fid, icon, name, count, collapsed, depth, isVirtual) {
+    var h = document.createElement("div");
+    h.className = "lib-folder" + (depth ? " sub" : "") + (isVirtual ? " virtual" : "");
+    h.dataset.fid = fid;
+    var arrow = document.createElement("span"); arrow.className = "lib-f-arrow"; arrow.textContent = collapsed ? "▸" : "▾";
+    var nm = document.createElement("span"); nm.className = "lib-f-name"; nm.textContent = icon + " " + name;
+    var cnt = document.createElement("span"); cnt.className = "lib-f-count"; cnt.textContent = count;
+    h.appendChild(arrow); h.appendChild(nm); h.appendChild(cnt);
+    if (!isVirtual) {
+      var ren = document.createElement("button"); ren.className = "lib-f-btn lib-f-ren"; ren.textContent = "✎"; ren.title = WE.i18n.t("폴더 이름 변경");
+      h.appendChild(ren);
+      if (!depth) {   // 하위 폴더 추가는 대분류에서만 (2단계 제한)
+        var add = document.createElement("button"); add.className = "lib-f-btn lib-f-sub"; add.textContent = "＋"; add.title = WE.i18n.t("하위 폴더 추가");
+        h.appendChild(add);
+      }
+      var del = document.createElement("button"); del.className = "lib-f-btn lib-f-del"; del.textContent = "×"; del.title = WE.i18n.t("폴더 삭제 (부품은 남음)");
+      h.appendChild(del);
+    }
+    return h;
+  }
+
+  // 실제 폴더 렌더 (하위 폴더 → 직속 부품 순)
+  function renderFolder(list, folder, depth, byFolder) {
+    var subs = WE.library.getFolders().filter(function (f) { return f.parentId === folder.id; });
+    var own = byFolder[folder.id] || [];
+    var count = own.length;
+    subs.forEach(function (s) { count += (byFolder[s.id] || []).length; });
+    list.appendChild(buildFolderHeader(folder.id, "📁", folder.name, count, folder.collapsed, depth, false));
+    if (folder.collapsed) return;   // 접힌 폴더 내용은 렌더 자체를 생략 (부품 많아도 가벼움)
+    var body = document.createElement("div");
+    body.className = "lib-folder-body" + (depth ? " sub" : "");
+    body.dataset.fid = folder.id;
+    subs.forEach(function (s) { renderFolder(body, s, depth + 1, byFolder); });
+    own.forEach(function (p) { body.appendChild(buildPartItem(p, "", "")); });
+    if (!subs.length && !own.length) {
+      var e = document.createElement("p"); e.className = "muted lib-f-empty";
+      e.textContent = WE.i18n.t("비어 있음 — 부품을 끌어다 놓으세요");
+      body.appendChild(e);
+    }
+    list.appendChild(body);
+  }
+
+  // 가상 섹션 렌더 (즐겨찾기/최근사용/미분류)
+  function renderVirtualSection(list, fid, icon, name, sectionParts, droppable) {
+    var collapsed = !!vfCollapsedMap()[fid];
+    var h = buildFolderHeader(fid, icon, name, sectionParts.length, collapsed, 0, true);
+    if (droppable) h.dataset.drop = "1";   // 미분류: 드롭으로 폴더 해제 허용
+    if (fid === "__recent") {
+      // 표시 개수 −/＋ 스텝퍼 (hover 시 표시 — 폴더 헤더 버튼과 같은 문법)
+      var n = libRecentCount();
+      var minus = document.createElement("button");
+      minus.className = "lib-f-btn lib-f-minus"; minus.textContent = "−";
+      minus.title = WE.i18n.t("표시 개수 줄이기 (0이면 목록 숨김)");
+      minus.disabled = n <= 0;
+      var plus = document.createElement("button");
+      plus.className = "lib-f-btn lib-f-plus"; plus.textContent = "＋";
+      plus.title = WE.i18n.t("표시 개수 늘리기");
+      plus.disabled = n >= LIB_RECENT_MAX;
+      h.appendChild(minus); h.appendChild(plus);
+    }
+    list.appendChild(h);
+    if (collapsed) return;
+    if (fid === "__recent" && !libRecentCount()) return;   // 0개: 헤더만 남기고 목록 숨김
+    var body = document.createElement("div");
+    body.className = "lib-folder-body virtual"; body.dataset.fid = fid;
+    sectionParts.forEach(function (p) { body.appendChild(buildPartItem(p, "", "")); });
+    list.appendChild(body);
+  }
+
   function renderLibrary() {
     var list = document.getElementById("libList");
     list.innerHTML = "";
     var parts = WE.library.getAll();
-    if (!parts.length) {
+    var folders = WE.library.getFolders();
+    if (!parts.length && !folders.length) {
       var p = document.createElement("p");
       p.className = "muted"; p.textContent = WE.i18n.t("등록된 부품이 없습니다.");
       list.appendChild(p); return;
     }
     var q = _libQuery;
-    // 검색 필터(이름+스펙)
-    var shown = !q ? parts.slice() : parts.filter(function (part) {
-      return (part.name || "").toLowerCase().indexOf(q) >= 0 ||
-             (part.spec || "").toLowerCase().indexOf(q) >= 0;
-    });
-    if (!shown.length) {
-      var np = document.createElement("p");
-      np.className = "muted"; np.textContent = "'" + q + WE.i18n.t("' 검색 결과가 없습니다.");
-      list.appendChild(np); return;
-    }
-    // 정렬: ★즐겨찾기 최상단 → 최근 사용 순 → 기존(수동) 순서
     var recent = libRecentMap();
-    shown.sort(function (a, b) {
-      var f = (b.fav ? 1 : 0) - (a.fav ? 1 : 0);
-      if (f) return f;
-      return (recent[b.id] || 0) - (recent[a.id] || 0);
-    });
 
-    shown.forEach(function (part) {
-      var item = document.createElement("div");
-      item.className = "lib-item" + (part.fav ? " fav" : ""); item.dataset.id = part.id;
-      item.setAttribute("draggable", "true");
-      item.title = WE.i18n.t("클릭: 캔버스에 배치 · 드래그: 순서 변경");
-      var fav = document.createElement("button");
-      fav.className = "lib-fav" + (part.fav ? " on" : "");
-      fav.textContent = part.fav ? "★" : "☆";
-      fav.title = part.fav ? WE.i18n.t("즐겨찾기 해제") : WE.i18n.t("즐겨찾기");
-      item.appendChild(fav);
-      var thumbWrap = document.createElement("div"); thumbWrap.className = "lib-thumb-wrap";
-      var thumb = document.createElement(part.image ? "img" : "div");
-      thumb.className = "lib-thumb";
-      if (part.image) thumb.src = part.image;
-      thumbWrap.appendChild(thumb);
-      if (part.link) {
-        var lk = document.createElement("span"); lk.className = "lib-haslink"; lk.textContent = "🔗"; lk.title = WE.i18n.t("구매 링크 있음");
-        thumbWrap.appendChild(lk);
+    // ---- 검색 중: 폴더 무시하고 평면 결과 + 소속 폴더 경로 뱃지 ----
+    if (q) {
+      var shown = parts.filter(function (part) {
+        return (part.name || "").toLowerCase().indexOf(q) >= 0 ||
+               (part.spec || "").toLowerCase().indexOf(q) >= 0;
+      });
+      if (!shown.length) {
+        var np = document.createElement("p");
+        np.className = "muted"; np.textContent = "'" + q + WE.i18n.t("' 검색 결과가 없습니다.");
+        list.appendChild(np); return;
       }
-      var info = document.createElement("div"); info.className = "lib-info";
-      var nm = document.createElement("div"); nm.className = "lib-name";
-      nm.innerHTML = hlHtml(part.name, q);
-      info.appendChild(nm);
-      if (part.spec) {
-        var meta = document.createElement("div"); meta.className = "lib-meta";
-        meta.innerHTML = hlHtml(part.spec, q);
-        info.appendChild(meta);
-      }
-      var edit = document.createElement("button"); edit.className = "lib-edit"; edit.textContent = "✎"; edit.title = WE.i18n.t("정보/구매링크 편집");
-      var del = document.createElement("button"); del.className = "lib-del"; del.textContent = "×"; del.title = WE.i18n.t("삭제");
-      item.appendChild(thumbWrap); item.appendChild(info); item.appendChild(edit); item.appendChild(del);
-      list.appendChild(item);
+      shown.sort(function (a, b) {
+        var f = (b.fav ? 1 : 0) - (a.fav ? 1 : 0);
+        if (f) return f;
+        return (recent[b.id] || 0) - (recent[a.id] || 0);
+      });
+      shown.forEach(function (part) { list.appendChild(buildPartItem(part, q, folderPathText(part))); });
+      return;
+    }
+
+    // ---- 폴더가 하나도 없으면 기존 그대로: 단일 리스트 (★ → 최근 사용 순) ----
+    if (!folders.length) {
+      var flat = parts.slice().sort(function (a, b) {
+        var f = (b.fav ? 1 : 0) - (a.fav ? 1 : 0);
+        if (f) return f;
+        return (recent[b.id] || 0) - (recent[a.id] || 0);
+      });
+      flat.forEach(function (part) { list.appendChild(buildPartItem(part, "", "")); });
+      return;
+    }
+
+    // ---- 폴더 뷰 ----
+    function byRecent(a, b) { return (recent[b.id] || 0) - (recent[a.id] || 0); }
+    var favs = parts.filter(function (p) { return p.fav; }).sort(byRecent);
+    if (favs.length) renderVirtualSection(list, "__fav", "★", WE.i18n.t("즐겨찾기"), favs, false);
+    var rn = libRecentCount();
+    var recents = parts.filter(function (p) { return recent[p.id]; }).sort(byRecent).slice(0, rn);
+    // 개수를 0으로 줄인 경우엔 헤더만 남겨 ＋로 되살릴 수 있게 함
+    if (recents.length || rn === 0) renderVirtualSection(list, "__recent", "🕘", WE.i18n.t("최근 사용"), recents, false);
+    if (favs.length || recents.length || rn === 0) {
+      var hr = document.createElement("div"); hr.className = "lib-divider";
+      list.appendChild(hr);
+    }
+
+    // 폴더별 부품 분류 (없는 폴더를 가리키면 미분류)
+    var byFolder = {}, unfiled = [];
+    parts.forEach(function (p) {
+      if (p.folderId && WE.library.getFolder(p.folderId)) {
+        (byFolder[p.folderId] = byFolder[p.folderId] || []).push(p);
+      } else unfiled.push(p);
     });
+    folders.forEach(function (f) {
+      if (!f.parentId) renderFolder(list, f, 0, byFolder);
+    });
+    if (unfiled.length) renderVirtualSection(list, "__none", "📦", WE.i18n.t("미분류"), unfiled, true);
   }
 
   // ---- 다중 선택 정렬 ----
@@ -1411,10 +1690,11 @@ WE.app = (function () {
     document.getElementById("btnRedo").addEventListener("click", function () { WE.history.doRedo(); });
   }
 
-  // ---- 모드 (선택 / 배선 / 텍스트) ----
+  // ---- 모드 (선택 / 배선 / 라벨 / 텍스트) ----
   function bindModes() {
     document.getElementById("modeSelect").addEventListener("click", function () { setMode("select"); });
     document.getElementById("modeWire").addEventListener("click", function () { setMode("wire"); });
+    document.getElementById("modeLabel").addEventListener("click", function () { setMode("label"); });
     document.getElementById("modeText").addEventListener("click", function () { setMode("text"); });
   }
   function setMode(mode) {
@@ -1422,14 +1702,33 @@ WE.app = (function () {
     if (WE.interactions.resetWire) WE.interactions.resetWire();
     document.getElementById("modeSelect").classList.toggle("active", mode === "select");
     document.getElementById("modeWire").classList.toggle("active", mode === "wire");
+    document.getElementById("modeLabel").classList.toggle("active", mode === "label");
     document.getElementById("modeText").classList.toggle("active", mode === "text");
     document.body.classList.toggle("wire-mode", mode === "wire");
     document.body.classList.toggle("text-mode", mode === "text");
+    document.body.classList.toggle("label-mode", mode === "label");
+    if (WE.render.setLabelPreview) WE.render.setLabelPreview(null);   // 모드 전환 시 미리보기 정리
     if (mode !== "select") { WE.model.clearSelection(); WE.render.renderOverlay(); refreshProps(); }
     setHint(
       mode === "wire" ? WE.i18n.t("단자를 클릭하고 다른 단자를 클릭하면 배선이 이어집니다.") :
-      mode === "text" ? WE.i18n.t("캔버스를 클릭해 텍스트를 추가하세요. (더블클릭으로 편집)") : ""
+      mode === "text" ? WE.i18n.t("캔버스를 클릭해 텍스트를 추가하세요. (더블클릭으로 편집)") :
+      mode === "label" ? WE.i18n.t("라벨을 붙일 배선을 클릭하세요. 번호는 자동으로 매겨집니다. (더블클릭: 수정)") : ""
     );
+  }
+
+  // 다음 자동 라벨 번호: 사용자가 마지막에 쓴 접두사(W/B/C 등)를 이어감 — "B3"까지 썼으면 "B4"
+  function nextWireLabel() {
+    var prefix = "W", maxN = 0;
+    var re = /^([A-Za-z]+)-?(\d+)$/;
+    WE.model.project.wires.forEach(function (w) {
+      var m = re.exec((w.labelText || "").trim());
+      if (m) prefix = m[1];   // 가장 나중 배선의 접두사가 남음
+    });
+    WE.model.project.wires.forEach(function (w) {
+      var m = re.exec((w.labelText || "").trim());
+      if (m && m[1].toLowerCase() === prefix.toLowerCase()) maxN = Math.max(maxN, parseInt(m[2], 10));
+    });
+    return prefix + (maxN + 1);
   }
 
   // ---- 팬/줌 ----
@@ -1834,7 +2133,7 @@ WE.app = (function () {
   }
 
   // ---- 단축키 ----
-  var _shortcuts = { "mode-select": "v", "mode-wire": "w", "mode-text": "t" };
+  var _shortcuts = { "mode-select": "v", "mode-wire": "w", "mode-label": "l", "mode-text": "t" };
   function loadShortcuts() {
     try { var r = localStorage.getItem("we_shortcuts"); if (r) { var s = JSON.parse(r); for (var k in _shortcuts) if (s[k] !== undefined) _shortcuts[k] = s[k]; } }
     catch (e) { /* 무시 */ }
@@ -1866,6 +2165,7 @@ WE.app = (function () {
       if (_shortcuts[action] && _shortcuts[action] === key) {
         if (action === "mode-select") { setMode("select"); closeQuickColorPicker(); }
         else if (action === "mode-wire") { setMode("wire"); openQuickColorPicker(); }
+        else if (action === "mode-label") { setMode("label"); closeQuickColorPicker(); }
         else if (action === "mode-text") { setMode("text"); closeQuickColorPicker(); }
         return true;
       }
@@ -2114,6 +2414,7 @@ WE.app = (function () {
     var rows = [
       [WE.i18n.t("선택 모드"), scLabel(_shortcuts["mode-select"])],
       [WE.i18n.t("배선 모드 (진입 시 배선색 팝업 자동 표시)"), scLabel(_shortcuts["mode-wire"])],
+      [WE.i18n.t("라벨 모드"), scLabel(_shortcuts["mode-label"])],
       [WE.i18n.t("텍스트 모드"), scLabel(_shortcuts["mode-text"])],
       [WE.i18n.t("실행 취소 / 다시 실행"), "Ctrl+Z / Ctrl+Shift+Z"],
       [WE.i18n.t("부품 복제"), "Ctrl+D"],
@@ -2138,10 +2439,6 @@ WE.app = (function () {
       if (c) WE.model.ui.wireColor = c;
       var r = localStorage.getItem("we_wireRouting");
       if (r === "ortho" || r === "straight") WE.model.ui.wireRouting = r;
-      var nn = localStorage.getItem("we_showWireNums");
-      if (nn != null) WE.model.ui.showWireNums = (nn === "1");
-      var cb = document.getElementById("chkWireNums");
-      if (cb) cb.checked = WE.model.ui.showWireNums;
     } catch (e) { /* 무시 */ }
   }
   function saveWireSettings() {
@@ -2149,7 +2446,6 @@ WE.app = (function () {
       localStorage.setItem("we_wireWidth", String(WE.model.ui.wireWidth));
       localStorage.setItem("we_wireColor", WE.model.ui.wireColor);
       localStorage.setItem("we_wireRouting", WE.model.ui.wireRouting);
-      localStorage.setItem("we_showWireNums", WE.model.ui.showWireNums ? "1" : "0");
     } catch (e) { /* 무시 */ }
   }
 
@@ -2333,9 +2629,17 @@ WE.app = (function () {
     });
     document.getElementById("wireLabelReset").addEventListener("click", function () {
       var ws = selectedWires(); if (!ws.length) return;
-      ws.forEach(function (w) { delete w.labelPos; });
+      ws.forEach(function (w) { delete w.labelPos; delete w.labelT; });
       WE.render.renderWires();
       WE.history.commit();
+    });
+    document.getElementById("wireLabelRemove").addEventListener("click", function () {
+      var ws = selectedWires(); if (!ws.length) return;
+      ws.forEach(function (w) { delete w.labelText; delete w.labelPos; delete w.labelT; });
+      WE.render.renderWires();
+      WE.render.renderOverlay();
+      WE.history.commit();
+      refreshProps();
     });
     document.getElementById("wireCurrent").addEventListener("input", function (e) {
       var w = WE.model.getSelectedWire(); if (!w) return;
@@ -2389,7 +2693,7 @@ WE.app = (function () {
     if (w && w.current > 0 && w.awg) {
       var e = WE.awg.get(w.awg);
       out.textContent = WE.i18n.t("권장 AWG ") + w.awg + " · Ø" + e.dia + WE.i18n.t("mm · 허용 ") + e.ampEff + WE.i18n.t("A (여유 ×") + WE.awg.MARGIN + ")";
-    } else out.textContent = WE.i18n.t("신호선(기본 두께). 전류를 입력하면 규격을 자동 계산합니다.");
+    } else out.textContent = "";   // 미입력 시 설명 문구 없이 비움 (속성창 정돈)
   }
   // 부하 부품(전력 있는 load) 체크박스 목록
   function renderWireLoadList() {
@@ -2502,16 +2806,6 @@ WE.app = (function () {
     setHint((alongX ? WE.i18n.t("가로") : WE.i18n.t("세로")) + WE.i18n.t(" 균등 배치: ") + items.length + WE.i18n.t("개"));
   }
 
-  function wireConnText(w) {
-    function nm(ref) {
-      var c = WE.model.getComponent(ref.componentId);
-      if (!c) return "?";
-      var t = WE.model.getTerminal(c, ref.terminalId);
-      return c.name + " · " + (t ? t.name : "?");
-    }
-    return nm(w.from) + "  ──  " + nm(w.to);
-  }
-
   // ---- 배선 리스트(와이어 리스트) ----
   // 색 → 팔레트 라벨(없으면 hex)
   function colorLabel(color) {
@@ -2529,7 +2823,8 @@ WE.app = (function () {
     return WE.model.project.wires.map(function (w, i) {
       var a = endParts(w.from), b = endParts(w.to);
       return {
-        no: "W" + (i + 1), color: colorLabel(w.color), colorHex: w.color,
+        no: (w.labelText || "").trim() || ("W" + (i + 1)),   // 도면에 부착한 라벨 우선, 없으면 순번
+        color: colorLabel(w.color), colorHex: w.color,
         awg: w.awg || "", current: w.current > 0 ? w.current : "",
         fromCmp: a.cmp, fromTerm: a.term, toCmp: b.cmp, toTerm: b.term
       };
@@ -2688,12 +2983,6 @@ WE.app = (function () {
     document.getElementById("chkSnap").addEventListener("change", function (e) {
       WE.model.project.meta.canvas.snap = e.target.checked;
     });
-    document.getElementById("chkWireNums").addEventListener("change", function (e) {
-      WE.model.ui.showWireNums = e.target.checked;
-      saveWireSettings();
-      WE.render.renderWires();
-    });
-
     var pn = document.getElementById("projName");
     pn.value = WE.model.project.meta.name || "";
     pn.addEventListener("input", function (e) {
@@ -2820,8 +3109,10 @@ WE.app = (function () {
     if (wire) {
       empty.hidden = true; body.hidden = true; wp.hidden = false;
       var mw = WE.model.getMultiWire();
-      document.getElementById("wireConn").textContent =
-        (mw && mw.length > 1) ? (WE.i18n.t("배선 ") + mw.length + WE.i18n.t("개 선택됨 (색·두께 일괄 변경)")) : wireConnText(wire);
+      // 연결 설명 문구는 단일 선택에선 표시하지 않음(불필요) — 다중 선택 개수만 안내
+      var connEl = document.getElementById("wireConn");
+      connEl.hidden = !(mw && mw.length > 1);
+      connEl.textContent = (mw && mw.length > 1) ? (WE.i18n.t("배선 ") + mw.length + WE.i18n.t("개 선택됨 (색·두께 일괄 변경)")) : "";
       document.getElementById("wireAlign").hidden = !(mw && mw.length >= 2);
       document.getElementById("wireAllowOverlap").checked = !!wire.allowOverlap;
       setIfNotFocused("wireColor", wire.color);
@@ -2936,6 +3227,7 @@ WE.app = (function () {
     powerSummaryRows: powerSummaryRows,
     handleShortcut: handleShortcut,
     setMode: setMode,
+    nextWireLabel: nextWireLabel,
     track: track, trackOnce: trackOnce,
     offerNotifyAfterValue: offerNotifyAfterValue
   };

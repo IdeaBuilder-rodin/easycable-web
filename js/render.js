@@ -232,7 +232,7 @@ WE.render = (function () {
     // 단자배치 모달(termeditor.js)과 동일한 충돌회피 로직(geometry.layoutTermLabels) 공유 → 두 화면이 항상 같은 결과
     var laid = WE.geometry.layoutTermLabels(autoTerms, cmp.width, cmp.height, box, function (t) {
       return WE.geometry.terminalAbs(cmp, t);
-    });
+    }, { sideOf: function (t) { return WE.geometry.termSideScreen(cmp, t); } });
     laid.forEach(function (o) { draw(o.t, o.dot, o.lx, o.ly, o.anchor, o.vertical); });
   }
   function renderTermLabels() {
@@ -264,10 +264,8 @@ WE.render = (function () {
   // obs: 이미 배치된 라벨(단자 라벨 + 앞서 그려진 배선 라벨) 사각형 목록 — 있으면 누적해 서로 겹치지 않게 회피
   function buildWireLabel(wire, obs) {
     var lblParts = [];
-    if (WE.model.ui.showWireNums) {
-      var numTxt = (wire.labelText && wire.labelText.trim()) || ("W" + (WE.model.project.wires.indexOf(wire) + 1));
-      lblParts.push(numTxt);
-    }
+    var tubeTxt = (wire.labelText || "").trim();   // ▭ 라벨 모드에서 수동 부착한 라벨(수축튜브)
+    if (tubeTxt) lblParts.push(tubeTxt);
     if (wire.awg) lblParts.push("AWG " + wire.awg);
     if (!lblParts.length) return null;
     var pts = WE.geometry.wireRoutePoints(wire);
@@ -277,14 +275,24 @@ WE.render = (function () {
     var lw = text.length * 6.4 + 6, lh = 12;   // 라벨 근사 크기
     function rectAtPoint(p) { return { x: p.x - lw / 2, y: p.y - lh / 2, w: lw, h: lh, cx: p.x, cy: p.y }; }
     var pos;
+    var segDir = null;   // 라벨이 놓인 구간 — 튜브를 배선 방향으로 눕히는 각도 계산용
 
-    if (wire.labelPos) {
-      // 수동으로 드래그해 지정한 위치(경로 위 지점)를 그대로 사용
-      var mi = WE.geometry.nearestSegmentIndex(pts, wire.labelPos);
-      var mSeg = mi >= 0 ? [pts[mi], pts[mi + 1]] : [wire.labelPos, wire.labelPos];
+    if (wire.labelT != null || wire.labelPos) {
+      // 수동 지정 위치: labelT(경로 비율, 신규) 우선 — 재라우팅돼도 배선을 따라옴.
+      // labelPos(절대좌표, 예전 저장본)는 가장 가까운 구간에 투영해 호환 유지.
+      var basePt, mi;
+      if (wire.labelT != null) {
+        basePt = WE.geometry.polylinePointAt(pts, wire.labelT);
+        mi = basePt ? basePt.seg : -1;
+      } else {
+        mi = WE.geometry.nearestSegmentIndex(pts, wire.labelPos);
+        basePt = wire.labelPos;
+      }
+      var mSeg = mi >= 0 ? [pts[mi], pts[mi + 1]] : [basePt, basePt];
+      segDir = mSeg;
       var msx = mSeg[1].x - mSeg[0].x, msy = mSeg[1].y - mSeg[0].y;
       var mSegLen = Math.hypot(msx, msy) || 1;
-      var mt0 = ((wire.labelPos.x - mSeg[0].x) * msx + (wire.labelPos.y - mSeg[0].y) * msy) / (mSegLen * mSegLen);
+      var mt0 = ((basePt.x - mSeg[0].x) * msx + (basePt.y - mSeg[0].y) * msy) / (mSegLen * mSegLen);
       mt0 = Math.max(0, Math.min(1, mt0));
       function ptAtT(t) {
         t = Math.max(0, Math.min(1, t));
@@ -316,6 +324,7 @@ WE.render = (function () {
       }
       // 가로 구간이 어느 정도 길면(라벨 폭 이상) 가로 우선, 아니면 최장 구간
       var seg = (bestH && bhLen >= 40) ? bestH : bestAny;
+      segDir = seg;
       // 단자 라벨·다른 배선 라벨과 겹치면 구간 위에서 자리를 옮겨가며 빈 곳을 찾음
       var obsList = obs || termLabelRects();
       function rectAt(f) {
@@ -344,15 +353,70 @@ WE.render = (function () {
     }
     if (obs) obs.push({ x: pos.x, y: pos.y, w: pos.w, h: pos.h });   // 다음 배선이 이 라벨도 피하도록 누적
 
-    var lbl = el("text", {
-      x: pos.cx, y: pos.cy, "text-anchor": "middle", "dominant-baseline": "central", "class": "wire-awg",
-      "data-wire-label-for": wire.id,
+    // AWG만 있으면 기존 텍스트 방식, 수동 라벨이 있으면 실물 수축튜브(흰 튜브에 번호 인쇄) 모양
+    if (!tubeTxt) {
+      var lbl = el("text", {
+        x: pos.cx, y: pos.cy, "text-anchor": "middle", "dominant-baseline": "central", "class": "wire-awg",
+        "data-wire-label-for": wire.id,
+        "data-wire-label-cx": pos.cx, "data-wire-label-cy": pos.cy,
+        style: "font:600 11px 'Malgun Gothic',sans-serif;fill:" + wire.color +
+          ";paint-order:stroke;stroke:#fff;stroke-width:3px;pointer-events:all;cursor:move;user-select:none"
+      });
+      lbl.textContent = text;
+      return lbl;
+    }
+    // 튜브 각도: 놓인 구간 방향을 따라 눕힘 (글자가 뒤집히지 않게 -90°~90°로 정규화)
+    var ang = 0;
+    if (segDir) {
+      ang = Math.atan2(segDir[1].y - segDir[0].y, segDir[1].x - segDir[0].x) * 180 / Math.PI;
+      if (ang > 90) ang -= 180;
+      if (ang <= -90) ang += 180;
+    }
+    var tw = text.length * 6.4 + 14, th = 16;
+    // 회전 후 화면 차지 영역(AABB) — 선택/호버 강조가 getBBox 대신 사용(g의 getBBox는 회전 미반영)
+    var rad = ang * Math.PI / 180;
+    var aw = Math.abs(tw * Math.cos(rad)) + Math.abs(th * Math.sin(rad));
+    var ah = Math.abs(tw * Math.sin(rad)) + Math.abs(th * Math.cos(rad));
+    var g = el("g", {
+      "class": "wire-tube", "data-wire-label-for": wire.id,
       "data-wire-label-cx": pos.cx, "data-wire-label-cy": pos.cy,
-      style: "font:600 11px 'Malgun Gothic',sans-serif;fill:" + wire.color +
-        ";paint-order:stroke;stroke:#fff;stroke-width:3px;pointer-events:all;cursor:move;user-select:none"
+      "data-aabb-w": aw, "data-aabb-h": ah,
+      transform: "translate(" + pos.cx + "," + pos.cy + ") rotate(" + ang + ")",
+      style: "pointer-events:all;cursor:move;user-select:none"
     });
-    lbl.textContent = text;
-    return lbl;
+    g.appendChild(el("rect", {
+      x: -tw / 2, y: -th / 2, width: tw, height: th, rx: 3,
+      fill: "#fff", stroke: "#98a2ad", "stroke-width": 1
+    }));
+    var t2 = el("text", {
+      x: 0, y: 0, "text-anchor": "middle", "dominant-baseline": "central",
+      style: "font:600 10.5px 'Malgun Gothic',sans-serif;fill:#222;pointer-events:none"
+    });
+    t2.textContent = text;
+    g.appendChild(t2);
+    return g;
+  }
+
+  // 튜브 글자 자동 중앙 정렬: DOM에 붙은 뒤 실제 글자 영역(getBBox)을 재서 세로 중심을 0에 맞춤
+  // (dominant-baseline은 폰트의 em 박스 기준이라 글꼴에 따라 시각적 중심이 어긋남 — 실측으로 보정)
+  function centerTubeText(g) {
+    if (!g || !g.querySelector) return;
+    var tx = g.querySelector("text");
+    if (!tx) return;
+    try {
+      var b = tx.getBBox();
+      tx.setAttribute("y", parseFloat(tx.getAttribute("y") || 0) - (b.y + b.height / 2));
+    } catch (e) { /* 무시 */ }
+  }
+
+  // 배선 라벨의 화면 영역 — 튜브(g, 회전 있음)는 data-aabb 속성 사용, 텍스트는 getBBox
+  function wireLabelBox(n) {
+    if (n.hasAttribute("data-aabb-w")) {
+      var cx = parseFloat(n.getAttribute("data-wire-label-cx")), cy = parseFloat(n.getAttribute("data-wire-label-cy"));
+      var w2 = parseFloat(n.getAttribute("data-aabb-w")), h2 = parseFloat(n.getAttribute("data-aabb-h"));
+      return { x: cx - w2 / 2, y: cy - h2 / 2, width: w2, height: h2 };
+    }
+    try { return n.getBBox(); } catch (e) { return null; }
   }
 
   // 단자 라벨들의 화면 영역(라벨 충돌 회피용, renderWires 1회당 캐시)
@@ -380,7 +444,7 @@ WE.render = (function () {
       var g = renderWire(w);
       if (g) layerWires.appendChild(g);
       var lbl = buildWireLabel(w, labelObs);
-      if (lbl) layerWireLabels.appendChild(lbl);
+      if (lbl) { layerWireLabels.appendChild(lbl); centerTubeText(lbl); }
     });
   }
 
@@ -403,7 +467,7 @@ WE.render = (function () {
     var labelObs = termLabelRects().slice();
     WE.model.project.wires.forEach(function (w) {
       var lbl = buildWireLabel(w, labelObs);
-      if (lbl) layerWireLabels.appendChild(lbl);
+      if (lbl) { layerWireLabels.appendChild(lbl); centerTubeText(lbl); }
     });
   }
 
@@ -467,6 +531,7 @@ WE.render = (function () {
     drawWireLabelGuide();
     drawWireLabelHover();
     drawAlignGuides();
+    drawLabelPreview();
 
     // 다중 선택(2개 이상): 부품 + 주석 + 배선 하이라이트 — 단일 선택보다 먼저 판정
     var multi = WE.model.getMulti(), mAnno = WE.model.getMultiAnno(), mWire = WE.model.getMultiWire();
@@ -569,8 +634,10 @@ WE.render = (function () {
 
   // 배선 선택 시: 하이라이트 + waypoint 핸들
   function renderWireOverlay(wire) {
+    // 라벨(수축튜브)을 직접 클릭한 상태면 라벨만 선택된 것처럼 — 배선 하이라이트·꺾임점 핸들 생략
+    var labelOnly = WE.model.ui.selectedWireLabel === wire.id;
     var d = WE.geometry.wirePath(wire);
-    if (d) {
+    if (d && !labelOnly) {
       layerOverlay.appendChild(el("path", {
         d: d, fill: "none", stroke: "#1e88e5", "stroke-width": wire.width + 4,
         "stroke-opacity": 0.35, "stroke-linecap": "round", "stroke-linejoin": "round",
@@ -578,16 +645,17 @@ WE.render = (function () {
       }));
     }
     // 선택된 배선의 번호 라벨도 눈에 띄게 (호버 강조와 구분되는 선택 강조)
-    var selLbl = layerWireLabels.querySelector('text[data-wire-label-for="' + wire.id + '"]');
+    var selLbl = layerWireLabels.querySelector('[data-wire-label-for="' + wire.id + '"]');
     if (selLbl) {
-      try {
-        var lb = selLbl.getBBox();
+      var lb = wireLabelBox(selLbl);
+      if (lb) {
         layerOverlay.appendChild(el("rect", {
           x: lb.x - 4, y: lb.y - 3, width: lb.width + 8, height: lb.height + 6, rx: 4,
           "class": "wire-label-selected"
         }));
-      } catch (e) { /* getBBox 실패 무시 */ }
+      }
     }
+    if (labelOnly) return;   // 라벨 단독 선택: 꺾임점 핸들도 표시 안 함
     var selWp = WE.model.ui.selectedWp;
     (wire.waypoints || []).forEach(function (p, i) {
       var sel = selWp === i;
@@ -620,6 +688,31 @@ WE.render = (function () {
   function setWireLabelGuide(g) { _wireLabelGuide = g; renderOverlay(); }
   var _hoverWireLabelId = null;
   function setWireLabelHover(id) { _hoverWireLabelId = id; renderOverlay(); }
+  // ---- 라벨 모드 미리보기: 마우스에 수축튜브가 들려 다니고, 배선 근처에선 경로에 착 붙음 ----
+  var _labelPreview = null;   // { x, y, text, angle, snapped }
+  function setLabelPreview(p) { _labelPreview = p; renderOverlay(); }
+  function drawLabelPreview() {
+    if (!_labelPreview) return;
+    var p = _labelPreview;
+    var tw = p.text.length * 6.4 + 14, th = 16;
+    var g = el("g", {
+      transform: "translate(" + p.x + "," + p.y + ") rotate(" + (p.angle || 0) + ")",
+      "pointer-events": "none", opacity: p.snapped ? 0.95 : 0.6
+    });
+    g.appendChild(el("rect", {
+      x: -tw / 2, y: -th / 2, width: tw, height: th, rx: 3,
+      fill: "#fff", stroke: p.snapped ? "#1e88e5" : "#98a2ad", "stroke-width": p.snapped ? 1.5 : 1
+    }));
+    var t = el("text", {
+      x: 0, y: 0, "text-anchor": "middle", "dominant-baseline": "central",
+      style: "font:600 10.5px 'Malgun Gothic',sans-serif;fill:#222"
+    });
+    t.textContent = p.text;
+    g.appendChild(t);
+    layerOverlay.appendChild(g);
+    centerTubeText(g);
+  }
+
   function drawWireLabelGuide() {
     if (!_wireLabelGuide) return;
     var c = WE.model.project.meta.canvas;
@@ -648,15 +741,15 @@ WE.render = (function () {
 
   function drawWireLabelHover() {
     if (!_hoverWireLabelId) return;
-    var lblEl = layerWireLabels.querySelector('text[data-wire-label-for="' + _hoverWireLabelId + '"]');
+    var lblEl = layerWireLabels.querySelector('[data-wire-label-for="' + _hoverWireLabelId + '"]');
     if (!lblEl) return;
-    try {
-      var b = lblEl.getBBox();
+    var b = wireLabelBox(lblEl);
+    if (b) {
       layerOverlay.appendChild(el("rect", {
         x: b.x - 4, y: b.y - 3, width: b.width + 8, height: b.height + 6, rx: 4,
         "class": "wire-label-hover"
       }));
-    } catch (e) { /* getBBox 실패 무시 */ }
+    }
   }
 
   // ---- 넷 하이라이트(연결된 배선·단자 강조) ----
@@ -743,6 +836,7 @@ WE.render = (function () {
     clearMarquee: clearMarquee,
     setNetHighlight: setNetHighlight,
     setWireLabelGuide: setWireLabelGuide,
+    setLabelPreview: setLabelPreview,
     setAlignGuides: setAlignGuides,
     setViewZoom: setViewZoom,
     setWireLabelHover: setWireLabelHover,

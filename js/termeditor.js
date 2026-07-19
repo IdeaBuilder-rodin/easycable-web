@@ -256,7 +256,8 @@ WE.termeditor = (function () {
       } else autoTerms.push(t);
     });
     laid = laid.concat(WE.geometry.layoutTermLabels(autoTerms, baseW, baseH, box, dotOf,
-      { offset: offset, minGapLR: gapLR, minGapTB: gapTB, charW: 7.5 / zoom, minGapV: 14 / zoom }));
+      { offset: offset, minGapLR: gapLR, minGapTB: gapTB, charW: 7.5 / zoom, minGapV: 14 / zoom,
+        sideOf: function (t) { return WE.geometry.termSideOf(cmp.terminals, baseW, baseH, t); } }));
 
     laid.forEach(function (o) {
       var t = o.t, dot = o.dot, color = t.color || WE.model.DEFAULT_TERMINAL_COLOR;

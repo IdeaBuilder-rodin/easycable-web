@@ -270,6 +270,13 @@ body { display: flex; flex-direction: column; }
 #wireProps input[type=color] { height: 30px; padding: 1px; }
 #wireProps .wp-conn { margin-bottom: var(--sp3); }
 #wireProps .chk { display: flex; align-items: center; gap: 6px; font-size: var(--fs-sm); color: var(--tx2); margin: var(--sp2) 0; cursor: pointer; }
+#wireProps input[type=checkbox] { width: auto; margin: 0; }   /* input width:100% 상속 방지 — 체크박스 정렬 */
+.wp-btn-row { display: flex; gap: var(--sp2); margin: 0 0 var(--sp3); }
+.wp-btn-row button {
+  flex: 1; padding: 5px 8px; border: 1px solid var(--bd); border-radius: var(--r);
+  background: var(--bg); font-size: var(--fs-sm); color: var(--tx2); cursor: pointer; font-family: inherit;
+}
+.wp-btn-row button:hover { background: var(--bg2); }
 .wp-row2 { display: flex; gap: var(--sp3); }
 .wp-row2 > label { flex: 1; }
 .wp-section { margin-top: var(--sp4); padding-top: var(--sp3); border-top: 1px solid var(--bd2); }
@@ -290,6 +297,7 @@ body.text-mode #canvas { cursor: text; }
 
 /* 배선 / waypoint */
 body.wire-mode #canvas, body.wire-mode #canvas * { cursor: crosshair !important; }
+body.label-mode #canvas, body.label-mode #canvas * { cursor: copy !important; }   /* 라벨 모드: 배선 클릭으로 부착 */
 .wp-handle { fill: #fff; stroke: #1e88e5; stroke-width: 1.5; }
 .wp-handle.sel { fill: #1e88e5; }
 
@@ -388,6 +396,54 @@ body.wire-mode #canvas, body.wire-mode #canvas * { cursor: crosshair !important;
 .lib-del { color: var(--danger-d); font-size: 15px; margin-right: -5px; margin-left: -8px; border-radius: 0 6px 6px 0; }   /* margin-left로 flex gap 상쇄 → ✎와 틈 없이 밀착 */
 .lib-del:hover { background: #fdecea; }
 .lib-haslink { color: #43a047; font-size: 11px; }
+
+/* 검색 + 새 폴더 버튼 한 줄 */
+.lib-search-row { flex: none; display: flex; gap: 6px; margin: 0 0 6px; }
+.lib-search-row #libSearch { flex: 1; width: auto; margin: 0; min-width: 0; }
+.lib-folder-add {
+  flex: none; padding: 0 8px; border: 1px solid var(--bd); border-radius: var(--r);
+  background: var(--bg); font-size: var(--fs-sm); font-family: inherit; color: var(--tx2); cursor: pointer;
+}
+.lib-folder-add:hover { background: var(--bg3); }
+
+/* 폴더 헤더 */
+.lib-folder {
+  flex: none; display: flex; align-items: center; gap: 5px;
+  padding: 6px 6px; border-radius: 6px; cursor: pointer; user-select: none;
+}
+.lib-folder:hover { background: #eceff1; }
+.lib-f-arrow { flex: none; width: 12px; font-size: 10px; color: #90979f; }
+.lib-f-name {
+  flex: 1; min-width: 0; font-size: 12px; font-weight: 700; color: #454b52;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.lib-folder.virtual .lib-f-name { color: #6b7280; }
+.lib-f-count {
+  flex: none; font-size: 10px; color: #90979f;
+  background: #e8eaee; border-radius: 8px; padding: 1px 6px;
+}
+/* 폴더 조작 버튼: hover 시에만 표시 (부품 카드의 ✎/× 패턴과 동일) */
+.lib-f-btn {
+  flex: none; display: none; border: none; background: none; cursor: pointer;
+  font-size: 12px; color: #90979f; padding: 2px 4px; border-radius: 4px; line-height: 1;
+}
+.lib-folder:hover .lib-f-btn { display: block; }
+.lib-f-btn:hover { background: #dde1e6; color: #454b52; }
+.lib-f-btn:disabled { opacity: .35; cursor: default; }
+.lib-f-btn:disabled:hover { background: none; color: #90979f; }
+.lib-f-del:hover { background: #fdecea; color: var(--danger-d); }
+/* 하위 폴더(2단계) 들여쓰기 */
+.lib-folder.sub { margin-left: 14px; }
+.lib-folder-body { display: flex; flex-direction: column; gap: 6px; }
+.lib-folder-body:not(.virtual) { margin-left: 14px; }
+.lib-folder-body.sub { margin-left: 14px; }   /* 하위 폴더 본문은 헤더(14px)보다 한 단 더 들어가 보임 */
+/* 드래그로 폴더에 넣을 때 하이라이트 */
+.lib-folder.drop-into { outline: 2px dashed var(--primary); outline-offset: -2px; background: var(--primary-bg); }
+.lib-f-empty { font-size: 11px; padding: 2px 4px; margin: 0; }
+/* 검색 결과의 소속 폴더 경로 뱃지 */
+.lib-path { font-size: 10px; color: #90979f; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* 가상 섹션과 폴더 목록 구분선 */
+.lib-divider { flex: none; border-top: 1px solid var(--bd2); margin: 2px 0; }
 
 .muted { color: #999; font-size: 12px; }
 .wire-align-row { display: flex; gap: var(--sp2); margin: var(--sp2) 0; }
@@ -730,8 +786,8 @@ body.term-mode #canvas { cursor: crosshair; }
   box-shadow: 0 10px 40px rgba(0,0,0,.3);
 }
 .modal-box h3 { margin: 0 0 6px; }
-/* 배경 제거 모달: 이미지 작업 공간이라 더 크게, 고정 높이 박스라 배율 계산이 안정적 */
-#bgModal .modal-box { width: min(760px, 94vw); }
+/* 이미지 편집 모달: 이미지 작업 공간이라 더 크게 — 화면의 ~75% 크기로 가운데 표시 */
+#bgModal .modal-box { width: min(900px, 80vw); }
 .bg-zoom-row {
   display: flex; align-items: center; gap: 6px; margin-top: 6px;
   font-size: 12px; color: #666;
@@ -753,7 +809,8 @@ body.term-mode #canvas { cursor: crosshair; }
 #bgZoomLevel { min-width: 38px; text-align: center; font-variant-numeric: tabular-nums; }
 #bgCanvasWrap {
   margin: 10px 0; text-align: center;
-  border: 1px solid #ddd; border-radius: 4px; height: 460px;
+  border: 1px solid #ddd; border-radius: 4px;
+  height: min(460px, 50vh);   /* 세로 짧은 화면에서도 모달 전체가 화면의 ~75%를 넘지 않게 */
   overflow: auto;
 }
 #bgCanvasWrap::after { content: ""; display: inline-block; height: 100%; vertical-align: middle; }

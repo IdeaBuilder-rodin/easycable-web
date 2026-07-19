@@ -25,6 +25,7 @@ WE.interactions = (function () {
     svg.addEventListener("pointerleave", function () { _hoverLabelId = null; WE.render.setWireLabelHover(null); });
     svg.addEventListener("pointermove", onTermTooltipMove);
     svg.addEventListener("pointerleave", hideTermTooltip);
+    svg.addEventListener("pointerleave", function () { WE.render.setLabelPreview(null); });
   }
 
   // 배선 번호 라벨 위에 마우스를 올리면 강조(드래그 가능함을 명확히 표시)
@@ -132,6 +133,7 @@ WE.interactions = (function () {
   function onPointerDown(e) {
     // 드래그/클릭 시작 시 넷 하이라이트 해제
     if (_netKey) { _netKey = null; WE.render.setNetHighlight(null); }
+    WE.model.ui.selectedWireLabel = null;   // 라벨 단독 선택은 라벨을 직접 클릭했을 때만 유지
     // 팬: 스페이스 드래그 또는 휠(가운데) 버튼 드래그
     if (spaceDown || e.button === 1) {
       drag = { mode: "pan", startX: e.clientX, startY: e.clientY, sl: wrap.scrollLeft, st: wrap.scrollTop };
@@ -143,6 +145,7 @@ WE.interactions = (function () {
 
     if (WE.model.ui.mode === "wire") { onWireDown(e); return; }
     if (WE.model.ui.mode === "text") { onTextDown(e); return; }
+    if (WE.model.ui.mode === "label") { onLabelDown(e); return; }
     if (WE.model.ui.mode === "terminal") { onTerminalDown(e); return; }
 
     // 주석 클릭 → (다중 선택에 포함되면 그룹 이동) 아니면 단일 선택+이동
@@ -170,6 +173,7 @@ WE.interactions = (function () {
     var wlblEl = e.target.closest("[data-wire-label-for]");
     if (wlblEl) {
       var wlWireId = wlblEl.getAttribute("data-wire-label-for");
+      WE.model.ui.selectedWireLabel = wlWireId;   // 라벨 자체를 선택 → Delete 시 라벨만 삭제
       WE.model.select("wire", wlWireId);
       WE.render.renderOverlay();
       WE.app.refreshProps();
@@ -536,6 +540,52 @@ WE.interactions = (function () {
     return Math.hypot(p.x - cx, p.y - cy);
   }
 
+  // 라벨 모드 미리보기: 커서 위치의 튜브. 배선 위에선 경로에 투영 + 구간 방향으로 회전
+  function updateLabelPreview(e) {
+    var pt = WE.geometry.clientToCanvas(svg, e.clientX, e.clientY);
+    var text = WE.app.nextWireLabel ? WE.app.nextWireLabel() : "W1";
+    var snap = null, ang = 0;
+    var wireEl = e.target.closest && e.target.closest("[data-wire-id]");
+    if (wireEl) {
+      var w = WE.model.getWire(wireEl.getAttribute("data-wire-id"));
+      if (w) {
+        if ((w.labelText || "").trim()) text = w.labelText.trim();   // 라벨 있는 배선: 이동 미리보기
+        var pts = WE.geometry.wireRoutePoints(w);
+        var on = pts && WE.geometry.nearestPointOnPolyline(pts, pt);
+        if (on) {
+          var si = WE.geometry.nearestSegmentIndex(pts, on);
+          if (si >= 0) {
+            ang = Math.atan2(pts[si + 1].y - pts[si].y, pts[si + 1].x - pts[si].x) * 180 / Math.PI;
+            if (ang > 90) ang -= 180;
+            if (ang <= -90) ang += 180;
+          }
+          snap = on;
+        }
+      }
+    }
+    var at = snap || pt;
+    WE.render.setLabelPreview({ x: at.x, y: at.y, text: text, angle: snap ? ang : 0, snapped: !!snap });
+  }
+
+  // 라벨 모드: 배선을 클릭하면 그 지점에 수축튜브 라벨 부착 (이미 있으면 클릭 지점으로 이동)
+  function onLabelDown(e) {
+    var wireEl = e.target.closest("[data-wire-id]");
+    var tubeEl = e.target.closest("[data-wire-label-for]");
+    var wid = wireEl ? wireEl.getAttribute("data-wire-id") : (tubeEl ? tubeEl.getAttribute("data-wire-label-for") : null);
+    if (!wid) return;
+    var w = WE.model.getWire(wid);
+    if (!w) return;
+    var pt = WE.geometry.clientToCanvas(svg, e.clientX, e.clientY);
+    var pts = WE.geometry.wireRoutePoints(w);
+    w.labelT = pts ? WE.geometry.polylineRatioOf(pts, pt) : 0.5;   // 경로 비율로 저장(이동해도 따라옴)
+    delete w.labelPos;
+    if (!(w.labelText || "").trim()) w.labelText = WE.app.nextWireLabel();
+    WE.render.setLabelPreview(null);   // 부착 직후 미리보기 지움(다음 마우스 이동에 새 번호로 재표시)
+    WE.render.renderWires();
+    WE.history.commit();
+    if (WE.app.trackOnce) WE.app.trackOnce("add_wire_label");
+  }
+
   // 텍스트 모드: 빈 곳 클릭 → 주석 추가 / 기존 주석 클릭 → 선택·이동
   function onTextDown(e) {
     var annoEl = e.target.closest("[data-anno-id]");
@@ -566,6 +616,23 @@ WE.interactions = (function () {
   }
 
   function onDblClick(e) {
+    // 배선 라벨(수축튜브) 더블클릭 → 문구 수정 (비우면 라벨 삭제)
+    var wtube = e.target.closest("[data-wire-label-for]");
+    if (wtube) {
+      var tw = WE.model.getWire(wtube.getAttribute("data-wire-label-for"));
+      if (tw) {
+        var tv = prompt(WE.i18n.t("라벨 문구 (비우면 라벨 삭제)"), tw.labelText || "");
+        if (tv !== null) {
+          tv = tv.trim();
+          if (tv) tw.labelText = tv; else { delete tw.labelText; delete tw.labelPos; delete tw.labelT; }
+          WE.render.renderWires();
+          WE.render.renderOverlay();
+          WE.history.commit();
+          if (WE.app.refreshProps) WE.app.refreshProps();
+        }
+      }
+      return;
+    }
     // 단자 라벨 더블클릭 → 자동 위치로 초기화
     var lblEl = e.target.closest("[data-label-tid]");
     if (lblEl) {
@@ -600,6 +667,12 @@ WE.interactions = (function () {
     // 배선 모드: 근접 단자 스냅 하이라이트 + 러버밴드
     if (WE.model.ui.mode === "wire") {
       updateWirePreview(WE.geometry.clientToCanvas(svg, e.clientX, e.clientY));
+      return;
+    }
+
+    // 라벨 모드: 마우스에 수축튜브 미리보기가 들려 다니고, 배선 위에선 경로에 착 붙음
+    if (WE.model.ui.mode === "label") {
+      updateLabelPreview(e);
       return;
     }
 
@@ -663,7 +736,8 @@ WE.interactions = (function () {
           }
         }
       }
-      wl.labelPos = { x: finalPt.x, y: finalPt.y };
+      wl.labelT = WE.geometry.polylineRatioOf(wlPts, finalPt);   // 경로 비율로 저장
+      delete wl.labelPos;
       WE.render.setWireLabelGuide(guide);
       WE.render.renderWires();
       WE.render.renderOverlay();
@@ -984,6 +1058,14 @@ WE.interactions = (function () {
     // 배선 선택 시 Delete
     var selWire = WE.model.getSelectedWire();
     if (selWire && (e.key === "Delete" || e.key === "Backspace")) {
+      // 라벨을 직접 클릭해 선택한 상태면 라벨만 삭제 (배선은 유지)
+      if (WE.model.ui.selectedWireLabel === selWire.id && (selWire.labelText || "").trim()) {
+        delete selWire.labelText; delete selWire.labelPos; delete selWire.labelT;
+        WE.model.ui.selectedWireLabel = null;
+        WE.render.renderWires(); WE.render.renderOverlay(); WE.app.refreshProps();
+        WE.history.commit();
+        e.preventDefault(); return;
+      }
       var wp = WE.model.ui.selectedWp;
       if (wp != null && selWire.waypoints && selWire.waypoints[wp] != null) {
         // 꺾임점만 제거 → 남으면 직각 재정리, 다 지우면 자동 최적경로로
