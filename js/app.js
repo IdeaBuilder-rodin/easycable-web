@@ -25,6 +25,11 @@ WE.app = (function () {
     WE.pdf.init();
     // 저장된 단축키를 bindSettings()(단축키 입력칸을 채움)보다 먼저 불러와야
     // 설정창에 기본값이 아니라 실제 저장된 키가 표시됨
+    // 저장공간 부족 시 브라우저가 IndexedDB(라이브러리·자동저장)를 임의 삭제하지 못하도록 보존 요청
+    // (사용자에게 아무것도 안 보이고, 거부돼도 동작엔 영향 없음)
+    try {
+      if (navigator.storage && navigator.storage.persist) navigator.storage.persist();
+    } catch (e) { /* 무시 */ }
     loadShortcuts();
     bindToolbar();
     bindModes();
@@ -38,6 +43,7 @@ WE.app = (function () {
     bindFileButtons();
     bindLibrary();
     bindLibEdit();
+    bindBackupNotice();
     bindDatasheetViewer();
     bindResizers();
     bindZoom();
@@ -88,6 +94,31 @@ WE.app = (function () {
     document.getElementById("btnRedo").disabled = !WE.history.canRedo();
   }
 
+  // ---- 첫 부품 등록 후 저장 위치 안내 모달 ----
+  // 등록 직후엔 부품 정보 편집 모달이 자동으로 열리므로, 그 모달이 닫힐 때 띄움 (겹침 방지)
+  var _backupNoticePending = false;
+  function backupNoticeDone() {
+    try { return !!localStorage.getItem("we_backupNoticeDone"); } catch (e) { return true; }
+  }
+  function queueBackupNotice() { if (!backupNoticeDone()) _backupNoticePending = true; }
+  function maybeShowBackupNotice() {
+    if (!_backupNoticePending) return;
+    _backupNoticePending = false;
+    if (backupNoticeDone()) return;
+    document.getElementById("backupNoticeModal").hidden = false;
+  }
+  function bindBackupNotice() {
+    function dismiss() {
+      try { localStorage.setItem("we_backupNoticeDone", "1"); } catch (e) { /* 무시 */ }
+      document.getElementById("backupNoticeModal").hidden = true;
+    }
+    document.getElementById("backupNoticeLater").addEventListener("click", dismiss);
+    document.getElementById("backupNoticeNow").addEventListener("click", function () {
+      dismiss();
+      document.getElementById("btnLibExport").click();   // 그 자리에서 라이브러리 파일 백업 실행
+    });
+  }
+
   // 라이브러리 저장 (이름 중복 시 덮어쓰기/새로 추가 확인). 저장된 부품 반환
   function saveToLibrary(name, buildData) {
     var existing = WE.library.findByName(name);
@@ -106,6 +137,7 @@ WE.app = (function () {
       setHint(WE.i18n.t("라이브러리에 저장: ") + name);
     }
     renderLibrary();
+    queueBackupNotice();
     return part;
   }
 
@@ -226,6 +258,7 @@ WE.app = (function () {
 
     document.getElementById("libEditCancel").addEventListener("click", function () {
       document.getElementById("libEditModal").hidden = true; _editLibId = null;
+      maybeShowBackupNotice();
     });
     document.getElementById("libEditSave").addEventListener("click", function () {
       if (_editLibId) {
@@ -252,6 +285,7 @@ WE.app = (function () {
         if (_view === "bom") renderBOMView();   // BOM 열려 있으면 갱신
       }
       document.getElementById("libEditModal").hidden = true; _editLibId = null;
+      maybeShowBackupNotice();
     });
   }
 
@@ -562,9 +596,28 @@ WE.app = (function () {
   // - 즐겨찾기·최근사용 가상 섹션 본문은 자동 정렬이라 드롭 대상에서 제외
   function bindLibraryDnD() {
     var list = document.getElementById("libList");
-    var dragId = null;
+    var dragId = null;        // 드래그 중인 부품 id
+    var dragFolderId = null;  // 드래그 중인 폴더 id
     var indicator = document.createElement("div");
     indicator.className = "lib-drop-line";
+
+    // 가장자리 자동 스크롤: 드래그 중 목록 상/하단 40px 안이면 스크롤 (가까울수록 빠르게)
+    // 드래그 중엔 휠 이벤트가 안 들어오므로 rAF 루프로 대신함
+    var _autoDir = 0, _autoSpeed = 0, _autoRaf = null;
+    function autoScrollStep() {
+      if (_autoDir) {
+        list.scrollTop += _autoDir * _autoSpeed;
+        _autoRaf = requestAnimationFrame(autoScrollStep);
+      } else _autoRaf = null;
+    }
+    function updateAutoScroll(y) {
+      var r = list.getBoundingClientRect(), Z = 40;
+      if (y < r.top + Z) { _autoDir = -1; _autoSpeed = Math.min(16, Math.ceil((r.top + Z - y) / 3)); }
+      else if (y > r.bottom - Z) { _autoDir = 1; _autoSpeed = Math.min(16, Math.ceil((y - (r.bottom - Z)) / 3)); }
+      else _autoDir = 0;
+      if (_autoDir && !_autoRaf) autoScrollStep();
+    }
+    function stopAutoScroll() { _autoDir = 0; }
 
     // container 직속 부품 카드 중, y 아래에 오는 첫 카드
     function afterElement(container, y) {
@@ -603,15 +656,52 @@ WE.app = (function () {
       return null;
     }
 
+    // 드래그 중인 폴더와 같은 계층(같은 부모)의 폴더 헤더 중, y 아래에 오는 첫 헤더
+    function afterSiblingFolder(y) {
+      var me = WE.library.getFolder(dragFolderId); if (!me) return null;
+      var headers = [].filter.call(list.querySelectorAll(".lib-folder:not(.dragging)"), function (h) {
+        var f = h.dataset.fid.indexOf("__") === 0 ? null : WE.library.getFolder(h.dataset.fid);
+        return f && (f.parentId || null) === (me.parentId || null);
+      });
+      var closest = { offset: -Infinity, el: null };
+      headers.forEach(function (h) {
+        var box = h.getBoundingClientRect();
+        var offset = y - box.top - box.height / 2;
+        if (offset < 0 && offset > closest.offset) closest = { offset: offset, el: h };
+      });
+      return closest.el;
+    }
+
     list.addEventListener("dragstart", function (e) {
-      var item = e.target.closest(".lib-item"); if (!item) return;
-      dragId = item.dataset.id;
-      e.dataTransfer.effectAllowed = "move";
-      try { e.dataTransfer.setData("text/plain", dragId); } catch (_) {}
-      setTimeout(function () { item.classList.add("dragging"); }, 0);
+      var item = e.target.closest(".lib-item");
+      if (item) {
+        dragId = item.dataset.id;
+        e.dataTransfer.effectAllowed = "move";
+        try { e.dataTransfer.setData("text/plain", dragId); } catch (_) {}
+        setTimeout(function () { item.classList.add("dragging"); }, 0);
+        return;
+      }
+      var fh = e.target.closest(".lib-folder");
+      if (fh && fh.dataset.fid.indexOf("__") !== 0) {
+        dragFolderId = fh.dataset.fid;
+        e.dataTransfer.effectAllowed = "move";
+        try { e.dataTransfer.setData("text/plain", "folder:" + dragFolderId); } catch (_) {}
+        setTimeout(function () { fh.classList.add("dragging"); }, 0);
+      }
     });
     list.addEventListener("dragover", function (e) {
+      // 폴더 드래그: 같은 계층 폴더 사이 순서 변경
+      if (dragFolderId != null) {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = "move";
+        updateAutoScroll(e.clientY);
+        var afterF = afterSiblingFolder(e.clientY);
+        if (afterF) afterF.parentNode.insertBefore(indicator, afterF);
+        else { clearInd(); }   // 맨 끝 이동은 드롭 시 처리 (아래 빈 곳)
+        return;
+      }
       if (dragId == null) return;
+      updateAutoScroll(e.clientY);
       var t = dropTarget(e);
       if (!t) { clearInd(); clearFolderHl(); return; }
       e.preventDefault();
@@ -627,6 +717,15 @@ WE.app = (function () {
       }
     });
     list.addEventListener("drop", function (e) {
+      stopAutoScroll();
+      if (dragFolderId != null) {
+        e.preventDefault();
+        var afterF = afterSiblingFolder(e.clientY);
+        WE.library.reorderFolderBefore(dragFolderId, afterF ? afterF.dataset.fid : null);
+        clearInd(); dragFolderId = null;
+        renderLibrary();
+        return;
+      }
       if (dragId == null) return;
       var t = dropTarget(e);
       clearInd(); clearFolderHl();
@@ -651,7 +750,8 @@ WE.app = (function () {
       renderLibrary();
     });
     list.addEventListener("dragend", function () {
-      clearInd(); clearFolderHl(); dragId = null;
+      stopAutoScroll();
+      clearInd(); clearFolderHl(); dragId = null; dragFolderId = null;
       var d = list.querySelector(".dragging"); if (d) d.classList.remove("dragging");
     });
   }
@@ -760,6 +860,10 @@ WE.app = (function () {
     var h = document.createElement("div");
     h.className = "lib-folder" + (depth ? " sub" : "") + (isVirtual ? " virtual" : "");
     h.dataset.fid = fid;
+    if (!isVirtual) {
+      h.setAttribute("draggable", "true");
+      h.title = WE.i18n.t("클릭: 접기/펼치기 · 드래그: 순서 변경");
+    }
     var arrow = document.createElement("span"); arrow.className = "lib-f-arrow"; arrow.textContent = collapsed ? "▸" : "▾";
     var nm = document.createElement("span"); nm.className = "lib-f-name"; nm.textContent = icon + " " + name;
     var cnt = document.createElement("span"); cnt.className = "lib-f-count"; cnt.textContent = count;
@@ -788,8 +892,10 @@ WE.app = (function () {
     var body = document.createElement("div");
     body.className = "lib-folder-body" + (depth ? " sub" : "");
     body.dataset.fid = folder.id;
-    subs.forEach(function (s) { renderFolder(body, s, depth + 1, byFolder); });
+    // 직속 부품을 먼저, 하위 폴더는 그 뒤에 — 부품이 항상 자기 폴더 헤더 바로 밑에 붙어
+    // "어느 폴더 소속인지" 경계가 헷갈리지 않게 함
     own.forEach(function (p) { body.appendChild(buildPartItem(p, "", "")); });
+    subs.forEach(function (s) { renderFolder(body, s, depth + 1, byFolder); });
     if (!subs.length && !own.length) {
       var e = document.createElement("p"); e.className = "muted lib-f-empty";
       e.textContent = WE.i18n.t("비어 있음 — 부품을 끌어다 놓으세요");

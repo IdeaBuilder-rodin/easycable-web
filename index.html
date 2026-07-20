@@ -377,6 +377,18 @@
     <button data-act="delete" class="danger">삭제</button>
   </div>
 
+  <!-- 첫 부품 등록 후: 저장 위치 안내 + 파일 백업 유도 모달 -->
+  <div id="backupNoticeModal" class="modal" hidden>
+    <div class="modal-box" style="width:min(400px,92vw)">
+      <h3>⚠️ 부품은 이 브라우저에만 저장됩니다</h3>
+      <p style="line-height:1.6">방문기록을 지우거나 다른 PC에서 열면 사라져요.<br />파일로 백업해 두면 안전합니다.</p>
+      <div class="modal-actions">
+        <button id="backupNoticeLater" type="button">나중에 하기</button>
+        <button id="backupNoticeNow" type="button" class="primary">⤓ 지금 파일로 백업</button>
+      </div>
+    </div>
+  </div>
+
   <!-- 라이브러리 부품 정보 편집 모달 -->
   <div id="libEditModal" class="modal" hidden>
     <div class="modal-box" style="width:min(460px,92vw)">

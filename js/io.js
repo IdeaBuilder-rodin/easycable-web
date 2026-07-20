@@ -9,11 +9,32 @@ WE.io = (function () {
   var _fileHandle = null;   // 현재 연결된 파일(FileSystemFileHandle) — 있으면 Ctrl+S가 여기로 조용히 저장됨
   var FILE_TYPES = [{ description: WE.i18n.t("이지케이블 프로젝트"), accept: { "application/json": [".ezc", ".json"] } }];
 
+  // ---- 미저장 변경 감지 ----
+  // 마지막으로 파일에 저장/공유/열기한 시점의 프로젝트 스냅샷.
+  // 자동저장(IndexedDB)과 별개로 "파일로 안전하게 보관됐는가" 기준 —
+  // 브라우저 데이터 삭제 등으로 자동저장이 사라질 수 있어, 파일 미보관 변경이 있으면 닫기 전에 확인창을 띄움
+  var _cleanJson = "";
+  function markClean() { _cleanJson = JSON.stringify(WE.model.project); }
+  function isDirty() {
+    var p = WE.model.project;
+    var empty = !(p.components && p.components.length) &&
+                !(p.wires && p.wires.length) &&
+                !(p.annotations && p.annotations.length);
+    if (empty) return false;   // 빈 도면은 잃을 게 없음 → 조용히 닫힘
+    return JSON.stringify(p) !== _cleanJson;
+  }
+
   function init() {
     document.getElementById("btnSave").addEventListener("click", save);
     document.getElementById("btnShare").addEventListener("click", share);
     document.getElementById("btnOpen").addEventListener("click", openFile);
     document.getElementById("fileOpen").addEventListener("change", onOpenFileInput);
+    // 파일로 저장 안 한 변경이 있을 때만 닫기 확인 (문구는 브라우저 고정 문구가 뜸 — 커스텀 불가)
+    window.addEventListener("beforeunload", function (e) {
+      if (!isDirty()) return;
+      e.preventDefault();
+      e.returnValue = "";   // 구형 Chrome 호환
+    });
   }
 
   function safeName(s) {
@@ -47,10 +68,11 @@ WE.io = (function () {
     var data = JSON.stringify(WE.model.project);
     var fn = safeName(WE.model.project.meta.name) + ".ezc";
 
-    if (!_supportsFS) { download(data, fn); WE.app.setHint(WE.i18n.t("저장됨: ") + fn); return; }
+    if (!_supportsFS) { download(data, fn); markClean(); WE.app.setHint(WE.i18n.t("저장됨: ") + fn); return; }
 
     if (_fileHandle) {
       writeToHandle(_fileHandle, data).then(function () {
+        markClean();
         WE.app.setHint(WE.i18n.t("저장됨: ") + _fileHandle.name);
       }).catch(function () {
         _fileHandle = null;   // 파일이 삭제/이동된 경우 등 → 새로 지정하도록 폴백
@@ -66,10 +88,12 @@ WE.io = (function () {
       _fileHandle = handle;
       return writeToHandle(handle, data);
     }).then(function () {
+      markClean();
       WE.app.setHint(WE.i18n.t("저장됨: ") + _fileHandle.name);
     }).catch(function (err) {
       if (err && err.name === "AbortError") return;   // 사용자가 저장창 취소
       download(data, fn);                              // 그 외 실패 시 구식 다운로드로 폴백
+      markClean();
       WE.app.setHint(WE.i18n.t("저장됨: ") + fn);
     });
   }
@@ -89,6 +113,7 @@ WE.io = (function () {
     var bundle = { format: "easycable-share", version: 1, project: proj, libraryParts: usedParts };
     var fn = safeName(proj.meta.name) + WE.i18n.t("_공유.ezc");
     download(JSON.stringify(bundle), fn);
+    markClean();   // 공유 파일에도 도면 전체가 담기므로 "파일로 보관됨"으로 간주
     WE.app.setHint(WE.i18n.t("공유 파일 저장: ") + fn + WE.i18n.t(" (부품 ") + usedParts.length + WE.i18n.t("개 포함)"));
   }
 
@@ -140,6 +165,7 @@ WE.io = (function () {
       WE.app.reloadUI();
       if (WE.history) WE.history.reset();
       if (WE.store) WE.store.saveNow(); // 연 내용을 즉시 임시저장에 반영
+      markClean();   // 방금 연 파일 내용 그대로 = 미저장 변경 없음
       WE.app.setHint(WE.i18n.t("열기 완료: ") + displayName + (added ? (WE.i18n.t(" · 새 부품 ") + added + WE.i18n.t("개를 라이브러리에 추가")) : ""));
     } catch (err) {
       alert(WE.i18n.t("파일을 읽을 수 없습니다: ") + err.message);

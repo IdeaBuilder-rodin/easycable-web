@@ -433,12 +433,16 @@ body.label-mode #canvas, body.label-mode #canvas * { cursor: copy !important; } 
 .lib-f-btn:disabled:hover { background: none; color: #90979f; }
 .lib-f-del:hover { background: #fdecea; color: var(--danger-d); }
 /* 하위 폴더(2단계) 들여쓰기 */
-.lib-folder.sub { margin-left: 14px; }
+.lib-folder.sub { margin-left: 10px; }
 .lib-folder-body { display: flex; flex-direction: column; gap: 6px; }
-.lib-folder-body:not(.virtual) { margin-left: 14px; }
-.lib-folder-body.sub { margin-left: 14px; }   /* 하위 폴더 본문은 헤더(14px)보다 한 단 더 들어가 보임 */
+/* 폴더 본문: 세로 가이드선으로 소속 범위 표시 (하위 폴더는 선이 한 겹 더 생겨 중첩이 보임) */
+.lib-folder-body:not(.virtual) {
+  margin-left: 10px; padding-left: 7px;
+  border-left: 2px solid #d9dee4;
+}
 /* 드래그로 폴더에 넣을 때 하이라이트 */
 .lib-folder.drop-into { outline: 2px dashed var(--primary); outline-offset: -2px; background: var(--primary-bg); }
+.lib-folder.dragging { opacity: 0.4; }
 .lib-f-empty { font-size: 11px; padding: 2px 4px; margin: 0; }
 /* 검색 결과의 소속 폴더 경로 뱃지 */
 .lib-path { font-size: 10px; color: #90979f; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
