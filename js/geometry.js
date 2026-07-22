@@ -305,6 +305,56 @@ WE.geometry = (function () {
     return out;
   }
 
+  // 꺾임점 하나를 '흡수'해서 지운다.
+  // 그냥 splice하면 남은 두 이웃이 대각선이 되어 orthogonalize가 코너를 다시 끼워 넣는다
+  // (= 지운 점이 되살아나 삭제가 안 먹는 것처럼 보임). 대신 이웃 한쪽을 지워질 세그먼트의
+  // '변하는 축'으로 끌어당기면 그 세그먼트가 길이 0이 되고 양옆 구간이 하나로 합쳐진다.
+  //   예) A(1200,352)-w1(1090,352)-w2(1090,420)-w3(78,420)-B 에서 w2 삭제
+  //       → w3.y를 w1.y(352)로 스냅 → A-(78,352)-B (꺾임 3→1)
+  // 단자 좌표는 절대 움직이지 않는다(탈출 축 보존). 꺾임이 실제로 줄어드는 후보만 채택하고,
+  // 없으면 기존 동작(단순 제거)으로 폴백한다.
+  // 반환: 새 waypoints 배열 (실패 시 null)
+  function dissolveWaypoint(wire, idx) {
+    var A = endpointFull(wire.from), B = endpointFull(wire.to);
+    if (!A || !B) return null;
+    var wps = (wire.waypoints || []).map(function (p) { return { x: p.x, y: p.y }; });
+    if (idx < 0 || idx >= wps.length) return null;
+
+    var full = [A.pos].concat(wps, [B.pos]);
+    var k = idx + 1, last = full.length - 1;      // k = full 상에서 지울 점의 인덱스
+    var prev = full[k - 1], cur = full[k], next = full[k + 1];
+
+    function clone(list) { return list.map(function (p) { return { x: p.x, y: p.y }; }); }
+    function bake(list) { return simplify(orthogonalize([A.pos].concat(list, [B.pos]))); }
+
+    var plain = clone(wps); plain.splice(idx, 1);
+    var cands = [];
+
+    // 후보 A: prev-cur 구간을 없애고 next를 prev 쪽으로 스냅 (next가 waypoint일 때만)
+    if (k + 1 < last) {
+      var a = clone(plain);
+      if (Math.abs(prev.y - cur.y) <= Math.abs(prev.x - cur.x)) a[idx].x = prev.x;   // 가로 구간 → x 정렬
+      else a[idx].y = prev.y;                                                        // 세로 구간 → y 정렬
+      cands.push({ wps: a, keepsTerm: k - 1 === 0 });
+    }
+    // 후보 B: cur-next 구간을 없애고 prev를 next 쪽으로 스냅 (prev가 waypoint일 때만)
+    if (k - 1 > 0) {
+      var b = clone(plain);
+      if (Math.abs(next.y - cur.y) <= Math.abs(next.x - cur.x)) b[idx - 1].x = next.x;
+      else b[idx - 1].y = next.y;
+      cands.push({ wps: b, keepsTerm: k + 1 === last });
+    }
+    // 단자 쪽 축을 지키는 후보를 먼저 본다(동점이면 이쪽 채택)
+    cands.sort(function (x, y) { return (y.keepsTerm ? 1 : 0) - (x.keepsTerm ? 1 : 0); });
+
+    var best = bake(plain);
+    cands.forEach(function (c) {
+      var p = bake(c.wps);
+      if (p.length < best.length) best = p;      // 꺾임이 실제로 줄 때만 채택
+    });
+    return clone(best.slice(1, best.length - 1));
+  }
+
   // 한 배선의 원시 경로 (너징 전)
   function wireRouteRaw(wire) {
     var A = endpointFull(wire.from), B = endpointFull(wire.to);
@@ -630,6 +680,7 @@ WE.geometry = (function () {
     polylinePointAt: polylinePointAt,
     polylineRatioOf: polylineRatioOf,
     simplify: simplify,
+    dissolveWaypoint: dissolveWaypoint,
     avoidOverlapCoord: avoidOverlapCoord,
     netFrom: netFrom,
     wirePath: wirePath,

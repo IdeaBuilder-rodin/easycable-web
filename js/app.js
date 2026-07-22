@@ -2776,8 +2776,9 @@ WE.app = (function () {
       var b = e.target.closest("button[data-walign]"); if (!b) return;
       var m = b.dataset.walign;
       if (m === "align") alignSelectedWires();
-      else if (m === "distH") distributeSelectedWires(true);    // 가로 균등(세로선들의 x 간격)
-      else if (m === "distV") distributeSelectedWires(false);   // 세로 균등(가로선들의 y 간격)
+      // 이름은 '무엇이 움직이는가' 기준 — 세로선을 고르면 세로선 균등을 누른다
+      else if (m === "distVert") distributeSelectedWires(true);    // 세로선 균등(세로선들의 x를 균등 간격으로)
+      else if (m === "distHoriz") distributeSelectedWires(false);  // 가로선 균등(가로선들의 y를 균등 간격으로)
     });
   }
 
@@ -2882,11 +2883,20 @@ WE.app = (function () {
     var avg = others.reduce(function (s, o) { return s + o.coord; }, 0) / others.length;
     var dir = (avg - C) < 0 ? -1 : 1;
     others.sort(function (a, b) { return dir * (a.coord - b.coord); });   // 앵커에 가까운 것부터
-    // 앵커에 맞추되(C), 겹치면 자동으로 옆 레인(gap)으로 회피. 순차 배치로 서로도 안 겹침.
-    others.forEach(function (o) {
-      var target = WE.geometry.avoidOverlapCoord(o.id, vertical, C, o.lo, o.hi, gap, dir);
-      setWireSeg(o.w, o.pts, o.idx, vertical, target);
-    });
+    if (gap > 0) {
+      // 간격 지정 → 앵커에서 gap씩 벌려 한쪽으로 나란히 평행 배치.
+      // 자동 회피를 태우지 않는다(회피는 gap의 정수배로 튀고 앵커 양옆으로 갈라져서
+      // 입력한 픽셀값과 결과가 어긋남). 넣은 값이 그대로 배선 간 간격이 된다.
+      others.forEach(function (o, i) {
+        setWireSeg(o.w, o.pts, o.idx, vertical, C + dir * gap * (i + 1));
+      });
+    } else {
+      // 간격 0 → 앵커와 같은 선에 맞추되, 겹치면 자동으로 옆 레인으로 회피(순차 배치라 서로도 안 겹침)
+      others.forEach(function (o) {
+        var target = WE.geometry.avoidOverlapCoord(o.id, vertical, C, o.lo, o.hi, gap, dir);
+        setWireSeg(o.w, o.pts, o.idx, vertical, target);
+      });
+    }
     WE.render.renderAll(); WE.render.renderOverlay(); refreshProps();
     setHint((vertical ? WE.i18n.t("세로선") : WE.i18n.t("가로선")) + WE.i18n.t(" 정렬: ") + others.length + WE.i18n.t("개") + (gap > 0 ? (WE.i18n.t(" · 간격 ") + gap + "px") : ""));
   }
@@ -2902,14 +2912,14 @@ WE.app = (function () {
       if (segIsVertical(pts, idx) !== alongX) { var s = wireMainSeg(pts, alongX); if (!s) return; idx = s.i; }
       items.push({ w: w, pts: pts, idx: idx, coord: alongX ? pts[idx].x : pts[idx].y });
     });
-    if (items.length < 3) { setHint(WE.i18n.t("균등 배치할 ") + (alongX ? WE.i18n.t("세로") : WE.i18n.t("가로")) + WE.i18n.t(" 구간이 부족합니다.")); return; }
+    if (items.length < 3) { setHint(WE.i18n.t("균등 배치할 ") + (alongX ? WE.i18n.t("세로선") : WE.i18n.t("가로선")) + WE.i18n.t(" 구간이 부족합니다.")); return; }
     items.sort(function (a, b) { return a.coord - b.coord; });
     var first = items[0].coord, step = (items[items.length - 1].coord - first) / (items.length - 1);
     items.forEach(function (it, i) {
       setWireSeg(it.w, it.pts, it.idx, alongX, first + step * i);
     });
     WE.render.renderAll(); WE.render.renderOverlay(); refreshProps();
-    setHint((alongX ? WE.i18n.t("가로") : WE.i18n.t("세로")) + WE.i18n.t(" 균등 배치: ") + items.length + WE.i18n.t("개"));
+    setHint((alongX ? WE.i18n.t("세로선") : WE.i18n.t("가로선")) + WE.i18n.t(" 균등 배치: ") + items.length + WE.i18n.t("개"));
   }
 
   // ---- 배선 리스트(와이어 리스트) ----

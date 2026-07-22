@@ -312,8 +312,12 @@
               <label class="wgap">간격 <input id="wireGap" type="number" value="0" step="1" /> px</label>
             </div>
             <div class="wire-align-row">
-              <button data-walign="distH" title="세로 구간들을 가로로 균등 간격">▦ 가로 균등</button>
-              <button data-walign="distV" title="가로 구간들을 세로로 균등 간격">▤ 세로 균등</button>
+              <button data-walign="distVert" title="선택한 세로선들을 좌우로 균등하게 벌림">
+                <svg viewBox="0 0 24 24"><rect x="3" y="4" width="2.5" height="16"/><rect x="10.75" y="4" width="2.5" height="16"/><rect x="18.5" y="4" width="2.5" height="16"/></svg><span>세로선 균등</span>
+              </button>
+              <button data-walign="distHoriz" title="선택한 가로선들을 위아래로 균등하게 벌림">
+                <svg viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="2.5"/><rect x="4" y="10.75" width="16" height="2.5"/><rect x="4" y="18.5" width="16" height="2.5"/></svg><span>가로선 균등</span>
+              </button>
             </div>
           </div>
 
@@ -560,10 +564,18 @@
           <p class="muted">이미지 클릭=단자 추가 · 드래그=이동 · <b>Ctrl+클릭=다중선택</b>(여러 개 함께 드래그) · Delete=삭제 · 휠=확대</p>
           <div id="teAlign" class="te-align" hidden>
             <div class="te-align-row">
-              <button data-talign="x" title="같은 X로(수직 한 줄)">↕ 세로정렬</button>
-              <button data-talign="y" title="같은 Y로(수평 한 줄)">↔ 가로정렬</button>
-              <button data-talign="distY" title="세로 균등 간격(3개↑)">▤ 세로균등</button>
-              <button data-talign="distX" title="가로 균등 간격(3개↑)">▦ 가로균등</button>
+              <button data-talign="x" title="같은 X로(수직 한 줄)">
+                <svg viewBox="0 0 24 24"><line x1="12" y1="3" x2="12" y2="21"/><circle cx="12" cy="7" r="2.6"/><circle cx="12" cy="17" r="2.6"/></svg><span>세로정렬</span>
+              </button>
+              <button data-talign="y" title="같은 Y로(수평 한 줄)">
+                <svg viewBox="0 0 24 24"><line x1="3" y1="12" x2="21" y2="12"/><circle cx="7" cy="12" r="2.6"/><circle cx="17" cy="12" r="2.6"/></svg><span>가로정렬</span>
+              </button>
+              <button data-talign="distX" title="가로 균등 간격(3개↑)">
+                <svg viewBox="0 0 24 24"><rect x="3" y="4" width="2.5" height="16"/><rect x="10.75" y="4" width="2.5" height="16"/><rect x="18.5" y="4" width="2.5" height="16"/></svg><span>가로 균등</span>
+              </button>
+              <button data-talign="distY" title="세로 균등 간격(3개↑)">
+                <svg viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="2.5"/><rect x="4" y="10.75" width="16" height="2.5"/><rect x="4" y="18.5" width="16" height="2.5"/></svg><span>세로 균등</span>
+              </button>
             </div>
           </div>
           <div id="teLabelSide" class="te-align" hidden>

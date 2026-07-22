@@ -242,7 +242,10 @@ WE.interactions = (function () {
         WE.app.refreshProps();
         return;
       }
-      WE.model.select("wire", wid);
+      // 이미 다중 선택된 배선을 잡았으면 선택을 유지한다(select()는 multiWire를 1개로 리셋함)
+      // → 선택한 여러 세그먼트를 간격 유지한 채 함께 평행이동
+      var mw = WE.model.getMultiWire() || [];
+      if (!(mw.length > 1 && mw.indexOf(wid) >= 0)) WE.model.select("wire", wid);
       WE.model.setWireClickPt(wid, clickPt);
       WE.render.renderOverlay();
       WE.app.refreshProps();
@@ -503,20 +506,45 @@ WE.interactions = (function () {
     else { wpPt.x = origPt.x + dx; wpPt.y = origPt.y; }
   }
 
-  // 드래그 시작 시: 자동 경로를 waypoint로 고정하고 잡은 세그먼트를 계산해 wseg로 전환
-  function beginWireSeg(wid, startClientX, startClientY) {
-    var w = WE.model.getWire(wid); if (!w) { drag = null; return; }
+  function segIsHoriz(pts, i) {
+    return Math.abs(pts[i].y - pts[i + 1].y) <= Math.abs(pts[i].x - pts[i + 1].x);
+  }
+  // 원하는 방향의 가장 긴 구간 (클릭 지점이 없는 배선의 대체 기준)
+  function longestSegIndex(pts, wantHoriz) {
+    var best = -1, bestLen = -1;
+    for (var i = 0; i < pts.length - 1; i++) {
+      if (wantHoriz != null && segIsHoriz(pts, i) !== wantHoriz) continue;
+      var len = Math.abs(pts[i].x - pts[i + 1].x) + Math.abs(pts[i].y - pts[i + 1].y);
+      if (len > bestLen) { bestLen = len; best = i; }
+    }
+    return best;
+  }
+  // 한 배선에서 이동 대상 구간을 확정하고 waypoint 인덱스 쌍으로 돌려준다.
+  // pt = 그 배선에서 클릭한 지점(없으면 같은 방향 최장 구간). wantHoriz = 맞춰야 할 방향(null이면 자유)
+  // 클릭 지점 우선, 없거나 방향이 안 맞으면 원하는 방향의 최장 구간
+  function pickSegIndex(pts, pt, wantHoriz) {
+    var seg = pt ? segIndexAt(pts, pt) : -1;
+    if (seg >= 0 && wantHoriz != null && segIsHoriz(pts, seg) !== wantHoriz) seg = -1;
+    return seg < 0 ? longestSegIndex(pts, wantHoriz) : seg;
+  }
+  function prepWireSeg(w, pt, wantHoriz) {
     var pts = WE.geometry.wireRoutePoints(w);
-    if (!pts || pts.length < 2) { drag = null; return; }
+    if (!pts || pts.length < 2) return null;
+    // 대상 구간이 있는지 먼저 판정한다. 여기서 걸러질 배선은 건드리지 않는다 —
+    // waypoints를 채우는 순간 자동배선이 수동배선으로 바뀌어(너징·자동 최적경로 상실)
+    // 실제로 움직이지도 않을 배선이 망가진다.
+    if (pickSegIndex(pts, pt, wantHoriz) < 0) return null;
+
     if (!w.waypoints || !w.waypoints.length) {
       w.waypoints = pts.slice(1, -1).map(function (p) { return { x: p.x, y: p.y }; });
     }
     cleanupWire(w);   // 잡는 순간 대각선을 직각으로 정리
     var full = WE.geometry.wireRoutePoints(w);   // [a0, ...waypoints, b0]
-    var p = WE.geometry.clientToCanvas(svg, startClientX, startClientY);
-    var seg = segIndexAt(full, p);
-    var q1 = full[seg], q2 = full[seg + 1];
-    var isHoriz = Math.abs(q1.y - q2.y) <= Math.abs(q1.x - q2.x);
+    if (!full || full.length < 2) return null;
+    // cleanup으로 점 구성이 바뀌었을 수 있으니 정리된 경로에서 다시 판정
+    var seg = pickSegIndex(full, pt, wantHoriz);
+    if (seg < 0) return null;
+    var isHoriz = segIsHoriz(full, seg);
     var W = w.waypoints, last = full.length - 1, wpi1, wpi2;
     if (seg === 0) {                              // a0 → 첫 waypoint: 단자쪽 복제 삽입
       W.unshift({ x: full[0].x, y: full[0].y }); wpi1 = 0; wpi2 = 1;
@@ -525,9 +553,31 @@ WE.interactions = (function () {
     } else {                                       // 내부 세그먼트
       wpi1 = seg - 1; wpi2 = seg;
     }
+    if (!W[wpi1] || !W[wpi2]) return null;
+    return { wireId: w.id, isHoriz: isHoriz, wpi1: wpi1, wpi2: wpi2, baseX: W[wpi1].x, baseY: W[wpi1].y };
+  }
+
+  // 드래그 시작 시: 자동 경로를 waypoint로 고정하고 잡은 세그먼트를 계산해 wseg로 전환.
+  // 다중 선택 상태면 같은 방향 구간을 가진 나머지 배선도 함께 잡는다(간격 유지 평행이동).
+  function beginWireSeg(wid, startClientX, startClientY) {
+    var w = WE.model.getWire(wid); if (!w) { drag = null; return; }
+    var p = WE.geometry.clientToCanvas(svg, startClientX, startClientY);
+    var anchor = prepWireSeg(w, p, null);
+    if (!anchor) { drag = null; return; }
+
+    var items = [anchor];
+    (WE.model.getMultiWire() || []).forEach(function (id) {
+      if (id === wid) return;
+      var ow = WE.model.getWire(id); if (!ow) return;
+      // 각 배선에서 Ctrl+클릭했던 지점 기준. 방향이 다른 구간은 함께 옮기지 않는다.
+      var it = prepWireSeg(ow, WE.model.getWireClickPt(id), anchor.isHoriz);
+      if (it) items.push(it);
+    });
+
     drag = {
-      mode: "wseg", wireId: wid, isHoriz: isHoriz, wpi1: wpi1, wpi2: wpi2,
-      baseX: W[wpi1].x, baseY: W[wpi1].y, startX: startClientX, startY: startClientY
+      mode: "wseg", wireId: wid, isHoriz: anchor.isHoriz, wpi1: anchor.wpi1, wpi2: anchor.wpi2,
+      baseX: anchor.baseX, baseY: anchor.baseY, items: items,
+      startX: startClientX, startY: startClientY
     };
     WE.render.renderWires(); WE.render.renderOverlay();
   }
@@ -765,18 +815,20 @@ WE.interactions = (function () {
 
     // 배선 세그먼트 평행 이동 (꺾임점 유지, 수직/수평으로만)
     if (drag.mode === "wseg") {
-      var ws = WE.model.getWire(drag.wireId); if (!ws) return;
-      var W = ws.waypoints;
-      if (!W[drag.wpi1] || !W[drag.wpi2]) return;
       var sp0 = WE.geometry.clientToCanvas(svg, drag.startX, drag.startY);
       var sp1 = WE.geometry.clientToCanvas(svg, e.clientX, e.clientY);
-      if (drag.isHoriz) {
-        var ny = snapVal(drag.baseY + (sp1.y - sp0.y));
-        W[drag.wpi1].y = ny; W[drag.wpi2].y = ny;
-      } else {
-        var nx = snapVal(drag.baseX + (sp1.x - sp0.x));
-        W[drag.wpi1].x = nx; W[drag.wpi2].x = nx;
-      }
+      // 잡은 구간(앵커)이 그리드에 맞도록 '이동량'을 정하고, 나머지는 같은 이동량을 그대로 적용
+      // → 앵커는 그리드 정렬, 선택된 배선끼리의 픽셀 간격은 정확히 보존
+      var d = drag.isHoriz
+        ? snapVal(drag.baseY + (sp1.y - sp0.y)) - drag.baseY
+        : snapVal(drag.baseX + (sp1.x - sp0.x)) - drag.baseX;
+      drag.items.forEach(function (it) {
+        var w2 = WE.model.getWire(it.wireId); if (!w2) return;
+        var W2 = w2.waypoints;
+        if (!W2 || !W2[it.wpi1] || !W2[it.wpi2]) return;
+        if (drag.isHoriz) { W2[it.wpi1].y = W2[it.wpi2].y = it.baseY + d; }
+        else { W2[it.wpi1].x = W2[it.wpi2].x = it.baseX + d; }
+      });
       WE.render.renderWires(); WE.render.renderOverlay();
       return;
     }
@@ -951,7 +1003,8 @@ WE.interactions = (function () {
       WE.render.setWireLabelGuide(null);
     }
     // 배선 세그먼트 드래그 종료 → 다른 배선과 겹치면 옆 레인으로 자동 회피
-    if (drag.mode === "wseg") {
+    // (다중 이동은 제외 — 사용자가 의도적으로 잡은 묶음 간격을 자동 회피가 흐트러뜨리므로)
+    if (drag.mode === "wseg" && (!drag.items || drag.items.length < 2)) {
       var ws = WE.model.getWire(drag.wireId);
       if (ws && ws.waypoints && ws.waypoints[drag.wpi1] && ws.waypoints[drag.wpi2]) {
         var p1 = ws.waypoints[drag.wpi1], p2 = ws.waypoints[drag.wpi2];
@@ -1068,11 +1121,13 @@ WE.interactions = (function () {
       }
       var wp = WE.model.ui.selectedWp;
       if (wp != null && selWire.waypoints && selWire.waypoints[wp] != null) {
-        // 꺾임점만 제거 → 남으면 직각 재정리, 다 지우면 자동 최적경로로
-        selWire.waypoints.splice(wp, 1);
+        // 꺾임점만 제거 → 이웃을 축에 맞춰 끌어당겨 꺾임을 흡수, 다 지우면 자동 최적경로로
+        var np = WE.geometry.dissolveWaypoint(selWire, wp);
+        if (np) selWire.waypoints = np;
+        else { selWire.waypoints.splice(wp, 1); if (selWire.waypoints.length) cleanupWire(selWire); }
         WE.model.ui.selectedWp = null;
-        if (selWire.waypoints.length) cleanupWire(selWire);
         WE.render.renderWires(); WE.render.renderOverlay(); WE.app.refreshProps();
+        WE.history.commit();
       } else {
         WE.model.removeWire(selWire.id);
         WE.render.renderAll(); WE.app.refreshProps();
