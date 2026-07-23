@@ -268,6 +268,7 @@ WE.model = (function () {
   // 마퀴 선택 결과 지정
   function setMultiSelection(comps, annos, wires) {
     multi = comps.slice(); multiAnno = annos.slice(); multiWire = (wires || []).slice();
+    wireClickPt = {};   // 이전 선택의 배선 클릭 지점은 무효 — 마퀴가 필요하면 직후에 다시 기록
     if (comps.length) { selection.type = "component"; selection.id = comps[comps.length - 1]; }
     else if (annos.length) { selection.type = "annotation"; selection.id = annos[annos.length - 1]; }
     else if (multiWire.length) { selection.type = "wire"; selection.id = multiWire[multiWire.length - 1]; }

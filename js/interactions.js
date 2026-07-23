@@ -286,9 +286,12 @@ WE.interactions = (function () {
       };
       svg.setPointerCapture(e.pointerId);
     } else {
-      // 빈 곳 → 드래그로 사각형(마퀴) 다중 선택 (클릭이면 선택 해제)
+      // 빈 곳 → 드래그로 사각형(마퀴) 다중 선택 (클릭이면 선택 해제).
+      // Ctrl/⌘ + 드래그 = '쓸어담기': 배선 구간만 선택, 박스 모양으로 방향 자동
+      //   (가로로 길쭉 → 세로선만 / 세로로 길쭉 → 가로선만 / 정사각에 가까우면 전부)
       var mp = WE.geometry.clientToCanvas(svg, e.clientX, e.clientY);
-      drag = { mode: "marquee", startX: e.clientX, startY: e.clientY, ox: mp.x, oy: mp.y, rect: null };
+      drag = { mode: "marquee", sweep: !!(e.ctrlKey || e.metaKey),
+               startX: e.clientX, startY: e.clientY, ox: mp.x, oy: mp.y, rect: null };
       svg.setPointerCapture(e.pointerId);
     }
   }
@@ -303,10 +306,22 @@ WE.interactions = (function () {
     svg.setPointerCapture(e.pointerId);
   }
 
-  // 마퀴 사각형 안의 부품·주석·배선 선택
-  function applyMarquee(rect) {
-    var comps = [], annos = [], wires = [], rx2 = rect.x + rect.w, ry2 = rect.y + rect.h;
+  // 마퀴 사각형 선택. 배선은 '쓸어담기(Ctrl)' 모드에서만 잡는다(일반 마퀴=부품·주석만).
+  // opts.wiresOnly : true=배선만 선택(쓸어담기) / false·미지정=부품·주석만 선택
+  // opts.dirFilter : "h"=가로 구간만 / "v"=세로 구간만 / null=방향 무관
+  // opts.origin    : 드래그 시작점(캔버스 좌표) — 배선을 이 점에 '세그먼트 수직거리'가
+  //                  가까운 순으로 정렬해 '처음 쓸린 선'이 ids[0](정렬 기준선)이 되게 함.
+  function applyMarquee(rect, opts) {
+    opts = opts || {};
+    var comps = [], annos = [], wires = [], clickPts = {};
+    var rx2 = rect.x + rect.w, ry2 = rect.y + rect.h;
+    var cx = rect.x + rect.w / 2, cy = rect.y + rect.h / 2;   // 박스 중심(가장 가까운 구간 판별용)
     function ptIn(p) { return p && p.x >= rect.x && p.x <= rx2 && p.y >= rect.y && p.y <= ry2; }
+    function segDir(a, b) {   // 'h' | 'v' | null
+      if (Math.abs(a.y - b.y) < 0.5) return "h";
+      if (Math.abs(a.x - b.x) < 0.5) return "v";
+      return null;
+    }
     // 직교 세그먼트가 사각형과 겹치는지
     function segHit(a, b) {
       if (ptIn(a) || ptIn(b)) return true;
@@ -320,22 +335,45 @@ WE.interactions = (function () {
       }
       return false;
     }
-    WE.model.project.components.forEach(function (c) {
-      var b = WE.render.componentBBox(c);
-      if (b.x < rx2 && b.x2 > rect.x && b.y < ry2 && b.y2 > rect.y) comps.push(c.id);
-    });
-    WE.model.project.annotations.forEach(function (a) {
-      var b = WE.render.annoBBox(a.id);
-      if (b && b.x < rx2 && b.x2 > rect.x && b.y < ry2 && b.y2 > rect.y) annos.push(a.id);
-    });
-    // 배선: 경로 일부라도 사각형과 겹치면 선택
-    WE.model.project.wires.forEach(function (w) {
-      var pts = WE.geometry.wireRoutePoints(w); if (!pts) return;
-      for (var i = 0; i < pts.length - 1; i++) {
-        if (segHit(pts[i], pts[i + 1])) { wires.push(w.id); break; }
+    var segs = {};
+    if (opts.wiresOnly) {
+      // 쓸어담기(Ctrl) 모드: 배선만 선택. 방향 필터 통과 + 히트한 세그먼트 중
+      // '박스 중심에 가장 가까운' 구간을 대상으로 삼아 그 중점을 wireClickPt에 기록.
+      WE.model.project.wires.forEach(function (w) {
+        var pts = WE.geometry.wireRoutePoints(w); if (!pts) return;
+        var bestMid = null, bestSeg = null, bestD = Infinity;
+        for (var i = 0; i < pts.length - 1; i++) {
+          var a = pts[i], b = pts[i + 1];
+          if (opts.dirFilter && segDir(a, b) !== opts.dirFilter) continue;
+          if (!segHit(a, b)) continue;
+          var mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
+          var d = Math.abs(mx - cx) + Math.abs(my - cy);
+          if (d < bestD) { bestD = d; bestMid = { x: mx, y: my }; bestSeg = { a: a, b: b }; }
+        }
+        if (bestMid) { wires.push(w.id); clickPts[w.id] = bestMid; segs[w.id] = bestSeg; }
+      });
+      // 기준선(ids[0]) = 드래그 시작점에 가장 가까운 선. 단 세그먼트 '중점'이 아니라
+      // '세그먼트 자체까지의 수직 거리'로 잰다 — 중점 거리는 선 길이(평행축) 성분이 섞여
+      // 나란한 배선 묶음에서 엉뚱한 선이 기준이 됨(짧은 선의 중점이 더 가까워 보이는 착시).
+      if (opts.origin) {
+        var O = opts.origin;
+        wires.sort(function (a, b) {
+          return distToSeg(O, segs[a].a, segs[a].b) - distToSeg(O, segs[b].a, segs[b].b);
+        });
       }
-    });
-    WE.model.setMultiSelection(comps, annos, wires);
+    } else {
+      // 일반 마퀴: 부품·주석만 선택(배선은 Ctrl 쓸어담기로만). — 사용자 의도
+      WE.model.project.components.forEach(function (c) {
+        var b = WE.render.componentBBox(c);
+        if (b.x < rx2 && b.x2 > rect.x && b.y < ry2 && b.y2 > rect.y) comps.push(c.id);
+      });
+      WE.model.project.annotations.forEach(function (a) {
+        var b = WE.render.annoBBox(a.id);
+        if (b && b.x < rx2 && b.x2 > rect.x && b.y < ry2 && b.y2 > rect.y) annos.push(a.id);
+      });
+    }
+    WE.model.setMultiSelection(comps, annos, wires);   // 이 안에서 wireClickPt 초기화됨
+    wires.forEach(function (id) { WE.model.setWireClickPt(id, clickPts[id]); });
     WE.render.renderOverlay(); WE.app.refreshProps();
   }
 
@@ -993,8 +1031,18 @@ WE.interactions = (function () {
     if (drag.mode === "marquee") {
       WE.render.clearMarquee();
       if (drag.rect && (drag.rect.w > 3 || drag.rect.h > 3)) {
-        applyMarquee(drag.rect);
-      } else {
+        var origin = { x: drag.ox, y: drag.oy };   // 드래그 시작점(캔버스 좌표) = 기준선 판별용
+        if (drag.sweep) {
+          // 종횡비 2:1 이상이면 짧은 축과 나란한 선만 골라잡는다(가로로 길면 세로선)
+          var R = 2, r = drag.rect, dir = null;
+          if (r.w >= r.h * R) dir = "v";
+          else if (r.h >= r.w * R) dir = "h";
+          applyMarquee(r, { wiresOnly: true, dirFilter: dir, origin: origin });
+        } else {
+          applyMarquee(drag.rect, { origin: origin });
+        }
+      } else if (!drag.sweep) {
+        // 헛클릭(움직임 거의 없음) → 선택 해제. 단 쓸어담기(Ctrl) 중엔 유지(실수로 다 날리는 것 방지)
         WE.model.clearSelection(); WE.render.renderOverlay(); WE.app.refreshProps();
       }
     }
