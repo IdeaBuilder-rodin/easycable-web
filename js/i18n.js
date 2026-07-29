@@ -518,6 +518,7 @@ WE.i18n = (function () {
     "가로": "horizontal",
     " 구간이 부족합니다.": " segments to distribute.",
     " 균등 배치: ": " distributed: ",
+    "라벨을 부착한 배선만 표시됩니다. ▭ 라벨 모드에서 배선을 클릭해 번호를 붙여 주세요.": "Only labeled wires are listed. Use the ▭ Label tool and click a wire to number it.",
     "배선이 없습니다.": "No wires.",
 
     // --- 선택 상태 ---

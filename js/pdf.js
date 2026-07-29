@@ -185,31 +185,47 @@ WE.pdf = (function () {
     }
 
     // 배선 리스트 (조립용: 번호·색·AWG·출발→도착)
+    // 열이 좁아 한 단으로 뽑으면 지면 절반이 비고 장수만 늘어난다 → 좌우 2단으로 나눠 담는다.
     var wl = WE.app.wireListData ? WE.app.wireListData() : [];
     if (wl.length) {
       bomBox.appendChild(sectionTitle(WE.i18n.t("배선 리스트"), true));
-      var wtbl = document.createElement("table");
-      wtbl.className = "bom";
-      var whead = document.createElement("thead");
-      whead.innerHTML = WE.i18n.t("<tr><th>번호</th><th>색</th><th>AWG</th><th>출발</th><th>도착</th></tr>");
-      wtbl.appendChild(whead);
-      var wbody = document.createElement("tbody");
-      wl.forEach(function (r) {
-        var tr = document.createElement("tr");
-        function wtd(text, cls) { var d = document.createElement("td"); if (cls) d.className = cls; d.textContent = text; return d; }
-        tr.appendChild(wtd(r.no, "qty"));
-        var ctd = document.createElement("td");
-        var sw = document.createElement("span");
-        sw.style.cssText = "display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:4px;vertical-align:middle;background:" + r.colorHex;
-        ctd.appendChild(sw); ctd.appendChild(document.createTextNode(r.color));
-        tr.appendChild(ctd);
-        tr.appendChild(wtd(r.awg ? ("AWG " + r.awg) : "", "qty"));
-        tr.appendChild(wtd(r.fromCmp + " · " + r.fromTerm));
-        tr.appendChild(wtd(r.toCmp + " · " + r.toTerm));
-        wbody.appendChild(tr);
-      });
-      wtbl.appendChild(wbody);
-      bomBox.appendChild(wtbl);
+
+      function wireTable(rows) {
+        var t = document.createElement("table");
+        t.className = "bom";
+        var head = document.createElement("thead");
+        head.innerHTML = WE.i18n.t("<tr><th>번호</th><th>색</th><th>AWG</th><th>출발</th><th>도착</th></tr>");
+        t.appendChild(head);
+        var body = document.createElement("tbody");
+        rows.forEach(function (r) {
+          var tr = document.createElement("tr");
+          function wtd(text, cls) { var d = document.createElement("td"); if (cls) d.className = cls; d.textContent = text; return d; }
+          tr.appendChild(wtd(r.no, "qty"));
+          var ctd = document.createElement("td");
+          var sw = document.createElement("span");
+          sw.style.cssText = "display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:4px;vertical-align:middle;background:" + r.colorHex;
+          ctd.appendChild(sw); ctd.appendChild(document.createTextNode(r.color));
+          tr.appendChild(ctd);
+          tr.appendChild(wtd(r.awg ? ("AWG " + r.awg) : "", "qty"));
+          tr.appendChild(wtd(r.fromCmp + " · " + r.fromTerm));
+          tr.appendChild(wtd(r.toCmp + " · " + r.toTerm));
+          body.appendChild(tr);
+        });
+        t.appendChild(body);
+        return t;
+      }
+
+      // 한 장에 담기는 줄 수(대략) 기준으로 쪽을 나누고, 각 쪽을 좌우 두 단으로 채운다
+      var PER_COL = 28, PER_PAGE = PER_COL * 2;
+      for (var off = 0; off < wl.length; off += PER_PAGE) {
+        var chunk = wl.slice(off, off + PER_PAGE);
+        var half = Math.ceil(chunk.length / 2);
+        var row = document.createElement("div");
+        row.className = "wl-cols" + (off > 0 ? " pdf-page-break" : "");
+        row.appendChild(wireTable(chunk.slice(0, half)));
+        if (chunk.length > half) row.appendChild(wireTable(chunk.slice(half)));
+        bomBox.appendChild(row);
+      }
     }
 
     // 전력/배터리 요약

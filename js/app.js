@@ -1213,7 +1213,10 @@ WE.app = (function () {
   function renderWireListView() {
     var rows = wireListData();
     var t = document.getElementById("wireListTable");
-    if (!rows.length) { t.innerHTML = WE.i18n.t("<tr><td class='muted' style='border:none'>배선이 없습니다.</td></tr>"); return; }
+    if (!rows.length) {
+      t.innerHTML = "<tr><td class='muted' style='border:none'>" + esc(wireListEmptyHint()) + "</td></tr>";
+      return;
+    }
     var html = WE.i18n.t("<thead><tr><th>번호</th><th>색</th><th>AWG</th><th>전류(A)</th><th>출발</th><th>도착</th></tr></thead><tbody>");
     rows.forEach(function (r) {
       html += "<tr><td>" + esc(r.no) + "</td>" +
@@ -3170,20 +3173,35 @@ WE.app = (function () {
     return { cmp: c ? c.name : "?", term: t ? t.name : "?" };
   }
   // 화면·PDF·CSV 공용 배선 리스트 데이터
+  // 배선 리스트: 라벨을 부착한 배선만 담는다.
+  // 라벨(수축튜브 번호)이 실물 전선과 목록을 잇는 유일한 식별자라, 라벨 없는 배선을 넣으면
+  // 목록의 그 줄이 어느 전선인지 현장에서 찾을 수가 없다.
+  // (예전엔 라벨이 없으면 "W1, W2…"를 자동으로 만들어 붙여, 달지도 않은 라벨이 목록에 나왔다)
   function wireListData() {
-    return WE.model.project.wires.map(function (w, i) {
+    var out = [];
+    WE.model.project.wires.forEach(function (w) {
+      var label = (w.labelText || "").trim();
+      if (!label) return;
       var a = endParts(w.from), b = endParts(w.to);
-      return {
-        no: (w.labelText || "").trim() || ("W" + (i + 1)),   // 도면에 부착한 라벨 우선, 없으면 순번
+      out.push({
+        no: label,
         color: colorLabel(w.color), colorHex: w.color,
         awg: w.awg || "", current: w.current > 0 ? w.current : "",
         fromCmp: a.cmp, fromTerm: a.term, toCmp: b.cmp, toTerm: b.term
-      };
+      });
     });
+    return out;
+  }
+  // 라벨이 하나도 없을 때 화면에 띄울 안내 (배선은 있는데 목록이 빈 이유를 알려 준다)
+  function wireListEmptyHint() {
+    var total = (WE.model.project.wires || []).length;
+    return total
+      ? WE.i18n.t("라벨을 부착한 배선만 표시됩니다. ▭ 라벨 모드에서 배선을 클릭해 번호를 붙여 주세요.")
+      : WE.i18n.t("배선이 없습니다.");
   }
   function exportWireListCSV() {
     var rows = wireListData();
-    if (!rows.length) { setHint(WE.i18n.t("배선이 없습니다.")); return; }
+    if (!rows.length) { setHint(wireListEmptyHint()); return; }
     function cell(v) { v = (v == null ? "" : String(v)); return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; }
     var lines = [[WE.i18n.t("번호"), WE.i18n.t("색"), "AWG", WE.i18n.t("전류(A)"), WE.i18n.t("출발 부품"), WE.i18n.t("출발 단자"), WE.i18n.t("도착 부품"), WE.i18n.t("도착 단자")].map(cell).join(",")];
     rows.forEach(function (r) {

@@ -981,6 +981,9 @@ body.term-mode #canvas { cursor: crosshair; }
   .pf-lg .pf-sw { display: inline-block; width: 16px; height: 3px; border: .5px solid #888; }
 
   #printBOM { margin-top: 12px; }
+  /* 배선 리스트 2단 — 표가 좁아 한 단이면 지면 절반이 비고 장수만 늘어난다 */
+  .wl-cols { display: flex; align-items: flex-start; gap: 8mm; }
+  .wl-cols > table { flex: none; }
   /* 섹션 머리글 — 1페이지 도면 제목줄과 같은 모양으로 통일 */
   .bom-title {
     display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
