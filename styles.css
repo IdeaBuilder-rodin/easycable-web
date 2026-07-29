@@ -924,15 +924,19 @@ body.term-mode #canvas { cursor: crosshair; }
 @media print {
   @page { size: landscape; margin: 8mm; }
   #layerWatermark { display: block; }   /* 화면에선 숨긴 워터마크를 PDF에는 표시 */
+  /* 화면 전용 UI는 종이에 나오지 않게. (복원 안내 띠가 빠져 있어 PDF 1페이지 머리에 찍혔다) */
   #toolbar, #leftPanel, #rightPanel, .modal, #cmpMenu, #viewTabs, #bomView, #wireListView,
-  .canvas-corner-tools, #canvasHeader { display: none !important; }
+  .canvas-corner-tools, #canvasHeader, #restoreBanner { display: none !important; }
   html, body { height: auto; display: block; background: #fff; }
-  #main, #centerCol { display: block; }
+  /* 좌우로 1px만 물려 둔다 — 테두리가 지면 경계에 딱 붙으면 반올림 때문에
+     세로선이 끊기거나 아예 안 찍히는 경우가 있다(도면 프레임·범례 상자 우측). */
+  #main { display: block; padding: 0 1px; }
+  #centerCol { display: block; }
   #canvasWrap {
     overflow: visible; width: 100%; height: auto; padding: 0 !important;
     box-shadow: none !important; background: #fff;
   }
-  #canvas { width: 100% !important; height: auto !important; margin: 0 !important; border: 1.5px solid #333 !important; box-shadow: none !important; background: #fff; box-sizing: border-box; }
+  #canvas { width: 100% !important; height: auto !important; margin: 0 !important; border: 1px solid #333 !important; box-shadow: none !important; background: #fff; box-sizing: border-box; }
   #gridBg, #layerOverlay { display: none !important; }  /* 그리드·선택표시 숨김 */
 
   .print-only { display: block; }
@@ -947,7 +951,6 @@ body.term-mode #canvas { cursor: crosshair; }
   #printTitleDate {
     font-size: 10.5px; font-weight: 500; color: #444; white-space: nowrap; letter-spacing: 0;
   }
-  #printTitleDate::before { content: "작성일 "; color: #888; }
 
   /* 도면 높이 상한 — 아래 범례 자리를 먼저 확보한다.
      이게 없으면 도면이 지면을 다 먹어 범례가 2페이지로 밀린다.
@@ -978,14 +981,52 @@ body.term-mode #canvas { cursor: crosshair; }
   .pf-lg .pf-sw { display: inline-block; width: 16px; height: 3px; border: .5px solid #888; }
 
   #printBOM { margin-top: 12px; }
-  .bom-title { font-weight: 700; font-size: 13px; margin-bottom: 4px; }
+  /* 섹션 머리글 — 1페이지 도면 제목줄과 같은 모양으로 통일 */
+  .bom-title {
+    display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
+    font-size: 17px; font-weight: 700; letter-spacing: -.2px;
+    margin: 0 0 3mm; padding-bottom: 1.6mm;
+    border-bottom: 1px solid #333;
+    font-family: "Malgun Gothic", sans-serif;
+  }
+  .bom-title .bt-date { font-size: 10.5px; font-weight: 500; color: #444; white-space: nowrap; letter-spacing: 0; }
   .pdf-page-break { page-break-before: always; break-before: page; }
-  table.bom { border-collapse: collapse; width: 100%; table-layout: fixed; font-size: 11px; page-break-inside: avoid; }
-  table.bom th, table.bom td { border: 1px solid #999; padding: var(--bom-rh, 3px) 6px; text-align: left; vertical-align: top; overflow-wrap: break-word; }
-  table.bom th { background: #eee; white-space: nowrap; }
-  table.bom td.qty { text-align: center; white-space: nowrap; }
+  /* 긴 표는 여러 장으로 자연스럽게 흘려보낸다.
+     예전엔 표 전체에 page-break-inside:avoid가 걸려 있었는데, 한 장에 안 들어가면
+     지킬 수가 없어 브라우저마다 잘리거나 이상하게 나뉘었다(부품 20종만 넘어도 발생).
+     대신 '행'을 쪼개지 않게 막고, thead(기본값 table-header-group)가 장마다 머리행을 다시 그린다. */
+  /* 폭은 내용에 맡긴다. 지면 폭에 억지로 맞추면 숫자 칸엔 빈 공간이 남고,
+     100%로 늘리면 우측 열이 잘렸다. 넘칠 때만 max-width가 잡아 준다. */
+  table.bom {
+    border-collapse: collapse; width: auto; max-width: 100%;
+    table-layout: auto; font-size: 11px;
+    page-break-inside: auto; break-inside: auto;
+  }
+  table.bom thead { display: table-header-group; }
+  table.bom tbody tr { page-break-inside: avoid; break-inside: avoid; }
+
+  /* 폭은 어느 열에도 지정하지 않는다 — 각 열에서 가장 긴 내용에 맞춰 저절로 잡히고,
+     표는 그 합만큼만 차지한다(지면 우측까지 늘리지 않는다).
+     줄바꿈만 막아 두면 '가장 긴 품명/스펙' 기준으로 폭이 결정된다. */
+  table.bom th, table.bom td { white-space: nowrap; }
+  /* 다만 한 열이 지면을 독식할 만큼 길면 그때만 줄바꿈을 허용한다 */
+  table.bom .bc-spec, table.bom .bc-name, table.bom .bc-custom { max-width: 70mm; white-space: normal; }
+  table.bom .bc-spec, table.bom .bc-name { overflow-wrap: normal; word-break: keep-all; }
+  table.bom th, table.bom td {
+    border: 1px solid #999; padding: var(--bom-rh, 3px) 10px;
+    text-align: center; vertical-align: middle; overflow-wrap: break-word;
+  }
+  /* 머리행·합계행은 색으로 구분한다. 인쇄 대화상자의 '배경 그래픽'이 꺼져 있어도 나오도록 강제 */
+  table.bom th {
+    background: #f2f5f8; font-weight: 600; white-space: nowrap;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
+  }
+  table.bom td.qty { white-space: nowrap; }
   table.bom td.link a { color: #1a0dab; text-decoration: underline; }
-  table.bom tr.bom-total td { font-weight: 700; background: #f0f0f0; }
+  table.bom tr.bom-total td {
+    font-weight: 700; background: #f0f0f0;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
+  }
 }
 
 /* 도면 머리줄 — 캔버스 '위'에 따로 둔다.

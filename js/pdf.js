@@ -78,6 +78,16 @@ WE.pdf = (function () {
     document.getElementById("printLegend").style.display = items.length ? "" : "none";
   }
 
+  // 섹션 머리글(BOM·배선 리스트 등) — 1페이지 도면 제목줄과 같은 모양으로
+  function sectionTitle(text, newPage) {
+    var d = document.createElement("div");
+    d.className = "bom-title" + (newPage ? " pdf-page-break" : "");
+    var t = document.createElement("span"); t.textContent = text;
+    var dt = document.createElement("span"); dt.className = "bt-date"; dt.textContent = drawnDate();
+    d.appendChild(t); d.appendChild(dt);
+    return d;
+  }
+
   function populate() {
     // 제목 + 우측 상단 날짜
     var proj0 = WE.model.project;
@@ -89,8 +99,17 @@ WE.pdf = (function () {
     var bomBox = document.getElementById("printBOM");
     bomBox.innerHTML = "";
     var data = WE.app.bomData ? WE.app.bomData() : { rows: [], total: 0, totalQty: 0 };
-    var cols = WE.app.bomColumns ? WE.app.bomColumns() : [];
+    var allCols = WE.app.bomColumns ? WE.app.bomColumns() : [];
     var proj = WE.model.project;
+
+    // 데이터시트 열은 종이에서 뺀다. 화면에선 클릭해 여는 첨부지만 인쇄물엔 "📎 2"만 찍혀
+    // 열어볼 수도, 개수를 알아도 쓸 데가 없다. 그 폭을 다른 열에 넘겨 주는 편이 낫다.
+    // (구매링크는 실제 하이퍼링크로 나가 PDF에서도 눌리므로 그대로 둔다)
+    var dsIdx = -1;
+    var cols = allCols.filter(function (c, i) {
+      if (c.id === "ds") { dsIdx = i; return false; }
+      return true;
+    });
     function won(v) { return v ? "₩" + Math.round(v).toLocaleString() : ""; }
     // 텍스트 셀 내용(구매링크·데이터시트는 별도 처리 — 아래 linkTd/ds 분기 참고)
     function cellText(col, r) {
@@ -104,13 +123,19 @@ WE.pdf = (function () {
       }
       return "";
     }
-    // 화면에 실제로 그려진 열 너비를 그대로 측정(사용자가 직접 조절했든 자동 맞춤이든 전부 반영)
-    var screenWidths = measureScreenBomColWidths(cols);
+    // 열 폭은 지정하지 않는다 — 내용만큼만 차지하게 두고, 길어지면 자연히 늘어난다.
+    // (지면 폭에 억지로 맞추면 숫자 칸에 빈 공간이 남고, 100%로 늘리면 우측 열이 잘렸다)
+    // 폭 규칙은 인쇄 CSS의 `bc-<열id>` 클래스에 모아 두었다.
+    function colClass(col) {
+      var base = "bc-" + (col.kind === "custom" ? "custom" : col.id);
+      if (col.kind === "num") base += " qty";
+      else if (col.kind === "link") base += " link";
+      return base;
+    }
 
     if (data.rows.length) {
-      var bt = document.createElement("div");
-      bt.className = "bom-title pdf-page-break"; bt.textContent = WE.i18n.t("부품 목록 (BOM)");   // 1페이지는 배선도만 — BOM부터 다음 페이지 시작
-      bomBox.appendChild(bt);
+      // 1페이지는 배선도만 — BOM부터 다음 장에서 시작
+      bomBox.appendChild(sectionTitle(WE.i18n.t("부품 목록 (BOM)"), true));
 
       var table = document.createElement("table");
       table.className = "bom";
@@ -119,7 +144,7 @@ WE.pdf = (function () {
       function th(text, cls) { var d = document.createElement("th"); if (cls) d.className = cls; d.textContent = text; return d; }
       // 구매링크 셀: 실제 클릭 가능한 하이퍼링크(href)로 — 화면은 JS가 클릭을 가로채는 방식이라 PDF엔 안 통함
       function linkTd(url) {
-        var d = document.createElement("td"); d.className = "link";
+        var d = document.createElement("td"); d.className = "bc-link link";
         if (url) {
           var a = document.createElement("a");
           a.href = url; a.target = "_blank"; a.rel = "noopener";
@@ -129,41 +154,30 @@ WE.pdf = (function () {
         return d;
       }
 
-      // 열 너비: 화면에서 실측한 픽셀 값을 그대로 적용, 표 전체 폭도 그 합으로 고정(비율 왜곡 방지)
-      var cg = document.createElement("colgroup");
-      var widths = [38];   // No열 기본값(실측 실패 시 폴백)
-      if (screenWidths && screenWidths.length === cols.length + 1) widths = screenWidths;
-      widths.forEach(function (w) {
-        var c = document.createElement("col"); c.style.width = Math.round(w) + "px"; cg.appendChild(c);
-      });
-      table.appendChild(cg);
-      table.style.width = Math.round(widths.reduce(function (a, b) { return a + b; }, 0)) + "px";
-
       var thead = document.createElement("thead"), htr = document.createElement("tr");
-      htr.appendChild(th("No", "qty"));
-      cols.forEach(function (col) { htr.appendChild(th(col.label, col.kind === "num" ? "qty" : (col.kind === "link" ? "link" : ""))); });
+      htr.appendChild(th("No", "bc-no qty"));
+      cols.forEach(function (col) { htr.appendChild(th(col.label, colClass(col))); });
       thead.appendChild(htr); table.appendChild(thead);
 
       var tbody = document.createElement("tbody");
       data.rows.forEach(function (b) {
         var tr = document.createElement("tr");
-        tr.appendChild(td(String(b.no), "qty"));
+        tr.appendChild(td(String(b.no), "bc-no qty"));
         cols.forEach(function (col) {
           if (col.id === "link") { tr.appendChild(linkTd(b.link)); return; }
-          if (col.id === "ds") { tr.appendChild(td((b.dsNames || []).length ? ("📎 " + b.dsNames.length) : "", "qty")); return; }
-          tr.appendChild(td(cellText(col, b), col.kind === "num" ? "qty" : ""));
+          tr.appendChild(td(cellText(col, b), colClass(col)));
         });
         tbody.appendChild(tr);
       });
       // 합계 행
       var trT = document.createElement("tr");
       trT.className = "bom-total";
-      trT.appendChild(td(""));
+      trT.appendChild(td("", "bc-no qty"));
       cols.forEach(function (col) {
-        if (col.id === "name") trT.appendChild(td(WE.i18n.t("합계")));
-        else if (col.id === "qty") trT.appendChild(td(data.totalQty + WE.i18n.t("개"), "qty"));
-        else if (col.id === "sum") trT.appendChild(td(won(data.total), "qty"));
-        else trT.appendChild(td("", col.kind === "num" ? "qty" : ""));
+        if (col.id === "name") trT.appendChild(td(WE.i18n.t("합계"), colClass(col)));
+        else if (col.id === "qty") trT.appendChild(td(data.totalQty + WE.i18n.t("개"), colClass(col)));
+        else if (col.id === "sum") trT.appendChild(td(won(data.total), colClass(col)));
+        else trT.appendChild(td("", colClass(col)));
       });
       tbody.appendChild(trT);
       table.appendChild(tbody);
@@ -173,9 +187,7 @@ WE.pdf = (function () {
     // 배선 리스트 (조립용: 번호·색·AWG·출발→도착)
     var wl = WE.app.wireListData ? WE.app.wireListData() : [];
     if (wl.length) {
-      var wt = document.createElement("div");
-      wt.className = "bom-title pdf-page-break"; wt.textContent = WE.i18n.t("배선 리스트");
-      bomBox.appendChild(wt);
+      bomBox.appendChild(sectionTitle(WE.i18n.t("배선 리스트"), true));
       var wtbl = document.createElement("table");
       wtbl.className = "bom";
       var whead = document.createElement("thead");
@@ -203,8 +215,8 @@ WE.pdf = (function () {
     // 전력/배터리 요약
     var rows = WE.app.powerSummaryRows ? WE.app.powerSummaryRows() : [];
     if (rows.length) {
-      var pt = document.createElement("div");
-      pt.className = "bom-title"; pt.style.marginTop = "10px"; pt.textContent = WE.i18n.t("전력 / 배터리 요약");
+      var pt = sectionTitle(WE.i18n.t("전력 / 배터리 요약"), false);
+      pt.style.marginTop = "8mm";
       bomBox.appendChild(pt);
       var ptbl = document.createElement("table");
       ptbl.className = "bom"; ptbl.style.width = "auto";
@@ -220,25 +232,5 @@ WE.pdf = (function () {
 
   // 화면 BOM 표(#bomTable)에 실제로 그려진 열 너비를 그대로 측정해 반환: [No열, col1, col2, ...]
   // (화면이 지금 BOM 탭이 아니어도 잠시 보이지 않게(visibility:hidden) 그려서 정확한 폭을 잼)
-  function measureScreenBomColWidths(cols) {
-    var bomView = document.getElementById("bomView");
-    var wasHidden = bomView.hidden;
-    var prevVisibility = bomView.style.visibility;
-    try {
-      if (wasHidden) { bomView.hidden = false; bomView.style.visibility = "hidden"; }
-      if (WE.app.renderBOMView) WE.app.renderBOMView();
-      var ths = document.querySelectorAll("#bomTable thead th");
-      // ths[0]=드래그용 여백열(제외), ths[1]="#"(No), ths[2..]=실제 열들
-      if (ths.length < cols.length + 2) return null;
-      var widths = [];
-      for (var i = 1; i < ths.length; i++) widths.push(ths[i].getBoundingClientRect().width);
-      return widths;
-    } catch (e) {
-      return null;
-    } finally {
-      if (wasHidden) { bomView.hidden = true; bomView.style.visibility = prevVisibility; }
-    }
-  }
-
   return { init: init, exportPrint: exportPrint, populate: populate };
 })();

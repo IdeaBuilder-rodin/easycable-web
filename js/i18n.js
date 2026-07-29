@@ -106,7 +106,7 @@ WE.i18n = (function () {
     "합계": "Total",
     "구매링크": "Buy link",
     "데이터시트": "Datasheet",
-    "자재 명세서 (BOM)": "Bill of Materials (BOM)",
+    "부품 목록 (BOM)": "Bill of Materials (BOM)",
     "배선 리스트": "Wire List",
     "📐 배선도": "📐 Diagram",
     "🔌 배선 리스트": "🔌 Wire List",
