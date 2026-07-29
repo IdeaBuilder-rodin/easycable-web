@@ -10,8 +10,17 @@ WE.model = (function () {
     { color: "#fbc02d", label: WE.i18n.t("신호") },
     { color: "#0000ff", label: WE.i18n.t("통신 (I2C 등)") }
   ];
+  // 문서 고유 id — 자동저장 슬롯을 문서별로 나누는 열쇠.
+  // 예전엔 슬롯이 주소(pathname)당 1개뿐이라 탭 두 개로 서로 다른 도면을 그리면 3초마다 서로 덮어썼다.
+  function newDocId() {
+    return "d" + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+  }
   function defaultMeta() {
-    return { name: WE.i18n.t("이지케이블 배선도"), version: 1, canvas: { width: 1600, height: 900, grid: 10, snap: true } };
+    return {
+      id: newDocId(),
+      name: WE.i18n.t("이지케이블 배선도"), version: 1,
+      canvas: { width: 1600, height: 900, grid: 10, snap: true }
+    };
   }
 
   // 전체 프로젝트 상태
@@ -184,6 +193,8 @@ WE.model = (function () {
   function loadProject(data) {
     if (!data) return;
     project.meta = data.meta || project.meta;
+    // 예전 파일에는 문서 id가 없다 → 지금 발급해 자기 슬롯을 갖게 한다
+    if (!project.meta.id) project.meta.id = newDocId();
     project.components = data.components || [];
     project.wires = data.wires || [];
     project.annotations = data.annotations || [];
@@ -301,6 +312,7 @@ WE.model = (function () {
     removeWire: removeWire,
     loadProject: loadProject,
     newProject: newProject,
+    newDocId: newDocId,
     select: select,
     clearSelection: clearSelection,
     getSelection: getSelection,

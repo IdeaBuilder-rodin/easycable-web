@@ -289,6 +289,7 @@ body { display: flex; flex-direction: column; }
 .wp-row2 { display: flex; gap: var(--sp3); }
 .wp-row2 > label { flex: 1; }
 .wp-section { margin-top: var(--sp4); padding-top: var(--sp3); border-top: 1px solid var(--bd2); }
+.wp-section.wp-first { margin-top: var(--sp2); padding-top: 0; border-top: none; }   /* 헤더 바로 아래 첫 구획: 윗선 없음 */
 .wp-sec-title { font-weight: 600; font-size: var(--fs-sm); color: var(--tx); margin-bottom: var(--sp2); }
 .wp-hint { margin: var(--sp2) 0 0; }
 #wireDelete { margin-top: var(--sp4); }
@@ -317,7 +318,7 @@ body.label-mode #canvas, body.label-mode #canvas * { cursor: copy !important; } 
   padding: 10px; overflow: auto; flex: none;
 }
 /* 좌측 라이브러리 패널: 세로 flex — 목록만 스크롤, 저장/불러오기는 하단 고정 */
-#leftPanel { width: 200px; display: flex; flex-direction: column; overflow: hidden; position: relative; }
+#leftPanel { width: 240px; display: flex; flex-direction: column; overflow: hidden; position: relative; }
 /* 이미지 파일을 라이브러리 패널로 드래그해서 놓을 때 시각 피드백 */
 #leftPanel.lib-dragover { outline: 2px dashed var(--primary); outline-offset: -2px; background: var(--primary-bg); }
 #rightPanel { width: 260px; display: flex; flex-direction: column; gap: 12px; }
@@ -393,6 +394,13 @@ body.label-mode #canvas, body.label-mode #canvas * { cursor: copy !important; } 
 .lib-info { flex: 1; min-width: 0; }
 .lib-name { font-size: 12px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .lib-meta { font-size: 11px; color: #999; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* 수정(✎)·삭제(×)는 평소 숨긴다.
+   아이콘 3개가 고정 폭을 차지하는 바람에 정작 부품 이름에 12px밖에 안 남아
+   전부 'ES…' 처럼 잘려 보였다. 마우스를 올리면(=클릭하려는 순간) 나타난다. */
+.lib-item .lib-edit, .lib-item .lib-del { display: none; }
+.lib-item:hover .lib-edit, .lib-item:hover .lib-del,
+.lib-item:focus-within .lib-edit, .lib-item:focus-within .lib-del { display: flex; }
+
 /* 수정(✎)·삭제(×): 우측 세로 칸 전체가 클릭 영역 (즐겨찾기와 동일 기준) */
 .lib-edit, .lib-del {
   flex: none; border: none; background: none; cursor: pointer;
@@ -917,7 +925,7 @@ body.term-mode #canvas { cursor: crosshair; }
   @page { size: landscape; margin: 8mm; }
   #layerWatermark { display: block; }   /* 화면에선 숨긴 워터마크를 PDF에는 표시 */
   #toolbar, #leftPanel, #rightPanel, .modal, #cmpMenu, #viewTabs, #bomView, #wireListView,
-  .canvas-corner-tools { display: none !important; }
+  .canvas-corner-tools, #canvasHeader { display: none !important; }
   html, body { height: auto; display: block; background: #fff; }
   #main, #centerCol { display: block; }
   #canvasWrap {
@@ -928,10 +936,46 @@ body.term-mode #canvas { cursor: crosshair; }
   #gridBg, #layerOverlay { display: none !important; }  /* 그리드·선택표시 숨김 */
 
   .print-only { display: block; }
+  /* 도면 머리글: 제목(좌) · 작성일(우). 아래 얇은 선으로 도면과 묶어 준다 */
   #printTitle {
-    font-size: 18px; font-weight: 700; margin: 0 0 6px;
+    display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
+    font-size: 17px; font-weight: 700; letter-spacing: -.2px;
+    margin: 0 0 3mm; padding-bottom: 1.6mm;
+    border-bottom: 1px solid #333;
     font-family: "Malgun Gothic", sans-serif;
   }
+  #printTitleDate {
+    font-size: 10.5px; font-weight: 500; color: #444; white-space: nowrap; letter-spacing: 0;
+  }
+  #printTitleDate::before { content: "작성일 "; color: #888; }
+
+  /* 도면 높이 상한 — 아래 범례 자리를 먼저 확보한다.
+     이게 없으면 도면이 지면을 다 먹어 범례가 2페이지로 밀린다.
+     (A4 가로 기준 가용 194mm = 머리글 12 + 도면 161 + 범례 18 + 여백) */
+  #canvas { max-height: 161mm; }
+
+  /* ---- 하단: 배선 범례 ---- */
+  #printFooter {
+    max-height: 18mm; overflow: hidden;      /* 색이 많아도 페이지를 밀지 않는다 */
+    margin-top: 3mm;
+    font-family: "Malgun Gothic", sans-serif;
+    page-break-inside: avoid; break-inside: avoid;
+  }
+  #printLegend {
+    display: flex; align-items: baseline; gap: 5mm;
+    border: 1px solid #999; padding: 2mm 3mm; overflow: hidden;
+  }
+  .pf-head { flex: none; font-size: 10px; font-weight: 700; color: #333; }
+  #printLegendItems {
+    display: flex; flex-wrap: wrap; gap: 1px 14px;   /* 가로로 흘려 담아 줄 수를 줄인다 */
+    font-size: 10px; line-height: 1.6;
+  }
+  .pf-lg { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
+  .pf-lg i {
+    display: inline-block; width: 16px; height: 0;
+    border-top: 3px solid currentColor; border-radius: 2px;
+  }
+  .pf-lg .pf-sw { display: inline-block; width: 16px; height: 3px; border: .5px solid #888; }
 
   #printBOM { margin-top: 12px; }
   .bom-title { font-weight: 700; font-size: 13px; margin-bottom: 4px; }
@@ -943,3 +987,47 @@ body.term-mode #canvas { cursor: crosshair; }
   table.bom td.link a { color: #1a0dab; text-decoration: underline; }
   table.bom tr.bom-total td { font-weight: 700; background: #f0f0f0; }
 }
+
+/* 도면 머리줄 — 캔버스 '위'에 따로 둔다.
+   예전엔 캔버스 안에 절대배치했더니 확대·스크롤을 따라 움직여 자리가 흔들렸다. */
+#canvasHeader {
+  flex: none; display: flex; align-items: center; justify-content: flex-end; gap: var(--sp2);
+  padding: 5px 28px; background: #dfe3e9; border-bottom: 1px solid #d3d9e0;
+}
+#canvasHeader label { margin: 0; font-size: var(--fs-sm); color: var(--tx2); }
+#canvasHeader input {
+  width: 108px; padding: 3px 7px; text-align: center;
+  font-size: var(--fs-sm); font-variant-numeric: tabular-nums; letter-spacing: .3px;
+  border: 1px solid var(--bd); border-radius: var(--r); background: var(--bg); color: var(--tx);
+}
+#canvasHeader input:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 2px var(--primary-bg); }
+/* 비어 있으면(=자동) 최종 수정일을 흐린 안내값으로 보여 준다 */
+#canvasHeader input::placeholder { color: var(--tx3); }
+
+/* ---- 복원 알림 띠 ----
+   지난 작업을 자동으로 되살렸을 때만 잠깐 나타난다.
+   복원이 기본 동작이므로 "예/아니오"를 묻지 않고, 새로 시작할 길만 열어둔다. */
+#restoreBanner {
+  display: flex; align-items: center; gap: var(--sp3);
+  padding: var(--sp2) var(--sp4);
+  background: var(--primary-bg);
+  border-bottom: 1px solid var(--bd2);
+  font-size: var(--fs);
+  color: var(--tx);
+}
+#restoreBanner[hidden] { display: none; }
+#restoreBanner .rb-icon { color: var(--primary); font-size: var(--fs-lg); }
+#restoreBannerText { flex: 1; }
+#restoreBannerText b { font-weight: 600; }
+#restoreBannerText .rb-sub { color: var(--tx2); font-size: var(--fs-sm); margin-left: var(--sp2); }
+#restoreBannerNew {
+  padding: 3px 10px; border: 1px solid var(--primary);
+  background: var(--bg); color: var(--primary);
+  border-radius: var(--r); font-size: var(--fs-sm); cursor: pointer;
+}
+#restoreBannerNew:hover { background: var(--primary); color: #fff; }
+#restoreBannerClose {
+  padding: 2px 6px; border: 0; background: none;
+  color: var(--tx3); font-size: var(--fs); cursor: pointer; line-height: 1;
+}
+#restoreBannerClose:hover { color: var(--tx); }

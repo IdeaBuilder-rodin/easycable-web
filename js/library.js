@@ -3,24 +3,57 @@ var WE = window.WE || {};
 window.WE = WE;
 
 WE.library = (function () {
-  var KEY = "library";
+  var KEY = "library";       // 구 형식(이미지·PDF가 base64로 박힌 통짜) — 마이그레이션 검증 전까지 보존
+  var KEY2 = "library2";     // 신 형식(첨부물은 자산 풀 참조). WE.assets.pack/unpack 경유
   var parts = [];    // { id, name, spec, image, defaultWidth, defaultHeight, folderId, terminals:[{name,color,rx,ry}] }
   var folders = [];  // { id, name, parentId(null=대분류), collapsed } — 2단계까지만 (UI에서 강제)
 
+  // 저장본(구/신 공통) → { parts, folders }
+  function toModel(d) {
+    // 구버전 저장본은 부품 배열만 있음 → 폴더 없이 그대로 (전부 미분류 취급)
+    if (Object.prototype.toString.call(d) === "[object Array]") return { parts: d, folders: [] };
+    return { parts: d.parts || [], folders: d.folders || [] };
+  }
+
+  // 신 형식이 있으면 그걸 쓰고, 없으면 구 형식을 읽어 한 번만 옮긴다.
+  // 옮기기 전 pack→unpack 왕복이 원본과 완전히 같은지 확인하고, 다르면 구 형식을 그대로 쓴다.
   function load(cb) {
-    WE.store.getRaw(KEY, function (json) {
-      if (json) {
+    WE.store.getRaw(KEY2, function (json2) {
+      if (json2) {
         try {
-          var d = JSON.parse(json);
-          // 구버전 저장본은 부품 배열만 있음 → 폴더 없이 그대로 (전부 미분류 취급)
-          if (Object.prototype.toString.call(d) === "[object Array]") { parts = d; folders = []; }
-          else { parts = d.parts || []; folders = d.folders || []; }
+          var m = toModel(WE.assets.unpack(JSON.parse(json2)));
+          parts = m.parts; folders = m.folders;
         } catch (e) { parts = []; folders = []; }
+        cb && cb();
+        return;
       }
-      cb && cb();
+      WE.store.getRaw(KEY, function (json) {
+        if (!json) { cb && cb(); return; }
+        var d;
+        try { d = JSON.parse(json); } catch (e) { parts = []; folders = []; cb && cb(); return; }
+        var m = toModel(d);
+        parts = m.parts; folders = m.folders;
+
+        var packed = WE.assets.pack(d);
+        if (JSON.stringify(WE.assets.unpack(packed)) !== JSON.stringify(d)) {
+          console.warn("[assets] 무손실 검증 실패 — 구 형식을 그대로 사용합니다.");
+          cb && cb();
+          return;
+        }
+        WE.assets.flush(function (n) {
+          WE.store.putRaw(KEY2, JSON.stringify(packed));
+          console.log("[assets] 라이브러리 이전 완료 — 첨부물 " + n + "개를 자산 풀로 분리했습니다. (구 형식은 보존됨)");
+          cb && cb();
+        });
+      });
     });
   }
-  function save() { WE.store.putRaw(KEY, JSON.stringify({ folders: folders, parts: parts })); }
+
+  function save() {
+    var packed = WE.assets.pack({ folders: folders, parts: parts });
+    WE.assets.flush();
+    WE.store.putRaw(KEY2, JSON.stringify(packed));
+  }
 
   // ---- 폴더 ----
   // 폴더 id는 로컬 순번 대신 UUID형 발급 — 나중에 여러 사용자의 라이브러리를
@@ -205,9 +238,15 @@ WE.library = (function () {
   //   (예전엔 무조건 id를 재발급해서, 불러오기 후 BOM의 스펙·가격·데이터시트가 전부 비어 보였음)
   // - 폴더는 "이름+상위폴더" 기준 병합: 같은 폴더가 있으면 재사용, 없으면 새로 만들고
   //   들어온 부품의 folderId를 로컬 폴더 id로 바꿔 연결
+  // 즐겨찾기(fav) 규칙: 내가 표시한 별만 남기고, 남이 보낸 별은 무시한다.
+  //  - 이미 있는 부품은 updatePart가 fav를 건드리지 않으므로 내 표시가 그대로 산다.
+  //  - 새로 들어오는 부품은 addPart가 fav를 옮기지 않으므로 남의 표시가 붙지 않는다.
+  //  - 예외: 라이브러리가 비어 있을 때의 가져오기는 대개 '새 PC에 내 백업 복원'이라
+  //    이때만 파일의 fav를 살린다. (남의 라이브러리를 빈 상태에서 받으면 별이 딸려오지만 지우면 그만)
   function importJson(data, replace) {
     var incoming = (data && data.parts) || [];
     var inFolders = (data && data.folders) || [];
+    var adoptFav = parts.length === 0;   // replace 여부와 무관하게 '가져오기 직전' 기준
     if (replace) { parts = []; folders = []; }
 
     function mergeFolder(name, parentId) {
@@ -232,6 +271,7 @@ WE.library = (function () {
       } else {
         var np = addPart(p);                       // 기본값 정규화(새 id 발급됨)
         if (p.id && !get(p.id)) np.id = p.id;      // 쓰이지 않는 원본 id면 되살려 연결 유지
+        if (adoptFav && p.fav) np.fav = true;      // 빈 라이브러리에 복원할 때만 별을 함께 살림
         added++;
       }
     });

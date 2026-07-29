@@ -28,7 +28,7 @@
 <body>
   <!-- 상단 툴바 -->
   <div id="toolbar">
-    <!-- 1행: 문서 레벨 — 자주 쓰는 것(저장·공유·피드백)만 노출, 나머지는 ☰ 메뉴로 -->
+    <!-- 1행: 문서 레벨 — 자주 쓰는 것(저장·피드백)만 노출, 나머지는 ☰ 메뉴로 -->
     <div class="tb-row">
       <button id="btnAppMenu" title="메뉴">☰</button>
       <span class="brand">🔌 이지케이블<span class="beta-badge">BETA</span></span>
@@ -36,7 +36,6 @@
       <div class="tb-spacer"></div>
       <div class="tb-group">
         <button id="btnSave" title="프로젝트를 파일로 저장 (Ctrl+S)">저장</button>
-        <button id="btnShare" title="프로젝트 + 사용된 부품을 한 파일로 내보내기 (받는 사람은 파일 하나로 열림)">🔗 공유</button>
       </div>
       <div class="tb-divider"></div>
       <button id="btnNotify" title="정식 출시·새 기능 소식을 이메일로 받기">🔔 출시 알림</button>
@@ -48,7 +47,6 @@
       <button id="btnNew" class="menu-item" title="새 프로젝트 (현재 작업 비움)"><span><i>📄</i>새 작업</span></button>
       <button id="btnOpen" class="menu-item" title="프로젝트 파일 열기"><span><i>📂</i>열기</span><kbd>Ctrl+O</kbd></button>
       <button id="btnSaveMenu" class="menu-item" title="프로젝트를 파일로 저장"><span><i>💾</i>저장</span><kbd>Ctrl+S</kbd></button>
-      <button id="btnShareMenu" class="menu-item" title="프로젝트 + 사용된 부품을 한 파일로 내보내기"><span><i>🔗</i>공유</span></button>
       <div class="menu-flyout">
         <button id="btnExport" class="menu-item" title="PDF 또는 이미지로 내보내기"><span><i>📤</i>내보내기</span><kbd>▸</kbd></button>
         <div id="exportSub" class="menu-sub">
@@ -57,6 +55,7 @@
         </div>
       </div>
       <button id="btnSample" class="menu-item" title="예제 배선도를 열어봅니다"><span><i>💡</i>샘플 프로젝트</span></button>
+      <button id="btnRecent" class="menu-item" title="이 브라우저에 자동 보관된 다른 배선도를 이어서 엽니다"><span><i>🗂</i>최근 작업</span></button>
       <button id="btnHistory" class="menu-item" title="자동 보관된 이전 스냅샷으로 되돌립니다"><span><i>🕘</i>이전 버전 복구</span></button>
       <div class="menu-divider"></div>
       <div class="menu-flyout">
@@ -98,6 +97,14 @@
     </div>
   </div>
 
+  <!-- 지난 작업을 되살렸을 때 알리는 띠. 복원은 기본 동작이고, 새로 시작하려면 여기서 한 번 누르면 된다 -->
+  <div id="restoreBanner" hidden>
+    <span class="rb-icon">⟳</span>
+    <span id="restoreBannerText"></span>
+    <button type="button" id="restoreBannerNew">새 배선도로 시작</button>
+    <button type="button" id="restoreBannerClose" title="닫기" aria-label="닫기">✕</button>
+  </div>
+
   <div id="main">
     <!-- 좌측 라이브러리 패널 (Phase 5에서 채움) -->
     <aside id="leftPanel">
@@ -108,22 +115,33 @@
       <input type="file" id="fileLibAdd" accept="image/*" hidden />
       <input type="file" id="fileLibImport" accept=".ezclib,.json,application/json" hidden />
       <div class="lib-search-row">
-        <input type="search" id="libSearch" placeholder="🔍 부품 검색 (이름·스펙)" autocomplete="off" />
+        <input type="search" id="libSearch" placeholder="🔍 부품 검색" autocomplete="off" />
         <button id="btnFolderAdd" class="lib-folder-add" title="새 폴더 만들기 (부품 분류용)">＋📁</button>
       </div>
       <div id="libList" class="lib-list"></div>
       <div class="lib-footer">
-        <button id="btnLibExport" class="lib-io-btn" title="라이브러리 전체를 .json 파일로 저장 (다른 PC·브라우저로 옮길 때)">⤓ 저장</button>
-        <button id="btnLibImport" class="lib-io-btn" title=".json 라이브러리 파일을 불러와 추가">⤒ 불러오기</button>
+        <button id="btnLibExport" class="lib-io-btn" title="부품 라이브러리 전체를 .ezclib 파일로 내보냅니다 (다른 PC·브라우저로 옮기거나 백업할 때)">⤓ 내보내기</button>
+        <button id="btnLibImport" class="lib-io-btn" title=".ezclib 라이브러리 파일을 불러와 내 라이브러리에 추가합니다">⤒ 불러오기</button>
       </div>
     </aside>
-    <div class="resizer" id="resizerLeft" title="드래그로 너비 조절"></div>
+    <div class="resizer" id="resizerLeft" title="드래그로 너비 조절 · 더블클릭하면 기본 너비로"></div>
 
     <!-- 인쇄용 제목 (화면에선 숨김) -->
-    <div id="printTitle" class="print-only"></div>
+    <div id="printTitle" class="print-only">
+      <span id="printTitleName"></span>
+      <span id="printTitleDate"></span>
+    </div>
 
     <!-- 중앙 영역: 캔버스(스크롤) + 하단 탭 바 -->
     <div id="centerCol">
+      <!-- 도면 머리줄: 작성일. 스크롤·확대와 무관하게 늘 같은 자리에 있고,
+           PDF에서도 도면 위 우측에 같은 값이 찍힌다. -->
+      <div id="canvasHeader">
+        <label for="projDate">작성일</label>
+        <input type="text" id="projDate" inputmode="numeric" maxlength="10"
+               autocomplete="off" spellcheck="false"
+               title="숫자만 입력해도 됩니다 (예: 20260723 → 2026.07.23) · 비우면 최종 수정일이 자동으로 들어갑니다" />
+      </div>
     <!-- 중앙 캔버스 -->
     <section id="canvasWrap">
       <svg id="canvas" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 900">
@@ -218,9 +236,18 @@
 
     <!-- 인쇄용 범례 (화면에선 숨김) -->
     <!-- 인쇄용 BOM (화면에선 숨김) -->
+    <!-- PDF 하단: 배선 범례. 16:9 도면을 A4 가로에 넣으면 아래가 남는데 그 자리를 쓴다.
+         높이를 묶어 두어 색이 많아져도 다음 장으로 밀리지 않는다. -->
+    <div id="printFooter" class="print-only">
+      <div id="printLegend">
+        <span class="pf-head">배선 범례</span>
+        <span id="printLegendItems"></span>
+      </div>
+    </div>
+
     <div id="printBOM" class="print-only"></div>
 
-    <div class="resizer" id="resizerRight" title="드래그로 너비 조절"></div>
+    <div class="resizer" id="resizerRight" title="드래그로 너비 조절 · 더블클릭하면 기본 너비로"></div>
     <!-- 우측 속성 패널 -->
     <aside id="rightPanel">
       <div id="propPanel">
@@ -276,17 +303,46 @@
         <div id="wireProps" hidden>
           <div id="wireConn" class="wp-conn muted" hidden></div>
 
+          <!-- 정렬(다중선택 시) — 다중선택의 주 작업이라 맨 위 -->
+          <div id="wireAlign" class="wp-section wp-first" hidden>
+            <div class="wp-sec-title">정렬</div>
+            <div class="wire-align-row">
+              <button data-walign="align" title="처음 클릭한 배선의 클릭한 구간에 맞춤(세로/가로 자동)">⌈ 구간 정렬</button>
+              <label class="wgap">간격 <input id="wireGap" type="number" value="0" step="1" /> px</label>
+            </div>
+            <div class="wire-align-row">
+              <button data-walign="distVert" title="선택한 세로선들을 좌우로 균등하게 벌림">
+                <svg viewBox="0 0 24 24"><rect x="3" y="4" width="2.5" height="16"/><rect x="10.75" y="4" width="2.5" height="16"/><rect x="18.5" y="4" width="2.5" height="16"/></svg><span>세로선 균등</span>
+              </button>
+              <button data-walign="distHoriz" title="선택한 가로선들을 위아래로 균등하게 벌림">
+                <svg viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="2.5"/><rect x="4" y="10.75" width="16" height="2.5"/><rect x="4" y="18.5" width="16" height="2.5"/></svg><span>가로선 균등</span>
+              </button>
+            </div>
+            <div class="wire-align-row">
+              <button data-walign="merge" title="선택한 배선을 한 선처럼 겹쳐 묶기(2개 이상)"><span>🔗 합치기</span></button>
+              <button data-walign="unmerge" title="묶음을 풀어 다시 따로 이동 가능하게"><span>✂️ 풀기</span></button>
+            </div>
+          </div>
+
           <!-- 스타일 -->
-          <div class="wp-row2">
-            <label>색상 <input type="color" id="wireColor" /></label>
-            <label>두께 <input type="number" id="wireWidth" min="1" max="30" /></label>
+          <div class="wp-section">
+            <div class="wp-sec-title">스타일</div>
+            <div class="wp-row2">
+              <label>색상 <input type="color" id="wireColor" /></label>
+              <label>두께 <input type="number" id="wireWidth" min="1" max="30" /></label>
+            </div>
+            <label class="chk" title="이 배선을 자동 겹침 회피에서 제외 — 다른 선과 겹쳐도 안 벌어짐"><input type="checkbox" id="wireAllowOverlap" /> 겹침 허용</label>
           </div>
-          <label>라벨 <input type="text" id="wireLabelText" placeholder="예: W1, B1, C1…" /></label>
-          <div class="wp-btn-row">
-            <button id="wireLabelReset" title="드래그로 옮긴 라벨 위치를 자동 배치로 되돌림">위치 초기화</button>
-            <button id="wireLabelRemove" title="이 배선의 라벨 제거">라벨 제거</button>
+
+          <!-- 라벨 -->
+          <div class="wp-section">
+            <div class="wp-sec-title">라벨</div>
+            <label><input type="text" id="wireLabelText" placeholder="예: W1, B1, C1…" /></label>
+            <div class="wp-btn-row">
+              <button id="wireLabelReset" title="드래그로 옮긴 라벨 위치를 자동 배치로 되돌림">위치 초기화</button>
+              <button id="wireLabelRemove" title="이 배선의 라벨 제거">라벨 제거</button>
+            </div>
           </div>
-          <label class="chk"><input type="checkbox" id="wireAllowOverlap" /> 겹침 허용(회피 안 함)</label>
 
           <!-- 규격(AWG) -->
           <div id="wireGauge" class="wp-section">
@@ -302,23 +358,6 @@
                 <button id="wireCalcApply" class="btn btn-block">합산 → 전류 적용</button>
               </div>
             </details>
-          </div>
-
-          <!-- 정렬(다중선택 시) -->
-          <div id="wireAlign" class="wp-section" hidden>
-            <div class="wp-sec-title">정렬 (다중 선택)</div>
-            <div class="wire-align-row">
-              <button data-walign="align" title="처음 클릭한 배선의 클릭한 구간에 맞춤(세로/가로 자동)">⌈ 구간 정렬</button>
-              <label class="wgap">간격 <input id="wireGap" type="number" value="0" step="1" /> px</label>
-            </div>
-            <div class="wire-align-row">
-              <button data-walign="distVert" title="선택한 세로선들을 좌우로 균등하게 벌림">
-                <svg viewBox="0 0 24 24"><rect x="3" y="4" width="2.5" height="16"/><rect x="10.75" y="4" width="2.5" height="16"/><rect x="18.5" y="4" width="2.5" height="16"/></svg><span>세로선 균등</span>
-              </button>
-              <button data-walign="distHoriz" title="선택한 가로선들을 위아래로 균등하게 벌림">
-                <svg viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="2.5"/><rect x="4" y="10.75" width="16" height="2.5"/><rect x="4" y="18.5" width="16" height="2.5"/></svg><span>가로선 균등</span>
-              </button>
-            </div>
           </div>
 
           <button id="wireDelete" class="btn btn-danger btn-block">배선 삭제</button>
@@ -671,9 +710,19 @@
   <div id="historyModal" class="modal" hidden>
     <div class="modal-box" style="width:min(480px,92vw)">
       <h3>🕘 이전 버전 복구</h3>
-      <p class="muted" style="margin:0 0 10px">이 브라우저에 5분 간격으로 자동 보관된 최근 스냅샷입니다 (최대 3개).</p>
+      <p class="muted" style="margin:0 0 10px">지금 배선도를 5분 간격으로 자동 보관한 기록입니다 (최대 40개).</p>
       <div id="historyList" class="history-list"></div>
       <div class="modal-actions"><button id="historyClose">닫기</button></div>
+    </div>
+  </div>
+
+  <!-- 최근 작업(다른 배선도) 목록 — 문서마다 자동저장 슬롯이 따로라 여기서 골라 이어서 연다 -->
+  <div id="recentModal" class="modal" hidden>
+    <div class="modal-box" style="width:min(520px,92vw)">
+      <h3>🗂 최근 작업</h3>
+      <p class="muted" style="margin:0 0 10px">이 브라우저에 자동 보관된 배선도입니다. 이어서 열 수 있습니다.</p>
+      <div id="recentList" class="history-list"></div>
+      <div class="modal-actions"><button id="recentClose">닫기</button></div>
     </div>
   </div>
 
@@ -737,6 +786,7 @@
   <script src="js/termeditor.js"></script>
   <script src="js/interactions.js"></script>
   <script src="js/store.js"></script>
+  <script src="js/assets.js"></script>   <!-- store.js 다음: 자산 풀이 store의 IndexedDB를 쓴다 -->
   <script src="js/history.js"></script>
   <script src="js/library.js"></script>
   <script src="js/io.js"></script>

@@ -1,13 +1,36 @@
 // io.js — 프로젝트 저장/열기
 // Chrome/Edge: File System Access API로 "같은 파일에 진짜 덮어쓰기"(Ctrl+S가 워드/한글처럼 조용히 저장)
 // 그 외 브라우저(Safari/Firefox 등): 기존 방식(매번 새 파일 다운로드)으로 자동 대체
+//
+// 저장 형식(v2): 도면 + 그 도면에 쓰인 부품 정보(스펙·단가·전기정보·데이터시트)를 한 파일에 담는다.
+// 예전엔 [저장]은 도면만, [공유]는 부품까지 담아서 둘을 구분해야 했는데,
+// 저장한 파일을 다른 PC에서 열면 BOM만 조용히 비는 사고가 났다 → [저장] 하나로 합쳤다.
+// 첨부물은 내용 해시로 중복을 없앤 뒤 gzip으로 묶는다(실측 9.91MB → 6.43MB).
+// 예전에 만든 파일(통짜 JSON / 공유 번들)도 그대로 열린다 — 앞부분을 보고 형식을 가린다.
 var WE = window.WE || {};
 window.WE = WE;
 
 WE.io = (function () {
   var _supportsFS = "showSaveFilePicker" in window && "showOpenFilePicker" in window;
+  var _supportsGzip = typeof CompressionStream === "function" && typeof DecompressionStream === "function";
   var _fileHandle = null;   // 현재 연결된 파일(FileSystemFileHandle) — 있으면 Ctrl+S가 여기로 조용히 저장됨
-  var FILE_TYPES = [{ description: WE.i18n.t("이지케이블 프로젝트"), accept: { "application/json": [".ezc", ".json"] } }];
+  var FILE_TYPES = [{ description: WE.i18n.t("이지케이블 프로젝트"), accept: { "application/octet-stream": [".ezc"], "application/json": [".json"] } }];
+  var FORMAT = "easycable", FORMAT_VERSION = 2;
+
+  // ---- gzip (브라우저 내장, 외부 라이브러리 없음) ----
+  function gzip(str) {
+    if (!_supportsGzip) return Promise.resolve(null);
+    var s = new Blob([str]).stream().pipeThrough(new CompressionStream("gzip"));
+    return new Response(s).arrayBuffer().catch(function () { return null; });
+  }
+  function gunzip(buf) {
+    var s = new Blob([buf]).stream().pipeThrough(new DecompressionStream("gzip"));
+    return new Response(s).text();
+  }
+  function isGzip(buf) {
+    var b = new Uint8Array(buf, 0, Math.min(2, buf.byteLength));
+    return b.length >= 2 && b[0] === 0x1f && b[1] === 0x8b;   // gzip 매직바이트
+  }
 
   // ---- 미저장 변경 감지 ----
   // 마지막으로 파일에 저장/공유/열기한 시점의 프로젝트 스냅샷.
@@ -26,7 +49,6 @@ WE.io = (function () {
 
   function init() {
     document.getElementById("btnSave").addEventListener("click", save);
-    document.getElementById("btnShare").addEventListener("click", share);
     document.getElementById("btnOpen").addEventListener("click", openFile);
     document.getElementById("fileOpen").addEventListener("change", onOpenFileInput);
     // 파일로 저장 안 한 변경이 있을 때만 닫기 확인 (문구는 브라우저 고정 문구가 뜸 — 커스텀 불가)
@@ -41,8 +63,35 @@ WE.io = (function () {
     return (s || WE.i18n.t("배선도")).replace(/[\\/:*?"<>|]/g, "_").slice(0, 60);
   }
 
+  // 이 도면이 쓰는 부품과 첨부물까지 한 덩어리로 묶는다.
+  // 부품 정보(스펙·단가·전기정보·데이터시트)가 함께 있어야 다른 PC에서 열어도 BOM이 온전하다.
+  function buildBundle() {
+    var proj = WE.model.project;
+    var seen = {}, parts = [];
+    (proj.components || []).forEach(function (c) {
+      if (!c.libraryId || seen[c.libraryId]) return;
+      var p = WE.library.get(c.libraryId);
+      if (p) { seen[c.libraryId] = 1; parts.push(p); }
+    });
+    // 첨부물은 참조로 빼고 실제 데이터는 assets에 한 벌만 담는다(같은 이미지가 여러 번 들어가지 않게)
+    var packed = WE.assets.pack({ project: proj, parts: parts });
+    var used = WE.assets.collectRefs(packed);
+    var assets = {};
+    for (var k in used) { var v = WE.assets.get(k); if (v != null) assets[k] = v; }
+    return JSON.stringify({
+      format: FORMAT, version: FORMAT_VERSION,
+      project: packed.project, parts: packed.parts, assets: assets
+    });
+  }
+
+  // 저장할 바이트 만들기 — 가능하면 gzip, 안 되는 브라우저는 그냥 JSON(그래도 열린다)
+  function buildPayload() {
+    var json = buildBundle();
+    return gzip(json).then(function (buf) { return buf || json; });
+  }
+
   function download(dataStr, filename) {
-    var blob = new Blob([dataStr], { type: "application/json" });
+    var blob = new Blob([dataStr], { type: "application/octet-stream" });
     var url = URL.createObjectURL(blob);
     var a = document.createElement("a");
     a.href = url;
@@ -65,22 +114,23 @@ WE.io = (function () {
   // 저장: 이미 연결된 파일이 있으면 그 파일에 조용히 덮어쓰기, 없으면 "다른 이름으로 저장" 새로 지정
   function save() {
     if (WE.app && WE.app.track) WE.app.track("save_project");
-    var data = JSON.stringify(WE.model.project);
     var fn = safeName(WE.model.project.meta.name) + ".ezc";
 
-    if (!_supportsFS) { download(data, fn); markClean(); WE.app.setHint(WE.i18n.t("저장됨: ") + fn); return; }
+    buildPayload().then(function (data) {
+      if (!_supportsFS) { download(data, fn); markClean(); WE.app.setHint(WE.i18n.t("저장됨: ") + fn); return; }
 
-    if (_fileHandle) {
-      writeToHandle(_fileHandle, data).then(function () {
-        markClean();
-        WE.app.setHint(WE.i18n.t("저장됨: ") + _fileHandle.name);
-      }).catch(function () {
-        _fileHandle = null;   // 파일이 삭제/이동된 경우 등 → 새로 지정하도록 폴백
-        saveAsNewHandle(data, fn);
-      });
-      return;
-    }
-    saveAsNewHandle(data, fn);
+      if (_fileHandle) {
+        writeToHandle(_fileHandle, data).then(function () {
+          markClean();
+          WE.app.setHint(WE.i18n.t("저장됨: ") + _fileHandle.name);
+        }).catch(function () {
+          _fileHandle = null;   // 파일이 삭제/이동된 경우 등 → 새로 지정하도록 폴백
+          saveAsNewHandle(data, fn);
+        });
+        return;
+      }
+      saveAsNewHandle(data, fn);
+    });
   }
 
   function saveAsNewHandle(data, fn) {
@@ -98,25 +148,6 @@ WE.io = (function () {
     });
   }
 
-  // 공유: 배선도 + 이 프로젝트에 실제 쓰인 라이브러리 부품을 한 파일로 (받는 사람은 파일 하나로 열림)
-  // 항상 새 파일로 내보내는 별도 산출물이라 파일 핸들과 무관하게 다운로드 방식 유지
-  function share() {
-    if (WE.app && WE.app.track) WE.app.track("share_project");
-    var proj = WE.model.project;
-    var usedIds = {}, usedParts = [];
-    (proj.components || []).forEach(function (c) {
-      if (c.libraryId && !usedIds[c.libraryId]) {
-        var p = WE.library.get(c.libraryId);
-        if (p) { usedIds[c.libraryId] = 1; usedParts.push(p); }
-      }
-    });
-    var bundle = { format: "easycable-share", version: 1, project: proj, libraryParts: usedParts };
-    var fn = safeName(proj.meta.name) + WE.i18n.t("_공유.ezc");
-    download(JSON.stringify(bundle), fn);
-    markClean();   // 공유 파일에도 도면 전체가 담기므로 "파일로 보관됨"으로 간주
-    WE.app.setHint(WE.i18n.t("공유 파일 저장: ") + fn + WE.i18n.t(" (부품 ") + usedParts.length + WE.i18n.t("개 포함)"));
-  }
-
   // 열기: 지원 브라우저는 File System Access API로 파일을 "연결"(이후 Ctrl+S가 이 파일로 저장됨),
   // 미지원 브라우저는 기존 input[type=file] 방식으로 폴백
   function openFile() {
@@ -124,7 +155,9 @@ WE.io = (function () {
     window.showOpenFilePicker({ types: FILE_TYPES }).then(function (handles) {
       var handle = handles[0];
       return handle.getFile().then(function (file) {
-        return file.text().then(function (text) { loadProjectText(text, file.name); _fileHandle = handle; });
+        return file.arrayBuffer().then(function (buf) {
+          return loadProjectBuffer(buf, file.name).then(function (ok) { if (ok) _fileHandle = handle; });
+        });
       });
     }).catch(function (err) {
       if (err && err.name === "AbortError") return;   // 사용자가 열기창 취소
@@ -138,37 +171,63 @@ WE.io = (function () {
     var reader = new FileReader();
     reader.onload = function (ev) {
       _fileHandle = null;   // input 방식으로 연 파일은 핸들이 없어 Ctrl+S 시 "다른 이름으로 저장"부터 다시 시작
-      loadProjectText(ev.target.result, file.name);
+      loadProjectBuffer(ev.target.result, file.name);
     };
-    reader.readAsText(file);
+    reader.readAsArrayBuffer(file);
     e.target.value = ""; // 같은 파일 재선택 허용
   }
 
-  // 텍스트(JSON) 파싱 후 프로젝트 로드 — 일반 파일/공유 파일(bundle) 공용
+  // 바이트로 받아 형식을 가린다: gzip이면 풀고, 아니면 텍스트 그대로 → loadProjectText로 넘긴다
+  function loadProjectBuffer(buf, displayName) {
+    if (typeof buf === "string") return Promise.resolve(loadProjectText(buf, displayName));
+    var p = isGzip(buf) ? gunzip(buf) : Promise.resolve(new TextDecoder().decode(buf));
+    return p.then(function (text) {
+      return loadProjectText(text, displayName);
+    }).catch(function (err) {
+      alert(WE.i18n.t("파일을 읽을 수 없습니다: ") + (err && err.message ? err.message : err));
+      return false;
+    });
+  }
+
+  // 텍스트(JSON) 파싱 후 프로젝트 로드.
+  // 세 가지 형식을 모두 받는다:
+  //   v2 통합본(format:"easycable")  — 도면 + 부품 + 첨부물(assets)
+  //   구 공유본(easycable-share)     — 도면 + 부품(첨부물이 부품 안에 통째로)
+  //   구 저장본(도면만)              — 부품 정보 없음(BOM은 로컬 라이브러리에 의존)
   function loadProjectText(text, displayName) {
     try {
       var data = JSON.parse(text);
-      var added = 0;
-      // 공유 파일(bundle)이면: 안에 든 부품을 내 라이브러리에 병합(이름 같으면 건너뜀) 후 프로젝트 로드
-      if (data && data.format === "easycable-share") {
-        var res = mergeLibraryParts(data.libraryParts || []);
+      var added = 0, project = data, incomingParts = null;
+
+      if (data && data.format === FORMAT) {
+        // 첨부물을 자산 풀에 먼저 들여야 참조를 되돌릴 수 있다(이미 있는 것은 자동으로 합쳐진다)
+        WE.assets.adopt(data.assets || {});
+        project = WE.assets.unpack(data.project);
+        incomingParts = WE.assets.unpack(data.parts || []);
+      } else if (data && data.format === "easycable-share") {
+        project = data.project;
+        incomingParts = data.libraryParts || [];
+      }
+
+      if (incomingParts) {
+        var res = mergeLibraryParts(incomingParts);
         added = res.added;
         // 프로젝트 부품의 libraryId를 받는 쪽 실제 부품 id로 재연결(전기정보·재배치 연동 유지)
-        (data.project.components || []).forEach(function (c) {
+        (project.components || []).forEach(function (c) {
           if (c.libraryId && res.idMap[c.libraryId]) c.libraryId = res.idMap[c.libraryId];
         });
-        WE.model.loadProject(data.project);
-        _fileHandle = null;   // 공유 파일은 "저장 대상"이 아님 — 다음 저장은 새로 지정
-      } else {
-        WE.model.loadProject(data);
       }
+
+      WE.model.loadProject(project);
       WE.app.reloadUI();
       if (WE.history) WE.history.reset();
       if (WE.store) WE.store.saveNow(); // 연 내용을 즉시 임시저장에 반영
       markClean();   // 방금 연 파일 내용 그대로 = 미저장 변경 없음
       WE.app.setHint(WE.i18n.t("열기 완료: ") + displayName + (added ? (WE.i18n.t(" · 새 부품 ") + added + WE.i18n.t("개를 라이브러리에 추가")) : ""));
+      return true;
     } catch (err) {
       alert(WE.i18n.t("파일을 읽을 수 없습니다: ") + err.message);
+      return false;
     }
   }
 
@@ -211,5 +270,9 @@ WE.io = (function () {
     return changed;
   }
 
-  return { init: init, save: save, share: share, clearFileHandle: clearFileHandle, loadProjectText: loadProjectText };
+  return {
+    init: init, save: save, clearFileHandle: clearFileHandle,
+    loadProjectText: loadProjectText, loadProjectBuffer: loadProjectBuffer,
+    buildBundle: buildBundle   // 테스트·진단용
+  };
 })();

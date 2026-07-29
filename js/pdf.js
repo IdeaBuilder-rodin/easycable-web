@@ -31,9 +31,59 @@ WE.pdf = (function () {
     window.print();
   }
 
+  // 화면 작성일 칸과 같은 표기(YYYY.MM.DD)를 쓴다
+  function ymd(t) {
+    var d = (t instanceof Date) ? t : new Date(t);
+    function p2(n) { return (n < 10 ? "0" : "") + n; }
+    return d.getFullYear() + "." + p2(d.getMonth() + 1) + "." + p2(d.getDate());
+  }
+
+  // 도면 작성일 — 사용자가 지정했으면 그 값, 아니면 마지막으로 내용이 바뀐 시각
+  function drawnDate() {
+    var m = WE.model.project.meta || {};
+    if (m.drawnAt) return m.drawnAt;
+    var t = WE.store && WE.store.lastSavedAt ? WE.store.lastSavedAt() : 0;
+    return ymd(t || Date.now());
+  }
+
+  // 배선 범례 — 도면에 실제로 쓰인 색만 넣는다.
+  // 팔레트 전체를 넣으면 안 쓴 색까지 나와 길어지고, 하단 블록을 넘길 수 있다.
+  function fillLegend() {
+    var proj = WE.model.project;
+    var used = {};
+    (proj.wires || []).forEach(function (w) {
+      if (w && w.color) used[String(w.color).toLowerCase()] = 1;
+    });
+    var items = (proj.palette || []).filter(function (p) {
+      return p && p.label && used[String(p.color).toLowerCase()];
+    });
+    var box = document.getElementById("printLegendItems");
+    box.innerHTML = "";
+    items.forEach(function (p) {
+      var el = document.createElement("span");
+      el.className = "pf-lg";
+      var sw = document.createElement("i");
+      // 흰색 계열은 종이에서 안 보이므로 테두리 있는 견본으로
+      var c = String(p.color).toLowerCase();
+      if (c === "#fff" || c === "#ffffff" || c === "white") {
+        sw.className = "pf-sw"; sw.style.background = "#fff";
+      } else {
+        sw.style.color = p.color;
+      }
+      el.appendChild(sw);
+      el.appendChild(document.createTextNode(p.label));
+      box.appendChild(el);
+    });
+    // 쓰인 색에 이름이 하나도 없으면 범례 칸을 통째로 숨겨 빈 상자가 남지 않게
+    document.getElementById("printLegend").style.display = items.length ? "" : "none";
+  }
+
   function populate() {
-    // 제목
-    document.getElementById("printTitle").textContent = WE.model.project.meta.name || "";
+    // 제목 + 우측 상단 날짜
+    var proj0 = WE.model.project;
+    document.getElementById("printTitleName").textContent = (proj0.meta && proj0.meta.name) || "";
+    document.getElementById("printTitleDate").textContent = drawnDate();
+    fillLegend();
 
     // BOM (자재명세서) — 화면에 보이는 그 표(열 구성·순서·너비·행 높이)를 그대로 인쇄
     var bomBox = document.getElementById("printBOM");
@@ -190,5 +240,5 @@ WE.pdf = (function () {
     }
   }
 
-  return { init: init, exportPrint: exportPrint };
+  return { init: init, exportPrint: exportPrint, populate: populate };
 })();

@@ -57,6 +57,8 @@ WE.app = (function () {
     bindHelp();
     bindAppMenu();
     bindBOMView();
+    bindRestoreBanner();
+    bindRecentModal();
     loadSettings();
     loadWireSettings();
     document.getElementById("wireWidthSel").value = String(WE.model.ui.wireWidth);
@@ -65,7 +67,9 @@ WE.app = (function () {
     WE.render.renderAll();
     refreshProps();
 
-    // 라이브러리 로드 (프로젝트는 항상 새 화면으로 시작 — 이전 작업 자동 복원 안 함)
+    // 시작 순서는 반드시 이 차례여야 한다(예전엔 라이브러리와 샘플이 동시에 떠서 순서가 들쭉날쭉했다):
+    //   자산 풀 → 라이브러리 → 이전 작업 복원 → (복원할 게 없을 때만) 첫 방문 샘플
+    // 자산 풀이 먼저 올라와야 라이브러리·도면의 첨부물 참조를 되돌릴 수 있다.
     WE.store.init(function () {
       function finish() {
         WE.store.syncBaseline();
@@ -75,17 +79,113 @@ WE.app = (function () {
         WE.history.start();
         updateHistoryButtons();
         requestAnimationFrame(fitZoom);   // 최초 화면은 현재 크기에 '맞춤'으로 시작
+        WE.store.pruneDrafts(20);         // 문서 슬롯이 무한정 쌓이지 않게 (현재·타 탭 문서는 제외)
+        // 쓰이지 않는 첨부물 정리 — 시작 직후 화면을 방해하지 않도록 조금 뒤로 미룬다
+        setTimeout(function () { WE.assets.sweepIfDue(); }, 4000);
       }
-      // 첫 방문(샘플 로드 안 한 브라우저)이면 sample.json이 있을 때만 예시로 보여줌
-      tryLoadSample(function (loaded) {
-        if (!loaded) {
-          applyDefaultLayoutToProject();
-          applyDefaultPaletteToProject();  // 저장해둔 배선색 팔레트로 시작(새로고침해도 유지)
-          renderPalette();
-        }
-        finish();
+      WE.assets.loadAll(function () {
+        WE.library.load(function () {
+          renderLibrary();
+          WE.store.migrateLegacy(function () {
+            // 지난 작업 이어서 하기 — 창을 닫거나 브라우저가 죽어도 마지막 상태로 돌아온다.
+            var mine = WE.store.myDoc();
+            if (mine) {
+              // 이 탭이 보던 문서로 돌아간다(새로고침). 저장본이 없으면 '비워둔 채였다'는 뜻이므로
+              // 다른 도면을 끌어오지 않고 그대로 빈 화면으로 둔다.
+              WE.store.loadDraft(mine, function (saved) {
+                if (saved && restoreDraft(saved)) { finish(); return; }
+                WE.model.project.meta.id = mine;
+                startFresh(false);
+              });
+              return;
+            }
+            // 새로 연 탭 — 가장 최근 작업을 잇되, 다른 탭이 편집 중인 문서는 건너뛴다
+            WE.store.listDrafts(function (drafts) {
+              var pick = null;
+              for (var i = 0; i < drafts.length; i++) {
+                if (!WE.store.claimedByOther(drafts[i].id)) { pick = drafts[i]; break; }
+              }
+              if (!pick) { startFresh(drafts.length > 0); return; }
+              WE.store.loadDraft(pick.id, function (saved) {
+                if (saved && restoreDraft(saved)) { finish(); return; }
+                startFresh(drafts.length > 0);
+              });
+            });
+          });
+
+          // 되살릴 게 없을 때: 첫 방문이면 샘플, 아니면 빈 화면
+          function startFresh(othersBusy) {
+            tryLoadSample(function (loaded) {
+              if (!loaded) {
+                applyDefaultLayoutToProject();
+                applyDefaultPaletteToProject();  // 저장해둔 배선색 팔레트로 시작(새로고침해도 유지)
+                renderPalette();
+              }
+              finish();
+              if (othersBusy) {
+                setHint(WE.i18n.t("다른 탭에서 편집 중인 작업이 있어 새 배선도로 시작했습니다. (☰ → 최근 작업)"));
+              }
+            });
+          }
+        });
       });
-      WE.library.load(renderLibrary);
+    });
+  }
+
+  // 자동저장본으로 화면을 되돌린다. 되돌릴 내용이 없으면 false.
+  function restoreDraft(saved) {
+    var empty = !(saved.components && saved.components.length) &&
+                !(saved.wires && saved.wires.length) &&
+                !(saved.annotations && saved.annotations.length);
+    if (empty) return false;   // 빈 도면은 복원해봐야 빈 화면 — 샘플/기본 시작에 양보
+    try {
+      WE.model.loadProject(saved);
+      reloadUI();
+    } catch (e) { return false; }
+    // 복원본은 아직 어떤 파일에도 담기지 않은 상태다. 파일 연결을 끊어두어야
+    // 다음 Ctrl+S가 예전 파일을 조용히 덮어쓰지 않고 저장 위치를 다시 묻는다.
+    WE.io.clearFileHandle();
+    WE.store.claimCurrent();   // 이 문서는 내가 편집한다고 표시 (다른 탭이 겹쳐 열지 않게)
+    // 되살린 시점을 즉시 스냅샷으로 남긴다 — 바로 '새 배선도로 시작'을 눌러도 되돌릴 수 있게
+    WE.store.pushSnapshot();
+    showRestoreBanner(saved._savedAt);
+    return true;
+  }
+
+  // ---- 복원 알림 띠 ----
+  var _restoreBannerTimer = null;
+  function fmtSavedAt(t) {
+    if (!t) return "";
+    var d = new Date(t), now = new Date();
+    var hm = pad2(d.getHours()) + ":" + pad2(d.getMinutes());
+    var sameDay = d.toDateString() === now.toDateString();
+    if (sameDay) return WE.i18n.t("오늘 ") + hm;
+    var yst = new Date(now.getTime() - 86400000);
+    if (d.toDateString() === yst.toDateString()) return WE.i18n.t("어제 ") + hm;
+    return (d.getMonth() + 1) + "/" + d.getDate() + " " + hm;
+  }
+  function hideRestoreBanner() {
+    if (_restoreBannerTimer) { clearTimeout(_restoreBannerTimer); _restoreBannerTimer = null; }
+    document.getElementById("restoreBanner").hidden = true;
+  }
+  function showRestoreBanner(savedAt) {
+    var when = fmtSavedAt(savedAt);
+    var name = (WE.model.project.meta && WE.model.project.meta.name) || "";
+    document.getElementById("restoreBannerText").innerHTML =
+      WE.i18n.t("지난 작업을 이어서 불러왔습니다.") +
+      (when || name
+        ? "<span class='rb-sub'>" + esc(when) + (when && name ? " · " : "") + esc(name) + "</span>"
+        : "");
+    document.getElementById("restoreBanner").hidden = false;
+    // 방해가 되지 않도록 잠시 뒤 스스로 사라진다(내용은 이미 화면에 복원돼 있다)
+    _restoreBannerTimer = setTimeout(hideRestoreBanner, 15000);
+  }
+  function bindRestoreBanner() {
+    document.getElementById("restoreBannerClose").addEventListener("click", hideRestoreBanner);
+    document.getElementById("restoreBannerNew").addEventListener("click", function () {
+      hideRestoreBanner();
+      startNewProject();
+      setHint(WE.i18n.t("새 배선도로 시작했습니다. 이전 작업은 ☰ 메뉴 → 최근 작업에서 이어서 열 수 있습니다."));
     });
   }
 
@@ -1780,17 +1880,28 @@ WE.app = (function () {
     box.innerHTML = html;
   }
 
+  // 빈 배선도로 되돌린다 (☰ 새로 만들기 / 복원 띠의 '새 배선도로 시작' 공용)
+  function startNewProject() {
+    // 비우기 전에 스냅샷을 남긴다. 실수로 눌렀더라도 ☰ → 이전 버전 복구로 되살릴 수 있어야 한다.
+    WE.store.pushSnapshot();
+    var prev = WE.model.project.meta.id;
+    WE.model.newProject();           // 새 문서 id 발급 → 자기 슬롯을 새로 갖는다
+    applyDefaultLayoutToProject();   // 새 배선도도 마지막 BOM 레이아웃 유지
+    applyDefaultPaletteToProject();  // 새 배선도도 마지막 배선색 팔레트 유지
+    WE.io.clearFileHandle();         // 이전 파일과의 연결 해제 → 다음 저장은 "다른 이름으로" 새로 지정
+    reloadUI();
+    WE.store.syncBaseline();
+    WE.history.reset();
+    // 이전 문서의 자동저장본은 지우지 않는다 — ☰ → 최근 작업에서 그대로 이어서 열 수 있다.
+    // 점유만 놓아주어 다른 탭이 이어받을 수 있게 한다.
+    WE.store.claimCurrent();   // 새 문서를 점유하고 이 탭의 문서로 기억 (옛 문서는 자동으로 놓아준다)
+  }
+
   function bindFileButtons() {
     document.getElementById("btnNew").addEventListener("click", function () {
-      if (!confirm(WE.i18n.t("현재 작업을 비우고 새 프로젝트를 시작할까요?\n(저장 안 한 내용은 사라집니다)"))) return;
-      WE.model.newProject();
-      applyDefaultLayoutToProject();   // 새 배선도도 마지막 BOM 레이아웃 유지
-      applyDefaultPaletteToProject();  // 새 배선도도 마지막 배선색 팔레트 유지
-      WE.io.clearFileHandle();         // 이전 파일과의 연결 해제 → 다음 저장은 "다른 이름으로" 새로 지정
-      WE.store.clear();
-      reloadUI();
-      WE.store.syncBaseline();
-      WE.history.reset();
+      if (!confirm(WE.i18n.t("현재 작업을 비우고 새 프로젝트를 시작할까요?\n(지금 작업은 ☰ → 최근 작업에서 다시 열 수 있습니다)"))) return;
+      startNewProject();
+      setHint(WE.i18n.t("새 배선도로 시작했습니다. 이전 작업은 ☰ 메뉴 → 최근 작업에서 이어서 열 수 있습니다."));
     });
     document.getElementById("btnUndo").addEventListener("click", function () { WE.history.doUndo(); });
     document.getElementById("btnRedo").addEventListener("click", function () { WE.history.doRedo(); });
@@ -1879,7 +1990,22 @@ WE.app = (function () {
   }
 
   // ---- 좌/우 패널 크기 조절 ----
+  // 패널 기본 너비 — 값을 여기 적어두면 CSS와 어긋나므로, 인라인 폭을 잠깐 걷어내고 CSS 값을 읽는다
+  var _defaultPanelW = {};
+  function defaultPanelWidth(panelId) {
+    if (_defaultPanelW[panelId] != null) return _defaultPanelW[panelId];
+    var panel = document.getElementById(panelId);
+    var saved = panel.style.width;
+    panel.style.width = "";
+    var w = Math.round(panel.getBoundingClientRect().width);
+    panel.style.width = saved;
+    _defaultPanelW[panelId] = w;
+    return w;
+  }
+
   function bindResizers() {
+    // 저장된 너비를 덮어쓰기 전에 CSS 기본값을 먼저 재둔다
+    ["leftPanel", "rightPanel"].forEach(function (id) { defaultPanelWidth(id); });
     setupResizer("resizerLeft", "leftPanel", 1);
     setupResizer("resizerRight", "rightPanel", -1);
     // 저장된 너비 복원
@@ -1892,14 +2018,16 @@ WE.app = (function () {
   }
   function setupResizer(resId, panelId, dir) {
     var res = document.getElementById(resId), panel = document.getElementById(panelId);
-    var startX = 0, startW = 0, dragging = false;
+    var startX = 0, startW = 0, dragging = false, moved = false;
+    res.title = WE.i18n.t("드래그로 너비 조절 · 더블클릭하면 기본 너비로");
     res.addEventListener("pointerdown", function (e) {
-      dragging = true; startX = e.clientX; startW = panel.getBoundingClientRect().width;
+      dragging = true; moved = false; startX = e.clientX; startW = panel.getBoundingClientRect().width;
       try { res.setPointerCapture(e.pointerId); } catch (_) {}
       document.body.style.cursor = "col-resize"; e.preventDefault();
     });
     window.addEventListener("pointermove", function (e) {
       if (!dragging) return;
+      if (Math.abs(e.clientX - startX) > 2) moved = true;
       var w = Math.max(140, Math.min(640, startW + (e.clientX - startX) * dir));
       panel.style.width = w + "px";
     });
@@ -1907,7 +2035,14 @@ WE.app = (function () {
       if (!dragging) return;
       dragging = false; document.body.style.cursor = "";
       try { res.releasePointerCapture(e.pointerId); } catch (_) {}
+      if (!moved) return;   // 제자리 클릭(더블클릭의 절반)은 너비를 건드리지 않는다
       try { localStorage.setItem("we_" + panelId + "W", panel.style.width); } catch (_) {}
+    });
+    // 더블클릭 → 기본 너비로 되돌리기
+    res.addEventListener("dblclick", function () {
+      panel.style.width = defaultPanelWidth(panelId) + "px";
+      try { localStorage.removeItem("we_" + panelId + "W"); } catch (_) {}
+      setHint(WE.i18n.t("기본 너비로 되돌렸습니다."));
     });
   }
 
@@ -2441,7 +2576,9 @@ WE.app = (function () {
       var s = _snapList[+btn.dataset.i]; if (!s) return;
       if (!confirm(fmtSnapTime(s.t) + WE.i18n.t(" 시점으로 되돌릴까요?\n(지금 화면의 작업은 사라집니다)"))) return;
       try {
-        WE.model.loadProject(JSON.parse(s.json));
+        // 스냅샷은 첨부물이 자산 참조로 빠진 형태로 보관된다 →
+        // 되돌리지 않으면 부품 그림 자리에 참조 문자열이 들어가 단자만 보인다
+        WE.model.loadProject(WE.assets.unpack(JSON.parse(s.json)));
       } catch (err) { alert(WE.i18n.t("스냅샷을 읽을 수 없습니다: ") + err.message); return; }
       WE.io.clearFileHandle();   // 옛 버전이 연결된 파일을 조용히 덮어쓰지 않도록 연결 해제
       reloadUI();
@@ -2449,6 +2586,57 @@ WE.app = (function () {
       WE.store.saveNow();
       modal.hidden = true;
       setHint(WE.i18n.t("복구 완료: ") + fmtSnapTime(s.t) + WE.i18n.t(" 시점"));
+    });
+  }
+
+  // ---- 최근 작업 목록 (문서별 자동저장본) ----
+  var _recentList = [];
+  function bindRecentModal() {
+    var modal = document.getElementById("recentModal");
+    document.getElementById("btnRecent").addEventListener("click", function () {
+      WE.store.listDrafts(function (list) {
+        _recentList = list;
+        var here = WE.store.docId();
+        var box = document.getElementById("recentList");
+        if (!list.length) {
+          box.innerHTML = WE.i18n.t("<p class='muted'>아직 보관된 작업이 없습니다.</p>");
+        } else {
+          box.innerHTML = list.map(function (d, i) {
+            var isHere = d.id === here;
+            var busy = !isHere && WE.store.claimedByOther(d.id);
+            var tag = isHere ? WE.i18n.t(" · 지금 편집 중")
+                    : busy ? WE.i18n.t(" · 다른 탭에서 편집 중") : "";
+            return "<div class='history-row'>" +
+              "<div class='history-info'><b>" + fmtSavedAt(d.t) + "</b>" +
+              "<span class='muted'> — " + esc(d.name || WE.i18n.t("이지케이블 배선도")) +
+              WE.i18n.t(" (부품 ") + d.comps + WE.i18n.t(" · 배선 ") + d.wires + ")" + tag + "</span></div>" +
+              (isHere ? "" : "<button class='history-restore' data-i='" + i + WE.i18n.t("'>열기</button>")) +
+              "</div>";
+          }).join("");
+        }
+        modal.hidden = false;
+      });
+    });
+    document.getElementById("recentClose").addEventListener("click", function () { modal.hidden = true; });
+    document.getElementById("recentList").addEventListener("click", function (e) {
+      var btn = e.target.closest(".history-restore"); if (!btn) return;
+      var d = _recentList[+btn.dataset.i]; if (!d) return;
+      if (WE.store.claimedByOther(d.id) &&
+          !confirm(WE.i18n.t("이 작업은 다른 탭에서 편집 중입니다.\n그래도 여시겠습니까? (두 탭이 서로 덮어쓸 수 있습니다)"))) return;
+      // 지금 화면의 작업은 자기 슬롯에 남으므로 잃지 않는다
+      WE.store.saveNow();
+      var prev = WE.store.docId();
+      WE.store.loadDraft(d.id, function (proj) {
+        if (!proj) { alert(WE.i18n.t("작업을 읽을 수 없습니다.")); return; }
+        WE.model.loadProject(proj);
+        WE.io.clearFileHandle();   // 자동저장본은 아직 어떤 파일에도 담기지 않은 상태
+        reloadUI();
+        if (WE.history) WE.history.reset();
+        WE.store.syncBaseline();
+        WE.store.claimCurrent();
+        modal.hidden = true;
+        setHint(WE.i18n.t("불러왔습니다: ") + (d.name || WE.i18n.t("이지케이블 배선도")));
+      });
     });
   }
 
@@ -2496,7 +2684,6 @@ WE.app = (function () {
 
     // 메뉴의 저장·공유 = 툴바 버튼과 같은 동작 (메뉴에서도 찾을 수 있게 중복 배치)
     document.getElementById("btnSaveMenu").addEventListener("click", function () { WE.io.save(); });
-    document.getElementById("btnShareMenu").addEventListener("click", function () { WE.io.share(); });
     document.getElementById("btnPng").addEventListener("click", exportPng);
 
     bindHistoryModal();
@@ -2779,6 +2966,8 @@ WE.app = (function () {
       // 이름은 '무엇이 움직이는가' 기준 — 세로선을 고르면 세로선 균등을 누른다
       else if (m === "distVert") distributeSelectedWires(true);    // 세로선 균등(세로선들의 x를 균등 간격으로)
       else if (m === "distHoriz") distributeSelectedWires(false);  // 가로선 균등(가로선들의 y를 균등 간격으로)
+      else if (m === "merge") mergeSelectedWires();
+      else if (m === "unmerge") unmergeSelectedWires();
     });
   }
 
@@ -2855,7 +3044,8 @@ WE.app = (function () {
   }
   // 처음 클릭한 배선(anchor)의 클릭한 구간에 나머지 선택 배선을 맞춤(세로/가로 자동)
   // 간격(px)>0이면 기준선에서 그 간격씩 벌려 평행 배치(방향은 현재 위치 쪽 자동)
-  function alignSelectedWires() {
+  // forceGap!=null이면 입력칸 대신 그 값을 씀(합치기가 gap 0으로 호출).
+  function alignSelectedWires(forceGap) {
     var ids = WE.model.getMultiWire();
     if (!ids || ids.length < 2) return;
     var anchor = WE.model.getWire(ids[0]); if (!anchor) return;
@@ -2864,7 +3054,7 @@ WE.app = (function () {
     var vertical = segIsVertical(aPts, aIdx);
     var C = vertical ? aPts[aIdx].x : aPts[aIdx].y;
     var gapEl = document.getElementById("wireGap");
-    var gap = gapEl ? parseInt(gapEl.value, 10) : 0; if (isNaN(gap)) gap = 0;
+    var gap = (forceGap != null) ? forceGap : (gapEl ? parseInt(gapEl.value, 10) : 0); if (isNaN(gap)) gap = 0;
 
     var others = [];
     for (var k = 1; k < ids.length; k++) {
@@ -2887,8 +3077,14 @@ WE.app = (function () {
       // 간격 지정 → 앵커에서 gap씩 벌려 한쪽으로 나란히 평행 배치.
       // 자동 회피를 태우지 않는다(회피는 gap의 정수배로 튀고 앵커 양옆으로 갈라져서
       // 입력한 픽셀값과 결과가 어긋남). 넣은 값이 그대로 배선 간 간격이 된다.
-      others.forEach(function (o, i) {
-        setWireSeg(o.w, o.pts, o.idx, vertical, C + dir * gap * (i + 1));
+      // 다발(bundleId)은 한 슬롯 = 한 선으로 취급(멤버끼리 안 벌어짐 → 합친 상태 유지).
+      // 앵커와 같은 다발이면 기준선(C)에 그대로 붙인다.
+      var anchorBid = anchor.bundleId, slotMap = {}, nextSlot = 0;
+      others.forEach(function (o) {
+        if (anchorBid && o.w.bundleId === anchorBid) { setWireSeg(o.w, o.pts, o.idx, vertical, C); return; }
+        var key = o.w.bundleId || o.id;
+        if (!(key in slotMap)) slotMap[key] = nextSlot++;
+        setWireSeg(o.w, o.pts, o.idx, vertical, C + dir * gap * (slotMap[key] + 1));
       });
     } else {
       // 간격 0 → 앵커와 같은 선에 맞추되, 겹치면 자동으로 옆 레인으로 회피(순차 배치라 서로도 안 겹침)
@@ -2914,12 +3110,51 @@ WE.app = (function () {
     });
     if (items.length < 3) { setHint(WE.i18n.t("균등 배치할 ") + (alongX ? WE.i18n.t("세로선") : WE.i18n.t("가로선")) + WE.i18n.t(" 구간이 부족합니다.")); return; }
     items.sort(function (a, b) { return a.coord - b.coord; });
-    var first = items[0].coord, step = (items[items.length - 1].coord - first) / (items.length - 1);
-    items.forEach(function (it, i) {
-      setWireSeg(it.w, it.pts, it.idx, alongX, first + step * i);
+    // 다발(bundleId)은 한 열로 취급 — 멤버끼리 안 벌어짐(합친 상태 유지)
+    var colOf = {}, cols = [];
+    items.forEach(function (it) {
+      var key = it.w.bundleId || it.w.id;
+      if (!(key in colOf)) { colOf[key] = cols.length; cols.push(it.coord); }
+    });
+    if (cols.length < 2) { setHint(WE.i18n.t("균등 배치할 ") + (alongX ? WE.i18n.t("세로선") : WE.i18n.t("가로선")) + WE.i18n.t(" 구간이 부족합니다.")); return; }
+    var first = cols[0], step = (cols[cols.length - 1] - first) / (cols.length - 1);
+    items.forEach(function (it) {
+      var key = it.w.bundleId || it.w.id;
+      setWireSeg(it.w, it.pts, it.idx, alongX, first + step * colOf[key]);
     });
     WE.render.renderAll(); WE.render.renderOverlay(); refreshProps();
     setHint((alongX ? WE.i18n.t("세로선") : WE.i18n.t("가로선")) + WE.i18n.t(" 균등 배치: ") + items.length + WE.i18n.t("개"));
+  }
+
+  // ---- 배선 합치기/풀기 (시각적 다발) ----
+  // 원칙: 배선은 기본적으로 안 겹치게 벌어진다. '합치기'는 그 예외 —
+  //   선택한 배선들을 겹침 허용(allowOverlap)으로 표시하고 한 좌표로 겹쳐 한 선처럼 보이게 함.
+  //   같은 bundleId로 묶여 함께 이동하며, '풀기'로 해제하면 다시 수동으로 떼어놓을 수 있다.
+  //   데이터는 계속 개별 배선 N개(넷·리스트·BOM 그대로) — 겹치는 건 시각뿐.
+  function mergeSelectedWires() {
+    var ids = WE.model.getMultiWire();
+    if (!ids || ids.length < 2) { setHint(WE.i18n.t("합치기는 배선 2개 이상 선택하세요.")); return; }
+    var bid = "b" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+    ids.forEach(function (id) {
+      var w = WE.model.getWire(id); if (!w) return;
+      w.bundleId = bid; w.allowOverlap = true;   // allowOverlap → avoidOverlapCoord가 회피 안 함 = 진짜 겹침
+    });
+    alignSelectedWires(0);   // gap 0 정렬: allowOverlap이 켜져 회피가 꺼지므로 기준선 위에 그대로 포개짐
+    if (WE.history) WE.history.commit();
+    setHint(ids.length + WE.i18n.t("개 배선 합침"));
+  }
+  function unmergeSelectedWires() {
+    var ids = WE.model.getMultiWire() || [];
+    var bids = {};
+    ids.forEach(function (id) { var w = WE.model.getWire(id); if (w && w.bundleId) bids[w.bundleId] = 1; });
+    var count = 0;
+    WE.model.project.wires.forEach(function (w) {
+      if (w.bundleId && bids[w.bundleId]) { delete w.bundleId; delete w.allowOverlap; count++; }
+    });
+    if (!count) { setHint(WE.i18n.t("합쳐진 배선이 없습니다.")); return; }
+    WE.render.renderAll(); WE.render.renderOverlay(); refreshProps();
+    if (WE.history) WE.history.commit();
+    setHint(count + WE.i18n.t("개 배선 풀림"));
   }
 
   // ---- 배선 리스트(와이어 리스트) ----
@@ -3104,6 +3339,70 @@ WE.app = (function () {
     pn.addEventListener("input", function (e) {
       WE.model.project.meta.name = e.target.value;
     });
+
+    // 도면 작성일 — PDF 우측 상단에 나가는 값. 비우면 최종 수정일을 자동으로 쓴다.
+    var pd = document.getElementById("projDate");
+    pd.addEventListener("blur", commitProjDate);
+    pd.addEventListener("keydown", function (e) {
+      if (e.key === "Enter") { e.preventDefault(); pd.blur(); }
+      else if (e.key === "Escape") { syncProjDate(); pd.blur(); }
+    });
+    syncProjDate();
+  }
+
+  // 입력값 정리 → YYYY.MM.DD. 사람이 치는 여러 형태를 받아 준다.
+  //   20260723 · 2026.07.23 · 2026-7-23 · 2026/7/3  →  2026.07.23 / 2026.07.03
+  // 알아들을 수 없으면 null.
+  function normDate(v) {
+    var raw = String(v || "").trim();
+    var y, m, d;
+    var parts = raw.split(/[^0-9]+/).filter(function (x) { return x !== ""; });
+    if (parts.length === 3 && parts[0].length === 4) {
+      y = parts[0]; m = parts[1]; d = parts[2];
+    } else {
+      var digits = raw.replace(/\D/g, "");
+      if (digits.length !== 8) return null;
+      y = digits.slice(0, 4); m = digits.slice(4, 6); d = digits.slice(6, 8);
+    }
+    var mi = +m, di = +d;
+    if (m.length > 2 || d.length > 2) return null;
+    if (!(mi >= 1 && mi <= 12) || !(di >= 1 && di <= 31)) return null;
+    function p2(n) { return (n < 10 ? "0" : "") + n; }
+    return y + "." + p2(mi) + "." + p2(di);
+  }
+  function commitProjDate() {
+    var input = document.getElementById("projDate");
+    var raw = (input.value || "").trim();
+    if (!raw) {                                   // 비우면 자동(최종 수정일)
+      delete WE.model.project.meta.drawnAt;
+      syncProjDate(); WE.store.saveNow();
+      setHint(WE.i18n.t("작성일을 자동(최종 수정일)으로 되돌렸습니다."));
+      return;
+    }
+    var v = normDate(raw);
+    if (!v) {                                     // 못 알아들으면 되돌리고 알려 준다
+      syncProjDate();
+      setHint(WE.i18n.t("날짜 형식을 알 수 없습니다. 예: 20260723 또는 2026.07.23"));
+      return;
+    }
+    WE.model.project.meta.drawnAt = v;
+    syncProjDate(); WE.store.saveNow();
+  }
+
+  // 날짜 칸 갱신. 지정값이 없으면 비워 두고, 자동값을 흐린 안내값(placeholder)으로 보여 준다.
+  function syncProjDate() {
+    var input = document.getElementById("projDate");
+    if (!input) return;
+    var fixed = WE.model.project.meta.drawnAt || "";
+    input.value = fixed;
+    input.placeholder = autoDrawnDate();
+  }
+  // 마지막으로 도면 내용이 바뀐 시각 (없으면 오늘)
+  function autoDrawnDate() {
+    var t = (WE.store && WE.store.lastSavedAt) ? WE.store.lastSavedAt() : 0;
+    var d = new Date(t || Date.now());
+    function p2(n) { return (n < 10 ? "0" : "") + n; }
+    return d.getFullYear() + "." + p2(d.getMonth() + 1) + "." + p2(d.getDate());
   }
 
   // ---- 속성 패널 ----
@@ -3228,7 +3527,7 @@ WE.app = (function () {
       // 연결 설명 문구는 단일 선택에선 표시하지 않음(불필요) — 다중 선택 개수만 안내
       var connEl = document.getElementById("wireConn");
       connEl.hidden = !(mw && mw.length > 1);
-      connEl.textContent = (mw && mw.length > 1) ? (WE.i18n.t("배선 ") + mw.length + WE.i18n.t("개 선택됨 (색·두께 일괄 변경)")) : "";
+      connEl.textContent = (mw && mw.length > 1) ? (mw.length + WE.i18n.t("개 선택됨")) : "";
       document.getElementById("wireAlign").hidden = !(mw && mw.length >= 2);
       document.getElementById("wireAllowOverlap").checked = !!wire.allowOverlap;
       setIfNotFocused("wireColor", wire.color);
@@ -3318,6 +3617,7 @@ WE.app = (function () {
     var snap = WE.model.project.meta.canvas.snap !== false;
     document.getElementById("chkSnap").checked = snap;
     document.getElementById("projName").value = WE.model.project.meta.name || "";
+    syncProjDate();
     document.getElementById("wireWidthSel").value = String(WE.model.ui.wireWidth);
     document.getElementById("wireRoutingSel").value = WE.model.ui.wireRouting;
     relinkOrphanComponents();
