@@ -227,6 +227,16 @@ WE.geometry = (function () {
   // 규칙(확정 기준): 첫 구간은 단자가 붙은 부품 외곽면의 바깥 방향으로 — 부품을 벗어난 뒤(+여유) 꺾는다.
   // 여러 개 공유 시 +LANE_STEP(10px)씩 차등.
   var STUB_BASE = 20, LANE_STEP = 10;
+  // 자동 경로의 '통로(채널)' 좌표를 캔버스 안으로 가둔다. 채널은 세로/가로 통로의 x/y일 뿐이라
+  // 어떤 값이어도 직각이 유지됨 → 안쪽으로 당겨도 모양만 접힐 뿐 연결은 그대로. (단자 스텁은
+  // 단자 탈출 규칙상 못 막으므로 가장자리 부품은 짧게 삐질 수 있으나 긴 통로는 확실히 안에 든다)
+  var CANVAS_MARGIN = 10;
+  function clampChan(v, axis) {
+    var m = WE.model.project.meta && WE.model.project.meta.canvas;
+    if (!m) return v;
+    var max = (axis === "x" ? m.width : m.height) - CANVAS_MARGIN;
+    return Math.max(CANVAS_MARGIN, Math.min(max, v));
+  }
   function orthoStub(A, B, wire) {
     var a0 = A.pos, b0 = B.pos;
     var ea = exitInfo(A.cmp, A.t), eb = exitInfo(B.cmp, B.t);
@@ -254,23 +264,25 @@ WE.geometry = (function () {
     if (horizExit) {
       if (aH && bH && da.x * db.x < 0) {
         // 좌/우 반대 방향 탈출: 중간 y에 가로 통로 — 양쪽 스텁(최초 탈출 구간) 모두 보존
-        var my = (pa.y + pb.y) / 2;
+        var my = clampChan((pa.y + pb.y) / 2, "y");
         pts = [a0, pa, { x: pa.x, y: my }, { x: pb.x, y: my }, pb, b0];
       } else {
         var cx;
         if (aH && bH && da.x * db.x > 0) cx = da.x > 0 ? Math.max(pa.x, pb.x) : Math.min(pa.x, pb.x);
         else cx = manifoldA ? pa.x : pb.x;
+        cx = clampChan(cx, "x");
         pts = [a0, pa, { x: cx, y: pa.y }, { x: cx, y: pb.y }, pb, b0];
       }
     } else {
       if (!aH && !bH && da.y * db.y < 0) {
         // 위/아래 반대 방향 탈출: 중간 x에 세로 통로 — 양쪽 스텁 모두 보존
-        var mx = (pa.x + pb.x) / 2;
+        var mx = clampChan((pa.x + pb.x) / 2, "x");
         pts = [a0, pa, { x: mx, y: pa.y }, { x: mx, y: pb.y }, pb, b0];
       } else {
         var cy;
         if (!aH && !bH && da.y * db.y > 0) cy = da.y > 0 ? Math.max(pa.y, pb.y) : Math.min(pa.y, pb.y);
         else cy = manifoldA ? pa.y : pb.y;
+        cy = clampChan(cy, "y");
         pts = [a0, pa, { x: pa.x, y: cy }, { x: pb.x, y: cy }, pb, b0];
       }
     }

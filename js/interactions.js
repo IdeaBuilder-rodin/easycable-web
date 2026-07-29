@@ -336,33 +336,8 @@ WE.interactions = (function () {
       return false;
     }
     var segs = {};
-    if (opts.wiresOnly) {
-      // 쓸어담기(Ctrl) 모드: 배선만 선택. 방향 필터 통과 + 히트한 세그먼트 중
-      // '박스 중심에 가장 가까운' 구간을 대상으로 삼아 그 중점을 wireClickPt에 기록.
-      WE.model.project.wires.forEach(function (w) {
-        var pts = WE.geometry.wireRoutePoints(w); if (!pts) return;
-        var bestMid = null, bestSeg = null, bestD = Infinity;
-        for (var i = 0; i < pts.length - 1; i++) {
-          var a = pts[i], b = pts[i + 1];
-          if (opts.dirFilter && segDir(a, b) !== opts.dirFilter) continue;
-          if (!segHit(a, b)) continue;
-          var mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
-          var d = Math.abs(mx - cx) + Math.abs(my - cy);
-          if (d < bestD) { bestD = d; bestMid = { x: mx, y: my }; bestSeg = { a: a, b: b }; }
-        }
-        if (bestMid) { wires.push(w.id); clickPts[w.id] = bestMid; segs[w.id] = bestSeg; }
-      });
-      // 기준선(ids[0]) = 드래그 시작점에 가장 가까운 선. 단 세그먼트 '중점'이 아니라
-      // '세그먼트 자체까지의 수직 거리'로 잰다 — 중점 거리는 선 길이(평행축) 성분이 섞여
-      // 나란한 배선 묶음에서 엉뚱한 선이 기준이 됨(짧은 선의 중점이 더 가까워 보이는 착시).
-      if (opts.origin) {
-        var O = opts.origin;
-        wires.sort(function (a, b) {
-          return distToSeg(O, segs[a].a, segs[a].b) - distToSeg(O, segs[b].a, segs[b].b);
-        });
-      }
-    } else {
-      // 일반 마퀴: 부품·주석만 선택(배선은 Ctrl 쓸어담기로만). — 사용자 의도
+    // 일반 마퀴는 부품·주석도 함께 선택(쓸어담기 모드는 배선만)
+    if (!opts.wiresOnly) {
       WE.model.project.components.forEach(function (c) {
         var b = WE.render.componentBBox(c);
         if (b.x < rx2 && b.x2 > rect.x && b.y < ry2 && b.y2 > rect.y) comps.push(c.id);
@@ -370,6 +345,30 @@ WE.interactions = (function () {
       WE.model.project.annotations.forEach(function (a) {
         var b = WE.render.annoBBox(a.id);
         if (b && b.x < rx2 && b.x2 > rect.x && b.y < ry2 && b.y2 > rect.y) annos.push(a.id);
+      });
+    }
+    // 배선: 일반 마퀴·쓸어담기 모두 선택(dirFilter는 쓸어담기일 때만 지정).
+    // 히트한 세그먼트 중 박스 중심에 가장 가까운 구간을 대상으로 삼아 그 중점을 wireClickPt에 기록.
+    WE.model.project.wires.forEach(function (w) {
+      var pts = WE.geometry.wireRoutePoints(w); if (!pts) return;
+      var bestMid = null, bestSeg = null, bestD = Infinity;
+      for (var i = 0; i < pts.length - 1; i++) {
+        var a = pts[i], b = pts[i + 1];
+        if (opts.dirFilter && segDir(a, b) !== opts.dirFilter) continue;
+        if (!segHit(a, b)) continue;
+        var mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
+        var d = Math.abs(mx - cx) + Math.abs(my - cy);
+        if (d < bestD) { bestD = d; bestMid = { x: mx, y: my }; bestSeg = { a: a, b: b }; }
+      }
+      if (bestMid) { wires.push(w.id); clickPts[w.id] = bestMid; segs[w.id] = bestSeg; }
+    });
+    // 기준선(ids[0]) = 드래그 시작점에 가장 가까운 선. 단 세그먼트 '중점'이 아니라
+    // '세그먼트 자체까지의 수직 거리'로 잰다 — 중점 거리는 선 길이(평행축) 성분이 섞여
+    // 나란한 배선 묶음에서 엉뚱한 선이 기준이 됨(짧은 선의 중점이 더 가까워 보이는 착시).
+    if (opts.origin) {
+      var O = opts.origin;
+      wires.sort(function (a, b) {
+        return distToSeg(O, segs[a].a, segs[a].b) - distToSeg(O, segs[b].a, segs[b].b);
       });
     }
     WE.model.setMultiSelection(comps, annos, wires);   // 이 안에서 wireClickPt 초기화됨
@@ -603,8 +602,21 @@ WE.interactions = (function () {
     var anchor = prepWireSeg(w, p, null);
     if (!anchor) { drag = null; return; }
 
+    // 함께 이동할 배선 = 다중 선택된 것 + 잡은 배선과 같은 다발(bundleId)의 전체.
+    // → 다발은 하나만 잡아도 통째로 움직인다(겹쳐 있으므로 같은 이동량이면 겹친 채 유지).
+    var moveIds = {};
+    (WE.model.getMultiWire() || []).forEach(function (id) { moveIds[id] = 1; });
+    var bundles = {};
+    if (w.bundleId) bundles[w.bundleId] = 1;
+    Object.keys(moveIds).forEach(function (id) {
+      var mw = WE.model.getWire(id); if (mw && mw.bundleId) bundles[mw.bundleId] = 1;
+    });
+    WE.model.project.wires.forEach(function (ow) {
+      if (ow.bundleId && bundles[ow.bundleId]) moveIds[ow.id] = 1;
+    });
+
     var items = [anchor];
-    (WE.model.getMultiWire() || []).forEach(function (id) {
+    Object.keys(moveIds).forEach(function (id) {
       if (id === wid) return;
       var ow = WE.model.getWire(id); if (!ow) return;
       // 각 배선에서 Ctrl+클릭했던 지점 기준. 방향이 다른 구간은 함께 옮기지 않는다.
