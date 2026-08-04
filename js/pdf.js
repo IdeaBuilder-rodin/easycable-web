@@ -46,17 +46,31 @@ WE.pdf = (function () {
     return ymd(t || Date.now());
   }
 
-  // 배선 범례 — 도면에 실제로 쓰인 색만 넣는다.
+  // 하단 밴드 — 비고(좌) + 배선 범례(우).
+  // 좌우로 나눈 덕에 두 칸이 높이를 '공유'해서, 비고 4줄까지 도면을 줄이지 않고 들어간다.
+  // 비고가 비어 있으면 예전처럼 범례만 전폭 가로 한 줄로 되돌린다(기존 도면 출력 그대로).
+  var BAND_MAX_LINES = 4;   // 이 이상은 도면을 밀기 시작한다 (세로 예산 21mm)
+
+  function fillFooter() {
+    var note = String((WE.model.project.meta || {}).note || "").trim();
+    var foot = document.getElementById("printFooter");
+    document.getElementById("printNoteBody").textContent = note;
+    foot.classList.toggle("pf-nonote", !note);
+
+    // 밴드 높이 = 비고 줄 수와 범례 개수 중 큰 쪽(최대 4줄).
+    // 범례는 이 줄 수를 채우면 다음 열로 넘어가므로, 이 값이 곧 "몇 개마다 열을 바꿀지"도 된다.
+    var noteLines = note ? note.split("\n").length : 0;
+    var legendCount = (WE.app.legendItems ? WE.app.legendItems() : []).length;
+    var lines = Math.min(BAND_MAX_LINES, Math.max(noteLines, legendCount)) || 1;
+    foot.style.setProperty("--pf-lines", String(lines));
+
+    fillLegend();
+  }
+
+  // 배선 범례 — 도면에 실제로 쓰인 색만 넣는다(목록은 app.legendItems가 정한다).
   // 팔레트 전체를 넣으면 안 쓴 색까지 나와 길어지고, 하단 블록을 넘길 수 있다.
   function fillLegend() {
-    var proj = WE.model.project;
-    var used = {};
-    (proj.wires || []).forEach(function (w) {
-      if (w && w.color) used[String(w.color).toLowerCase()] = 1;
-    });
-    var items = (proj.palette || []).filter(function (p) {
-      return p && p.label && used[String(p.color).toLowerCase()];
-    });
+    var items = WE.app.legendItems ? WE.app.legendItems() : [];
     var box = document.getElementById("printLegendItems");
     box.innerHTML = "";
     items.forEach(function (p) {
@@ -74,8 +88,12 @@ WE.pdf = (function () {
       el.appendChild(document.createTextNode(p.label));
       box.appendChild(el);
     });
-    // 쓰인 색에 이름이 하나도 없으면 범례 칸을 통째로 숨겨 빈 상자가 남지 않게
+    // 쓰인 색에 이름이 하나도 없으면 범례 칸을 숨긴다(비고만 전폭). 둘 다 비면 밴드째 숨겨
+    // 빈 상자가 남지 않게 — 여기서 안 숨기면 도면 아래에 테두리만 있는 띠가 찍힌다.
+    var foot = document.getElementById("printFooter");
     document.getElementById("printLegend").style.display = items.length ? "" : "none";
+    document.getElementById("printNote").style.borderRight = items.length ? "" : "none";
+    foot.style.display = (items.length || !foot.classList.contains("pf-nonote")) ? "" : "none";
   }
 
   // 섹션 머리글(BOM·배선 리스트 등) — 1페이지 도면 제목줄과 같은 모양으로
@@ -93,7 +111,7 @@ WE.pdf = (function () {
     var proj0 = WE.model.project;
     document.getElementById("printTitleName").textContent = (proj0.meta && proj0.meta.name) || "";
     document.getElementById("printTitleDate").textContent = drawnDate();
-    fillLegend();
+    fillFooter();
 
     // BOM (자재명세서) — 화면에 보이는 그 표(열 구성·순서·너비·행 높이)를 그대로 인쇄
     var bomBox = document.getElementById("printBOM");

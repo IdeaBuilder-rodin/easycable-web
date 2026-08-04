@@ -214,6 +214,9 @@ body { display: flex; flex-direction: column; }
   position: absolute; right: 28px; bottom: 40px; z-index: 40;
   display: flex; align-items: center; gap: 6px;
 }
+/* 캔버스 아래 비고 바(#canvasFooter) 높이만큼 띄운다 — 접힘 37px / 펼침 91px */
+.canvas-corner-tools { bottom: 77px; }
+body.note-open .canvas-corner-tools { bottom: 131px; }
 .canvas-float-controls {
   display: flex; align-items: center; gap: 1px;
   background: #fff; border: 1px solid #d3d9e0; border-radius: 8px;
@@ -926,7 +929,7 @@ body.term-mode #canvas { cursor: crosshair; }
   #layerWatermark { display: block; }   /* 화면에선 숨긴 워터마크를 PDF에는 표시 */
   /* 화면 전용 UI는 종이에 나오지 않게. (복원 안내 띠가 빠져 있어 PDF 1페이지 머리에 찍혔다) */
   #toolbar, #leftPanel, #rightPanel, .modal, #cmpMenu, #viewTabs, #bomView, #wireListView,
-  .canvas-corner-tools, #canvasHeader, #restoreBanner { display: none !important; }
+  .canvas-corner-tools, #canvasHeader, #canvasFooter, #restoreBanner { display: none !important; }
   html, body { height: auto; display: block; background: #fff; }
   /* 좌우로 1px만 물려 둔다 — 테두리가 지면 경계에 딱 붙으면 반올림 때문에
      세로선이 끊기거나 아예 안 찍히는 경우가 있다(도면 프레임·범례 상자 우측). */
@@ -957,21 +960,64 @@ body.term-mode #canvas { cursor: crosshair; }
      (A4 가로 기준 가용 194mm = 머리글 12 + 도면 161 + 범례 18 + 여백) */
   #canvas { max-height: 161mm; }
 
-  /* ---- 하단: 배선 범례 ---- */
+  /* ---- 하단 밴드: 비고(좌) + 배선 범례(우) ----
+     위아래로 쌓으면 두 칸의 높이가 '더해지지만' 좌우로 두면 '공유'된다.
+     덕분에 비고 4줄 + 범례 4색을 도면(158mm)을 한 mm도 줄이지 않고 넣는다.
+     세로 예산: 가용 194 − 제목줄 12 − 도면 158 − 간격 3 = 21mm → 아래 4줄(약 20mm)이 상한. */
   #printFooter {
-    max-height: 18mm; overflow: hidden;      /* 색이 많아도 페이지를 밀지 않는다 */
+    display: flex; align-items: stretch; overflow: hidden;
     margin-top: 3mm;
+    border: 1px solid #999;
     font-family: "Malgun Gothic", sans-serif;
     page-break-inside: avoid; break-inside: avoid;
   }
-  #printLegend {
-    display: flex; align-items: baseline; gap: 5mm;
-    border: 1px solid #999; padding: 2mm 3mm; overflow: hidden;
+  /* 표제는 별도 칸으로 세우고 본문만 여백을 갖는다(패딩이 칸 바깥에 있으면 표제 칸이 밴드 높이를 못 채운다) */
+  #printNote, #printLegend {
+    display: flex; align-items: stretch; overflow: hidden;
   }
-  .pf-head { flex: none; font-size: 10px; font-weight: 700; color: #333; }
+  /* 비고는 남는 폭을 전부 쓰되 100mm 밑으로는 안 줄어든다 — 그보다 좁으면 못 읽는 칸이 된다 */
+  #printNote { flex: 1 1 auto; min-width: 100mm; border-right: 1px solid #999; }
+  /* 범례는 내용만큼만. 색이 늘면 아래가 아니라 왼쪽으로 열이 늘어난다(아래 column wrap) */
+  #printLegend { flex: 0 0 auto; }
+  /* 비고가 비면 예전처럼 범례만 전폭 가로 한 줄 — 기존 도면 출력이 그대로 유지된다 */
+  #printFooter.pf-nonote #printNote { display: none; }
+  #printFooter.pf-nonote #printLegend { flex: 1 1 auto; }
+  #printFooter.pf-nonote #printLegendItems {
+    display: flex; flex-flow: row wrap; height: auto; gap: 1px 14px;
+  }
+
+  /* 표제 칸 — BOM 표 머리행과 같은 모양(회색 바탕·가운데 정렬)으로 통일.
+     본문이 여러 줄이어도 표제는 칸 한가운데에 놓인다.
+     '배경 그래픽' 끄고 인쇄해도 바탕색이 나오도록 print-color-adjust를 강제한다(BOM th와 동일). */
+  .pf-head {
+    flex: none; display: flex; align-items: center; justify-content: center;
+    min-width: 18mm; padding: 0 2mm;
+    border-right: 1px solid #999;
+    background: #f2f5f8;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
+    font-size: 10px; font-weight: 700; color: #333;
+    text-align: center; white-space: nowrap;
+  }
+  /* 비고 본문 — 입력한 줄바꿈 그대로. 4줄에서 잘린다(화면 비고 바에 같은 폭으로 미리 보임) */
+  /* 밴드 높이 = max(비고 줄 수, 범례 개수)를 4줄로 자른 값. pdf.js가 --pf-lines에 넣는다.
+     늘 4줄로 고정하면 비고 한 줄짜리 도면에서 빈 칸이 3줄 남는다.
+     줄간격 1.5 — 4줄이 쌓이면 1.6과 1mm 차이가 나고, 지면 여유가 그만큼 얇아진다
+     (밴드는 page-break-inside:avoid라 1mm 모자라면 통째로 2페이지로 밀린다). */
+  #printFooter { --pf-lh: 1.5; }
+  /* content-box — 전역 border-box를 그대로 두면 아래 height(=줄 수)에서 패딩이 빠져
+     4줄 자리가 3줄이 되고 마지막 줄이 잘린다. height는 '본문 줄 수'만 뜻해야 한다. */
+  #printNoteBody {
+    flex: 1 1 auto; min-width: 0; padding: 1.5mm 3mm; box-sizing: content-box;
+    height: calc(var(--pf-lines, 4) * var(--pf-lh) * 10px); overflow: hidden;
+    font-size: 10px; line-height: var(--pf-lh);
+    white-space: pre-wrap; overflow-wrap: break-word;
+  }
+  /* 세로로 쌓다가 그 줄 수를 채우면 다음 열로 넘어간다 → 폭이 왼쪽으로 늘고 비고가 그만큼 준다 */
   #printLegendItems {
-    display: flex; flex-wrap: wrap; gap: 1px 14px;   /* 가로로 흘려 담아 줄 수를 줄인다 */
-    font-size: 10px; line-height: 1.6;
+    display: flex; flex-flow: column wrap; align-content: flex-start;
+    height: calc(var(--pf-lines, 4) * var(--pf-lh) * 10px); box-sizing: content-box;
+    padding: 1.5mm 3mm; gap: 0 6mm;
+    font-size: 10px; line-height: var(--pf-lh);
   }
   .pf-lg { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
   .pf-lg i {
@@ -980,7 +1026,9 @@ body.term-mode #canvas { cursor: crosshair; }
   }
   .pf-lg .pf-sw { display: inline-block; width: 16px; height: 3px; border: .5px solid #888; }
 
-  #printBOM { margin-top: 12px; }
+  /* 여백을 주지 않는다 — BOM·배선 리스트는 저마다 강제로 새 장에서 시작(.pdf-page-break)하므로
+     여기 margin은 다음 장으로 넘어가지 않고 1페이지 바닥만 3mm 잡아먹었다(하단 밴드 여유가 그만큼 줄었다). */
+  #printBOM { margin-top: 0; }
   /* 배선 리스트 2단 — 표가 좁아 한 단이면 지면 절반이 비고 장수만 늘어난다 */
   .wl-cols { display: flex; align-items: flex-start; gap: 8mm; }
   .wl-cols > table { flex: none; }
@@ -1047,6 +1095,53 @@ body.term-mode #canvas { cursor: crosshair; }
 #canvasHeader input:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 2px var(--primary-bg); }
 /* 비어 있으면(=자동) 최종 수정일을 흐린 안내값으로 보여 준다 */
 #canvasHeader input::placeholder { color: var(--tx3); }
+
+/* ---- 도면 꼬리줄(비고) — 머리줄(작성일)의 짝으로 캔버스 '아래' ----
+   인쇄물 하단 좌측 비고 칸과 같은 폭 비율(--note-ratio)로 그린다.
+   한 줄에 몇 자가 들어가고 어디서 접히는지 화면에서 그대로 보여야
+   "인쇄해 보니 5줄째가 잘렸다"는 사고가 안 난다. */
+#canvasFooter {
+  flex: none; display: flex; align-items: flex-start; gap: var(--sp2);
+  padding: 5px 28px; background: #dfe3e9; border-top: 1px solid #c3c9d2;
+}
+#canvasFooter label {
+  flex: none; margin: 0; padding-top: 5px;
+  font-size: var(--fs-sm); color: var(--tx2); white-space: nowrap;
+}
+#noteWrap { flex: 1; min-width: 0; }
+#projNote {
+  display: block; box-sizing: border-box;
+  width: calc(100% * var(--note-ratio, 1));   /* 범례 열이 늘면 JS가 이 비율을 줄인다 */
+  height: 26px;                                /* 접힘: 한 줄 */
+  padding: 3px 7px; resize: none; overflow: hidden;
+  font-family: inherit; font-size: var(--fs-sm); line-height: 18px;
+  border: 1px solid var(--bd); border-radius: var(--r);
+  background: var(--bg); color: var(--tx);
+  transition: height .12s ease;
+}
+body.note-open #projNote { height: 80px; overflow: auto; }   /* 펼침: 4줄 */
+#projNote:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 2px var(--primary-bg); }
+#projNote::placeholder { color: var(--tx3); }
+/* 4줄을 넘겨 인쇄에서 잘릴 상태 — 테두리로 알린다 */
+#projNote.note-over { border-color: #e0705a; background: #fff6f4; }
+/* 5줄째 입력을 막았을 때 잠깐 번쩍 — 반응이 없으면 키가 안 먹은 줄 알고 계속 누르게 된다 */
+#projNote.note-blocked {
+  border-color: #e0705a; background: #fdecea;
+  animation: note-nudge .18s ease 2;
+}
+@keyframes note-nudge {
+  0%, 100% { transform: translateX(0); }
+  50% { transform: translateX(3px); }
+}
+#noteToggle {
+  flex: none; width: 26px; height: 26px; padding: 0;
+  border: 1px solid var(--bd); border-radius: var(--r);
+  background: var(--bg); color: var(--tx2); cursor: pointer;
+  font-family: inherit; font-size: 12px; line-height: 1;
+  transition: transform .12s ease;
+}
+#noteToggle:hover { border-color: var(--primary); color: var(--primary); }
+body.note-open #noteToggle { transform: rotate(180deg); }
 
 /* ---- 복원 알림 띠 ----
    지난 작업을 자동으로 되살렸을 때만 잠깐 나타난다.

@@ -1209,6 +1209,7 @@ WE.app = (function () {
   function afterModelRender() {
     if (_view === "bom") renderBOMView();
     else if (_view === "wirelist") renderWireListView();
+    syncNoteWidth();   // 배선 색이 늘면 범례 열이 늘고 그만큼 비고 폭이 준다
   }
   function renderWireListView() {
     var rows = wireListData();
@@ -3366,6 +3367,114 @@ WE.app = (function () {
       else if (e.key === "Escape") { syncProjDate(); pd.blur(); }
     });
     syncProjDate();
+    bindProjNote();
+  }
+
+  // ---- 도면 비고 ----
+  // 인쇄물 하단 좌측 비고 칸에 그대로 나가는 값. 칸 높이가 4줄로 묶여 있다.
+  //
+  // 넘치는 줄은 '잘라내지 않고 입력 자체를 막는다'. 예전엔 초과분을 잘라 버렸는데,
+  // 4줄이 찬 상태에서 첫 줄 끝에 엔터를 치면 마지막 줄이 소리 없이 사라졌다.
+  // 사용자가 쓴 글을 지우는 쪽보다 안 받아 주는 쪽이 낫다.
+  var NOTE_LINES = 4;
+
+  function noteLineCount(v) { return String(v || "").split("\n").length; }
+
+  function bindProjNote() {
+    var ta = document.getElementById("projNote");
+    if (!ta) return;
+    var last = ta.value;
+
+    // 줄이 늘어나는 입력만 미리 가로챈다(엔터·붙여넣기·드롭).
+    // 지우기·되돌리기나 줄바꿈 없는 글자는 줄 수를 늘릴 수 없으므로 그냥 통과시킨다.
+    ta.addEventListener("beforeinput", function (e) {
+      var t = e.inputType || "", ins;
+      if (t === "insertLineBreak" || t === "insertParagraph") ins = "\n";
+      else if (t === "insertFromPaste" || t === "insertFromDrop") {
+        ins = (e.dataTransfer && e.dataTransfer.getData("text/plain")) || "";
+      } else if (t.indexOf("insert") === 0) ins = e.data || "";
+      else return;
+      if (!/[\r\n]/.test(ins)) return;
+      var next = ta.value.slice(0, ta.selectionStart) + ins + ta.value.slice(ta.selectionEnd);
+      if (noteLineCount(next) > NOTE_LINES) { e.preventDefault(); rejectNote(); }
+    });
+
+    ta.addEventListener("input", function () {
+      // beforeinput을 안 지원하는 브라우저용 안전망 — 여기서도 자르지 않고 직전 값으로 되돌린다
+      if (noteLineCount(ta.value) > NOTE_LINES) {
+        var at = Math.min(ta.selectionStart, last.length);
+        ta.value = last;
+        ta.setSelectionRange(at, at);
+        rejectNote();
+        return;
+      }
+      last = ta.value;
+      WE.model.project.meta.note = ta.value;
+      markNoteOverflow();
+    });
+    // 작성일과 같은 규칙 — 칸을 벗어날 때 저장(그 사이는 자동저장이 받는다)
+    ta.addEventListener("blur", function () { WE.store.saveNow(); });
+    ta.addEventListener("focus", function () { setNoteOpen(true); });
+    document.getElementById("noteToggle").addEventListener("click", function () {
+      var open = !document.body.classList.contains("note-open");
+      setNoteOpen(open);
+      if (open) ta.focus();
+    });
+    syncProjNote();
+  }
+
+  // 막았다는 걸 알린다 — 아무 반응이 없으면 키가 안 먹은 줄 알고 계속 누르게 된다
+  var _noteRejectTimer = null;
+  function rejectNote() {
+    var ta = document.getElementById("projNote");
+    setHint(WE.i18n.t("비고는 최대 4줄까지 넣을 수 있습니다."));
+    ta.classList.add("note-blocked");
+    clearTimeout(_noteRejectTimer);
+    _noteRejectTimer = setTimeout(function () { ta.classList.remove("note-blocked"); }, 700);
+  }
+
+  function setNoteOpen(open) {
+    document.body.classList.toggle("note-open", !!open);
+    document.getElementById("noteToggle").setAttribute("aria-expanded", open ? "true" : "false");
+  }
+
+  // 실제로 접힌 줄까지 세어 4줄을 넘으면 테두리로 알린다(그 상태로 인쇄하면 잘린다)
+  function markNoteOverflow() {
+    var ta = document.getElementById("projNote");
+    if (!ta) return;
+    var lh = 18;                                   // #projNote line-height
+    var over = ta.value !== "" && ta.scrollHeight - 6 > lh * NOTE_LINES + 1;
+    ta.classList.toggle("note-over", over);
+  }
+
+  // 인쇄 범례에 실제로 실리는 항목 — 도면에 쓰인 색 중 이름이 붙은 것만.
+  // 팔레트 전체를 넣으면 안 쓴 색까지 나와 칸만 길어진다. (인쇄는 pdf.js가 이 목록을 그린다)
+  function legendItems() {
+    var proj = WE.model.project;
+    var used = {};
+    (proj.wires || []).forEach(function (w) {
+      if (w && w.color) used[String(w.color).toLowerCase()] = 1;
+    });
+    return (proj.palette || []).filter(function (p) {
+      return p && p.label && used[String(p.color).toLowerCase()];
+    });
+  }
+
+  // 화면 비고 칸 폭을 인쇄물과 같은 비율로 맞춘다.
+  // 인쇄 밴드 281mm 중 범례가 (열 수 × 약 22mm)를 쓰고 나머지가 비고 몫이다.
+  function syncNoteWidth() {
+    var cols = Math.max(1, Math.ceil(legendItems().length / NOTE_LINES));
+    var legendMm = Math.min(181, cols * 22 + 16);   // 비고 최소 100mm는 남긴다
+    var ratio = (281 - legendMm) / 281;
+    document.getElementById("canvasFooter").style.setProperty("--note-ratio", ratio.toFixed(3));
+    markNoteOverflow();
+  }
+
+  function syncProjNote() {
+    var ta = document.getElementById("projNote");
+    if (!ta) return;
+    ta.value = WE.model.project.meta.note || "";
+    syncNoteWidth();
   }
 
   // 입력값 정리 → YYYY.MM.DD. 사람이 치는 여러 형태를 받아 준다.
@@ -3636,6 +3745,7 @@ WE.app = (function () {
     document.getElementById("chkSnap").checked = snap;
     document.getElementById("projName").value = WE.model.project.meta.name || "";
     syncProjDate();
+    syncProjNote();
     document.getElementById("wireWidthSel").value = String(WE.model.ui.wireWidth);
     document.getElementById("wireRoutingSel").value = WE.model.ui.wireRouting;
     relinkOrphanComponents();
@@ -3657,6 +3767,9 @@ WE.app = (function () {
     linkLabel: linkLabel,
     renderBOMView: renderBOMView,
     wireListData: wireListData,
+    legendItems: legendItems,
+    syncProjNote: syncProjNote,
+    syncNoteWidth: syncNoteWidth,
     afterModelRender: afterModelRender,
     powerSummaryRows: powerSummaryRows,
     handleShortcut: handleShortcut,

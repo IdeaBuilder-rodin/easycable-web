@@ -226,6 +226,19 @@
         </div>
       </div>
 
+      <!-- 도면 꼬리줄: 비고. 머리줄(작성일)의 짝으로 캔버스 '아래'에 둔다.
+           인쇄물 하단 좌측에 같은 내용이 그대로 나가고, 폭도 인쇄와 같은 비율로 맞춰
+           몇 줄까지 들어가는지 화면에서 바로 보이게 한다. -->
+      <div id="canvasFooter">
+        <label for="projNote">📝 비고</label>
+        <div id="noteWrap">
+          <textarea id="projNote" rows="1" spellcheck="false" autocomplete="off"
+                    placeholder="주의사항·코멘트 (최대 4줄) — 인쇄물 하단 좌측에 나갑니다"
+                    title="인쇄물 하단 좌측 비고 칸에 그대로 나갑니다 · 최대 4줄"></textarea>
+        </div>
+        <button type="button" id="noteToggle" title="비고 칸 펼치기 / 접기" aria-expanded="false">⌃</button>
+      </div>
+
       <!-- 하단 뷰 탭 (캔버스 영역 밖, 항상 하단 고정) -->
       <div id="viewTabs">
         <button class="view-tab active" data-view="wiring">📐 배선도</button>
@@ -236,9 +249,16 @@
 
     <!-- 인쇄용 범례 (화면에선 숨김) -->
     <!-- 인쇄용 BOM (화면에선 숨김) -->
-    <!-- PDF 하단: 배선 범례. 16:9 도면을 A4 가로에 넣으면 아래가 남는데 그 자리를 쓴다.
-         높이를 묶어 두어 색이 많아져도 다음 장으로 밀리지 않는다. -->
+    <!-- PDF 하단 밴드: 비고(좌) + 배선 범례(우). 16:9 도면을 A4 가로에 넣으면 아래가 남는데 그 자리를 쓴다.
+         좌우로 나눈 이유 — 위아래로 쌓으면 높이가 '더해지지만' 좌우로 두면 '공유'되어,
+         비고 4줄 + 범례 4색을 도면(158mm)을 1mm도 줄이지 않고 넣을 수 있다.
+         높이는 4줄로 묶어 두어 내용이 늘어도 다음 장으로 밀리지 않는다.
+         범례 색이 5개 이상이면 아래로 넘기지 않고 왼쪽으로 열을 늘린다(그만큼 비고 폭이 준다). -->
     <div id="printFooter" class="print-only">
+      <div id="printNote">
+        <span class="pf-head">비고</span>
+        <span id="printNoteBody"></span>
+      </div>
       <div id="printLegend">
         <span class="pf-head">배선 범례</span>
         <span id="printLegendItems"></span>
