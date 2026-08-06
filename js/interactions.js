@@ -19,6 +19,11 @@ WE.interactions = (function () {
     window.addEventListener("pointerup", onPointerUp);
     window.addEventListener("keydown", onKeyDown);
     window.addEventListener("keyup", onKeyUp);
+    // 우클릭 = 그리던 배선 버리기. 배선을 그리는 중일 때만 기본 메뉴를 막는다
+    // (평소 우클릭은 브라우저 메뉴 그대로 — 개발자도구·이미지 저장 등을 쓸 수 있어야 한다)
+    svg.addEventListener("contextmenu", function (e) {
+      if (cancelWireDraw()) e.preventDefault();
+    });
     svg.addEventListener("pointerover", onNetHover);
     svg.addEventListener("pointerout", onNetHoverOut);
     svg.addEventListener("pointerover", onWireLabelHover);
@@ -435,23 +440,136 @@ WE.interactions = (function () {
     var hit = nearestTerminal(p, SNAP_DIST);
     var snap = hit ? hit.pos : null;
     if (wirePending) {
-      var a = WE.geometry.wireEndpoint({ componentId: wirePending.cmpId, terminalId: wirePending.tid });
-      WE.render.setWirePreview(a, snap || p, snap);
+      // 단자가 우선, 없으면 분기 대상 배선, 그것도 없으면 빈 곳
+      var bt = snap ? null : branchTargetAt(wirePending, p);
+      var mode = snap ? "terminal" : (bt ? "branch" : "free");
+      var path = wireDraftPath(wirePending, snap || (bt ? bt.pos : p), mode);   // _alignGuide 갱신
+      WE.render.setBranchTarget(bt ? { wireId: bt.wire.id, pos: bt.pos } : null);
+      WE.render.setWirePreview(path, snap, _alignGuide);
     } else {
-      WE.render.setWirePreview(null, null, snap);
+      _alignGuide = null;
+      WE.render.setBranchTarget(null);
+      WE.render.setWirePreview(null, snap, null);
     }
   }
 
-  // 배선 모드: 가장 가까운 단자를 클릭 → 단자 → 단자로 배선
+  // 찍는 점을 직전 점과 수평/수직으로 맞춘다 — 배선도에 대각선은 쓰지 않는다.
+  // 커서가 더 많이 벗어난 축을 살리고 나머지 축은 직전 점 값을 그대로 물려받는다.
+  function axisLock(prev, p) {
+    return Math.abs(p.x - prev.x) >= Math.abs(p.y - prev.y)
+      ? { x: p.x, y: prev.y }    // 가로로 간다
+      : { x: prev.x, y: p.y };   // 세로로 간다
+  }
+  function lastSegHoriz(pts) {
+    var n = pts.length;
+    if (n < 2) return true;
+    return Math.abs(pts[n - 1].x - pts[n - 2].x) >= Math.abs(pts[n - 1].y - pts[n - 2].y);
+  }
+  // ---- 단자 정렬 가이드 ----
+  // 찍으려는 점의 '자유 축'(직전 점에 묶이지 않은 쪽)을 가까운 단자에 맞춘다.
+  // 예: 세로로 내려가는 중이면 x는 직전 점에 묶여 있고 y가 자유 → 근처 단자의 y에 흡착.
+  // 그래야 다음 구간이 그 단자로 곧장 들어가고, 도착해서 한 번 더 꺾이는 일이 없다.
+  var TERM_ALIGN_TOL = 8;
+  var _alignGuide = null;   // { x1, y1, x2, y2 } — 흡착된 단자까지의 점선
+  function alignToTerminal(prev, p) {
+    _alignGuide = null;
+    var horiz = Math.abs(p.x - prev.x) >= Math.abs(p.y - prev.y);
+    var best = null;
+    WE.model.project.components.forEach(function (c) {
+      (c.terminals || []).forEach(function (t) {
+        var pos = WE.geometry.wireEndpoint({ componentId: c.id, terminalId: t.id });
+        if (!pos) return;
+        // 가로로 가는 중이면 자유 축은 x, 세로면 y
+        var d = horiz ? Math.abs(pos.x - p.x) : Math.abs(pos.y - p.y);
+        if (d <= TERM_ALIGN_TOL && (!best || d < best.d)) best = { d: d, pos: pos };
+      });
+    });
+    if (!best) return p;
+    var out = horiz ? { x: best.pos.x, y: p.y } : { x: p.x, y: best.pos.y };
+    _alignGuide = { x1: out.x, y1: out.y, x2: best.pos.x, y2: best.pos.y };
+    return out;
+  }
+
+  // 커서 아래에 있는 '기존 배선' 찾기 — 분기(다른 배선 중간에 물리기)용.
+  // 그리는 중인 배선 자신과, 이미 이 배선을 호스트로 삼은 것은 후보에서 뺀다(순환 방지).
+  var BRANCH_HIT = 7;
+  function wireUnder(p, excludeId) {
+    var best = null;
+    WE.model.project.wires.forEach(function (w) {
+      if (w.id === excludeId) return;
+      var pts = WE.geometry.wireRoutePoints(w);
+      if (!pts || pts.length < 2) return;
+      var q = WE.geometry.projectOnPath(pts, p);
+      if (!q) return;
+      var d = Math.hypot(q.x - p.x, q.y - p.y);
+      // 겹친 선에서는 가장 가까운 것, 같으면 나중에 그려진(위에 있는) 것
+      if (d <= BRANCH_HIT && (!best || d <= best.d)) best = { d: d, wire: w, pos: q };
+    });
+    return best;
+  }
+
+  // 그리는 중인 배선의 전체 경로. 미리보기와 실제 생성이 같은 함수를 쓰므로
+  // "보이는 대로 만들어진다"가 보장된다.
+  //   toTerminal=true → 끝점이 단자다. 축이 어긋나면 모서리를 하나 끼워 ㄱ자로 맞춘다
+  //                     (단자 위치는 우리가 못 정하니, 마지막 구간이 대각선이 되는 걸 여기서 막는다)
+  // 지금까지 확정된 마지막 점 (시작 단자 또는 마지막 꺾임점)
+  function pendPrev(pend) {
+    if (pend.waypoints.length) return pend.waypoints[pend.waypoints.length - 1];
+    return WE.geometry.wireEndpoint({ componentId: pend.cmpId, terminalId: pend.tid });
+  }
+
+  // mode: "free"(빈 곳) | "terminal"(단자에서 끝) | "branch"(다른 배선에 물려 끝)
+  function wireDraftPath(pend, target, mode) {
+    var a = WE.geometry.wireEndpoint({ componentId: pend.cmpId, terminalId: pend.tid });
+    if (!a) return null;
+    var pts = [a].concat(pend.waypoints);
+    var prev = pts[pts.length - 1];
+    if (mode === "free") { pts.push(alignToTerminal(prev, axisLock(prev, target))); return pts; }
+    _alignGuide = null;   // 끝점에 붙는 순간엔 가이드가 필요 없다
+    // 분기는 접점이 호스트 선 위를 미끄러질 수 있으므로 모서리를 끼우지 않는다.
+    // 들어온 방향 그대로 선에 닿게 하는 게 맞다(끼우면 접점 직전에 쓸데없이 한 번 꺾인다).
+    // 단자는 위치가 고정이라 축이 어긋나면 모서리가 꼭 필요하다.
+    if (mode === "terminal" && pend.waypoints.length &&
+        target.x !== prev.x && target.y !== prev.y) {
+      pts.push(lastSegHoriz(pts) ? { x: prev.x, y: target.y } : { x: target.x, y: prev.y });
+    }
+    pts.push(target);
+    return pts;
+  }
+
+  // 분기 대상 찾기 — 커서를 그대로 쓰지 않고 '축에 맞춘 점'으로 찾는다.
+  // 세로로 내려오는 중이면 x가 직전 점에 묶여 있으므로, 그 x선이 호스트와 만나는 자리가
+  // 접점이 된다 → 들어온 방향 그대로 선에 닿고 꺾임이 생기지 않는다.
+  function branchTargetAt(pend, p) {
+    if (!pend) return null;
+    var prev = pendPrev(pend);
+    if (!prev) return null;
+    var hit = wireUnder(axisLock(prev, p), null);
+    return hit ? { wire: hit.wire, pos: hit.pos } : null;
+  }
+
+  // 배선 모드
+  //   단자 → 단자        : 예전 그대로 자동배선(최적 경로를 알아서 잡음)
+  //   단자 → 빈 곳 클릭… : 클릭한 자리마다 꺾임점이 생기고, 수평/수직으로만 이어진다(수동배선)
+  // 빈 곳 클릭이 예전엔 '취소'였다 → 이제 점 찍기다. 취소는 Esc·우클릭, 한 점 무르기는 Backspace.
   function onWireDown(e) {
     var p = WE.geometry.clientToCanvas(svg, e.clientX, e.clientY);
     var hit = nearestTerminal(p, SNAP_DIST);
     if (hit) {
       if (!wirePending) {
-        wirePending = { cmpId: hit.cmpId, tid: hit.tid };
+        wirePending = { cmpId: hit.cmpId, tid: hit.tid, waypoints: [] };
       } else if (!(wirePending.cmpId === hit.cmpId && wirePending.tid === hit.tid)) {
         var w = WE.model.addWire(wirePending.cmpId, wirePending.tid, hit.cmpId, hit.tid);
-        if (w && WE.app.trackOnce) WE.app.trackOnce("create_wire");
+        if (w) {
+          if (wirePending.waypoints.length) {
+            // 미리보기와 같은 계산을 써서 보이던 그대로 만든다(끝 모서리 보정 포함).
+            // 점들은 이미 수평·수직으로만 찍히므로 여느 수동배선과 똑같이 다뤄진다
+            // (구간 드래그·꺾임점 편집·부품 따라오기가 전부 그대로 동작).
+            var path = wireDraftPath(wirePending, hit.pos, "terminal");
+            w.waypoints = path ? path.slice(1, -1) : wirePending.waypoints;
+          }
+          if (WE.app.trackOnce) WE.app.trackOnce("create_wire");
+        }
         wirePending = null;
         WE.render.clearWirePreview();
         WE.render.renderWires();
@@ -464,8 +582,47 @@ WE.interactions = (function () {
       e.preventDefault();
       return;
     }
-    // 단자 없는 빈 곳 클릭 → 취소
-    if (wirePending) { wirePending = null; WE.render.clearWirePreview(); }
+    // 기존 배선 위를 클릭 → 그 배선에 물리는 분기로 마무리
+    var host = branchTargetAt(wirePending, p);
+    if (host && wirePending) {
+      var bp = wireDraftPath(wirePending, host.pos, "branch");
+      var wb = WE.model.addWireRef(
+        { componentId: wirePending.cmpId, terminalId: wirePending.tid },
+        { wireId: host.wire.id, x: host.pos.x, y: host.pos.y });
+      if (wb && bp) wb.waypoints = bp.slice(1, -1);
+      wirePending = null;
+      WE.render.clearWirePreview();
+      WE.render.renderWires();
+      WE.model.select("wire", wb.id);
+      WE.app.refreshProps();
+      if (WE.app.trackOnce) WE.app.trackOnce("create_branch");
+      e.preventDefault();
+      return;
+    }
+
+    // 단자 없는 빈 곳 클릭 → 꺾임점 추가 (시작 단자를 아직 안 골랐으면 아무 일도 없음)
+    if (wirePending) {
+      var path = wireDraftPath(wirePending, { x: snapVal(p.x), y: snapVal(p.y) }, "free");
+      if (path) wirePending.waypoints.push(path[path.length - 1]);
+      updateWirePreview(p);
+      e.preventDefault();
+    }
+  }
+
+  // 그리던 배선 버리기 (Esc·우클릭)
+  function cancelWireDraw() {
+    if (!wirePending) return false;
+    wirePending = null;
+    WE.render.clearWirePreview();
+    return true;
+  }
+  // 마지막에 찍은 점 하나만 무르기 (Backspace) — 점이 없으면 전체 취소와 같다
+  function undoWirePoint() {
+    if (!wirePending) return false;
+    if (!wirePending.waypoints.length) return cancelWireDraw();
+    wirePending.waypoints.pop();
+    updateWirePreview(WE.geometry.clientToCanvas(svg, lastX, lastY));
+    return true;
   }
 
   function segIndexAt(pts, p) {
@@ -957,6 +1114,12 @@ WE.interactions = (function () {
     var p1 = WE.geometry.clientToCanvas(svg, e.clientX, e.clientY);
     var dx = p1.x - p0.x, dy = p1.y - p0.y;
 
+    // Shift + 이동 = 수평/수직으로만 (PPT·피그마 관례).
+    // 정렬해 둔 부품을 줄에서 벗어나지 않게 옮길 때 쓴다. 더 많이 움직인 축만 남긴다.
+    if (e.shiftKey && drag.mode === "move") {
+      if (Math.abs(dx) >= Math.abs(dy)) dy = 0; else dx = 0;
+    }
+
     // ---- 스마트 정렬 스냅 (diagrams.net 스타일) ----
     // 드래그 중인 부품의 좌/중/우·상/중/하가 다른 부품의 같은 기준선과 가까우면
     // 그 선에 착 붙이고 파란 가이드선을 표시. 그리드 스냅보다 나중에 적용되어 우선함.
@@ -1099,6 +1262,14 @@ WE.interactions = (function () {
   function onKeyDown(e) {
     // Ctrl/⌘+S → 실제 파일에 저장(Chrome/Edge는 이미 연결된 파일에 조용히 덮어씀, 그 외엔 새로 저장창).
     // 브라우저 임시저장도 함께 갱신. 입력창·모달 상관없이 항상 동작
+    // Ctrl/⌘+Shift+S → 다른 이름으로 저장. 반드시 아래 Ctrl+S보다 먼저 볼 것 —
+    // Ctrl+S 분기는 Shift를 보지 않아서, 뒤에 두면 Shift 조합이 그냥 덮어쓰기로 새어 나간다.
+    if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === "s") {
+      e.preventDefault();
+      if (WE.store) WE.store.saveNow();
+      if (WE.io) WE.io.saveAs();
+      return;
+    }
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") {
       e.preventDefault();
       if (WE.store) WE.store.saveNow();
@@ -1120,6 +1291,13 @@ WE.interactions = (function () {
     var tag = (document.activeElement && document.activeElement.tagName) || "";
     if (tag === "INPUT" || tag === "TEXTAREA") return;
 
+    // 배선을 그리는 중이면 Esc·Backspace가 먼저다 — 모드 복귀보다 '그리던 것 정리'가 우선.
+    // (Esc 한 번에 배선도 버리고 모드까지 빠져나가면 실수로 눌렀을 때 되돌리기 번거롭다)
+    if (wirePending && (e.key === "Escape" || e.key === "Backspace" || e.key === "Delete")) {
+      if (e.key === "Escape") cancelWireDraw(); else undoWirePoint();
+      e.preventDefault(); return;
+    }
+
     // Esc → 어떤 모드에서든 기본(선택) 모드로 복귀
     if (e.key === "Escape" && WE.model.ui.mode !== "select") {
       WE.app.setMode("select");
@@ -1136,6 +1314,14 @@ WE.interactions = (function () {
     }
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "y") {
       WE.history.doRedo(); e.preventDefault(); return;
+    }
+
+    // Shift+C → 부품 라이브러리 폴더 전체 접기/펼치기.
+    // 반드시 아래 '사용자 지정 단축키'보다 먼저 볼 것 — handleShortcut은 e.key를 소문자로 바꿔
+    // 비교하므로, 사용자가 모드 단축키를 'c'로 잡아 두면 Shift+C가 그쪽으로 먼저 새어 나간다.
+    if (e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey && e.key.toLowerCase() === "c") {
+      if (WE.app.toggleAllFolders) WE.app.toggleAllFolders();
+      e.preventDefault(); return;
     }
 
     // 사용자 지정 단축키(모드 전환 등, 조합키 없을 때)

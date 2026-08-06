@@ -625,6 +625,7 @@ WE.app = (function () {
     bindLibraryDnD();
 
     // 새 폴더 (대분류)
+    document.getElementById("btnFolderCollapse").addEventListener("click", toggleAllFolders);
     document.getElementById("btnFolderAdd").addEventListener("click", function () {
       var name = prompt(WE.i18n.t("새 폴더 이름 (예: 센서류, MCU)"));
       if (name == null) return;
@@ -954,11 +955,37 @@ WE.app = (function () {
     var m = vfCollapsedMap(); m[id] = !m[id];
     try { localStorage.setItem("we_libVfCollapse", JSON.stringify(m)); } catch (e) { /* 무시 */ }
   }
+  var VF_IDS = ["__fav", "__recent", "__none"];
+  function setAllVfCollapsed(v) {
+    var m = vfCollapsedMap();
+    VF_IDS.forEach(function (id) { m[id] = !!v; });
+    try { localStorage.setItem("we_libVfCollapse", JSON.stringify(m)); } catch (e) { /* 무시 */ }
+  }
+
+  // ---- 폴더 전체 접기/펼치기 (Shift+C) ----
+  // 폴더가 많아지면 하나씩 누르기 힘들다. 하나라도 펼쳐져 있으면 전부 접고,
+  // 이미 다 접혀 있으면 전부 펼친다(같은 키로 되돌릴 수 있게).
+  //
+  // 판정은 화면(DOM)이 아니라 데이터로 한다 — 검색 중에는 폴더 헤더가 아예 안 그려져
+  // DOM을 보면 "펼쳐진 게 없다"고 잘못 읽는다.
+  function allFoldersCollapsed() {
+    if (!WE.library.allCollapsed()) return false;
+    var m = vfCollapsedMap();
+    for (var i = 0; i < VF_IDS.length; i++) if (!m[VF_IDS[i]]) return false;
+    return true;
+  }
+  function toggleAllFolders() {
+    var collapse = !allFoldersCollapsed();
+    WE.library.setAllCollapsed(collapse);
+    setAllVfCollapsed(collapse);      // 보이지 않는 섹션까지 함께 맞춰야 다음 누름에 토글이 성립한다
+    renderLibrary();
+    setHint(collapse ? WE.i18n.t("폴더를 모두 접었습니다.") : WE.i18n.t("폴더를 모두 펼쳤습니다."));
+  }
 
   // 폴더 헤더 한 줄 생성. fid: 실제 폴더 id 또는 "__fav"/"__recent"/"__none"
   function buildFolderHeader(fid, icon, name, count, collapsed, depth, isVirtual) {
     var h = document.createElement("div");
-    h.className = "lib-folder" + (depth ? " sub" : "") + (isVirtual ? " virtual" : "");
+    h.className = "lib-folder" + (depth ? " sub" : "") + (isVirtual ? " virtual" : "") + (collapsed ? " collapsed" : "");
     h.dataset.fid = fid;
     if (!isVirtual) {
       h.setAttribute("draggable", "true");
@@ -1187,6 +1214,11 @@ WE.app = (function () {
     return a.join(" · ");
   }
 
+  // 배선 리스트 UI 노출 여부.
+  // 지금 쓰임새가 없어 화면·인쇄·CSV에서 감춰 두었다. 기능 코드(wireListData·renderWireListView·
+  // 인쇄 섹션)는 그대로 살아 있으므로, 다시 필요해지면 이 값만 true로 되돌리면 된다.
+  var SHOW_WIRE_LIST = false;
+
   // ---- BOM 표 뷰(하단 탭) ----
   var _view = "wiring";
   function setActiveTab(view) {
@@ -1195,6 +1227,7 @@ WE.app = (function () {
   }
   // 배선도는 항상 표시. BOM/배선 리스트 탭 = 배선도 아래에 해당 창을 추가 표시(스크롤 이동), 배선도 탭 = 둘 다 숨김.
   function switchView(view) {
+    if (view === "wirelist" && !SHOW_WIRE_LIST) view = "wiring";   // 숨긴 상태에선 진입 자체를 막는다
     _view = view; setActiveTab(view);
     var wrap = document.getElementById("canvasWrap");
     var bom = document.getElementById("bomView");
@@ -1804,6 +1837,16 @@ WE.app = (function () {
     for (var i = 0; i < tabs.length; i++) {
       tabs[i].addEventListener("click", function () { switchView(this.dataset.view); });
     }
+    applyWireListVisibility();
+  }
+
+  // 배선 리스트 관련 UI를 한 곳에서 감춘다 (탭 · BOM 툴바의 CSV 버튼)
+  function applyWireListVisibility() {
+    if (SHOW_WIRE_LIST) return;
+    var tab = document.querySelector('.view-tab[data-view="wirelist"]');
+    if (tab) tab.hidden = true;
+    var csv = document.getElementById("bomExportWires");
+    if (csv) csv.hidden = true;
   }
 
   // ---- 전력 / 배터리 요약 ----
@@ -1931,7 +1974,7 @@ WE.app = (function () {
     if (WE.render.setLabelPreview) WE.render.setLabelPreview(null);   // 모드 전환 시 미리보기 정리
     if (mode !== "select") { WE.model.clearSelection(); WE.render.renderOverlay(); refreshProps(); }
     setHint(
-      mode === "wire" ? WE.i18n.t("단자를 클릭하고 다른 단자를 클릭하면 배선이 이어집니다.") :
+      mode === "wire" ? WE.i18n.t("단자 → 단자를 클릭하면 자동 배선. 중간에 빈 곳을 클릭하면 수평·수직으로 꺾여 그 지점을 지나갑니다. (Esc·우클릭: 취소 · Backspace: 한 점 무르기)") :
       mode === "text" ? WE.i18n.t("캔버스를 클릭해 텍스트를 추가하세요. (더블클릭으로 편집)") :
       mode === "label" ? WE.i18n.t("라벨을 붙일 배선을 클릭하세요. 번호는 자동으로 매겨집니다. (더블클릭: 수정)") : ""
     );
@@ -2687,7 +2730,7 @@ WE.app = (function () {
     });
 
     // 메뉴의 저장·공유 = 툴바 버튼과 같은 동작 (메뉴에서도 찾을 수 있게 중복 배치)
-    document.getElementById("btnSaveMenu").addEventListener("click", function () { WE.io.save(); });
+    document.getElementById("btnSaveAsMenu").addEventListener("click", function () { WE.io.saveAs(); });
     document.getElementById("btnPng").addEventListener("click", exportPng);
 
     bindHistoryModal();
@@ -2719,7 +2762,9 @@ WE.app = (function () {
       [WE.i18n.t("확대 / 축소"), WE.i18n.t("Ctrl+휠")],
       [WE.i18n.t("선택 항목 삭제"), "Delete / Backspace"],
       [WE.i18n.t("즉시 저장"), "Ctrl+S"],
+      [WE.i18n.t("다른 이름으로 저장"), "Ctrl+Shift+S"],
       [WE.i18n.t("파일 열기"), "Ctrl+O"],
+      [WE.i18n.t("라이브러리 폴더 전체 접기/펼치기"), "Shift+C"],
       [WE.i18n.t("이 도움말"), "?"]
     ];
     document.getElementById("helpShortcutList").innerHTML = rows.map(function (r) {
@@ -3757,6 +3802,7 @@ WE.app = (function () {
   return {
     init: init, refreshProps: refreshProps, setHint: setHint, setSavedHint: setSavedHint, reloadUI: reloadUI,
     renderLibrary: renderLibrary,
+    toggleAllFolders: toggleAllFolders,
     openComponentMenu: openComponentMenu,
     openPresetModal: openPresetModal,
     focusAnnoText: focusAnnoText,
@@ -3766,7 +3812,7 @@ WE.app = (function () {
     bomColumns: visibleCols,
     linkLabel: linkLabel,
     renderBOMView: renderBOMView,
-    wireListData: wireListData,
+    wireListData: function () { return SHOW_WIRE_LIST ? wireListData() : []; },   // 숨김 시 인쇄 섹션도 빠진다
     legendItems: legendItems,
     syncProjNote: syncProjNote,
     syncNoteWidth: syncNoteWidth,

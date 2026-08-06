@@ -91,6 +91,15 @@ WE.library = (function () {
     var f = getFolder(id); if (!f) return;
     f.collapsed = !f.collapsed; save();
   }
+  // 전체 접기/펼치기 — 폴더가 많아지면 하나씩 누르기 힘들다 (Shift+C)
+  function setAllCollapsed(v) {
+    folders.forEach(function (f) { f.collapsed = !!v; });
+    save();
+  }
+  function allCollapsed() {
+    for (var i = 0; i < folders.length; i++) if (!folders[i].collapsed) return false;
+    return true;
+  }
   // 폴더를 beforeId 폴더 앞으로 이동(beforeId 없으면 맨 끝) — 렌더는 부모별로 걸러 그리므로
   // 전역 배열 순서만 바꾸면 같은 계층 안에서의 표시 순서가 바뀐다
   function reorderFolderBefore(id, beforeId) {
@@ -284,6 +293,7 @@ WE.library = (function () {
     addPart: addPart, updatePart: updatePart, addFromComponent: addFromComponent, remove: remove, toggleFav: toggleFav, reorderBefore: reorderBefore,
     getFolders: getFolders, getFolder: getFolder, addFolder: addFolder, renameFolder: renameFolder,
     removeFolder: removeFolder, toggleFolder: toggleFolder, movePart: movePart, reorderFolderBefore: reorderFolderBefore,
+    setAllCollapsed: setAllCollapsed, allCollapsed: allCollapsed,
     instanceOpts: instanceOpts, exportJson: exportJson, importJson: importJson
   };
 })();

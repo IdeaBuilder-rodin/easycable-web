@@ -97,10 +97,11 @@ WE.model = (function () {
 
   function removeComponent(id) {
     project.components = project.components.filter(function (c) { return c.id !== id; });
-    // 이 부품에 연결된 배선도 제거
-    project.wires = project.wires.filter(function (w) {
-      return w.from.componentId !== id && w.to.componentId !== id;
-    });
+    // 이 부품에 연결된 배선 제거 — 그 배선에 물린 분기선까지 연쇄로 없애야 하므로
+    // removeWire를 거친다(여기서 직접 걸러내면 분기선이 허공에 남는다)
+    project.wires.filter(function (w) {
+      return w.from.componentId === id || w.to.componentId === id;
+    }).map(function (w) { return w.id; }).forEach(function (wid) { removeWire(wid); });
     if (selection.type === "component" && selection.id === id) clearSelection();
   }
 
@@ -147,10 +148,15 @@ WE.model = (function () {
 
   // ---- 배선 ----
   function addWire(fromCmpId, fromTid, toCmpId, toTid, color, width) {
+    return addWireRef({ componentId: fromCmpId, terminalId: fromTid },
+                      { componentId: toCmpId, terminalId: toTid }, color, width);
+  }
+  // 끝점을 직접 준다. 단자는 { componentId, terminalId }, 분기는 { wireId, x, y }.
+  function addWireRef(fromRef, toRef, color, width) {
     var w = {
       id: nextId("w"),
-      from: { componentId: fromCmpId, terminalId: fromTid },
-      to: { componentId: toCmpId, terminalId: toTid },
+      from: fromRef,
+      to: toRef,
       color: color || ui.wireColor,
       width: width || ui.wireWidth,
       waypoints: []
@@ -164,9 +170,23 @@ WE.model = (function () {
     }
     return null;
   }
+  // 배선 삭제. 이 배선에 물려 있던 분기선은 붙을 데가 없어지므로 함께 지운다
+  // (분기의 분기까지 있으면 연쇄로). 몇 개가 같이 지워졌는지 돌려준다.
   function removeWire(id) {
-    project.wires = project.wires.filter(function (w) { return w.id !== id; });
-    if (selection.type === "wire" && selection.id === id) clearSelection();
+    var doomed = {}; doomed[id] = 1;
+    var changed = true;
+    while (changed) {
+      changed = false;
+      project.wires.forEach(function (w) {
+        if (doomed[w.id]) return;
+        if ((w.from && doomed[w.from.wireId]) || (w.to && doomed[w.to.wireId])) {
+          doomed[w.id] = 1; changed = true;
+        }
+      });
+    }
+    project.wires = project.wires.filter(function (w) { return !doomed[w.id]; });
+    if (selection.type === "wire" && doomed[selection.id]) clearSelection();
+    return Object.keys(doomed).length - 1;   // 함께 지워진 분기선 수
   }
 
   // ---- 직렬화 ----
@@ -308,6 +328,7 @@ WE.model = (function () {
     removeComponent: removeComponent,
     duplicateComponent: duplicateComponent,
     addWire: addWire,
+    addWireRef: addWireRef,
     getWire: getWire,
     removeWire: removeWire,
     loadProject: loadProject,

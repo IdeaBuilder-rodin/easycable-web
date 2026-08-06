@@ -62,8 +62,55 @@ WE.geometry = (function () {
     return terminalAbs(cmp, t);
   }
 
-  // 단자 끝점 정보(부품/단자/절대좌표)
-  function endpointFull(ref) {
+  // ---- 분기점(다른 배선 위에 물린 끝점) ----
+  // 끝점은 두 가지다:
+  //   { componentId, terminalId }  단자
+  //   { wireId, x, y }             다른 배선 위의 한 점(분기)
+  // 분기는 찍은 좌표를 기억해 두고, 그릴 때마다 호스트 배선의 '지금' 경로에 투영한다.
+  // 그래야 호스트가 움직여도 접점이 선에서 떨어지지 않는다(비율로 기억하면 호스트에
+  // 꺾임점이 늘 때 접점이 밀린다).
+  function isBranchRef(ref) { return !!(ref && ref.wireId); }
+  function wireHasBranch(w) { return isBranchRef(w.from) || isBranchRef(w.to); }
+
+  // 선분 위에서 p에 가장 가까운 점
+  function closestOnSeg(p, a, b) {
+    var dx = b.x - a.x, dy = b.y - a.y;
+    var len2 = dx * dx + dy * dy;
+    if (len2 < 1e-9) return { x: a.x, y: a.y };
+    var t = ((p.x - a.x) * dx + (p.y - a.y) * dy) / len2;
+    t = Math.max(0, Math.min(1, t));
+    return { x: a.x + dx * t, y: a.y + dy * t };
+  }
+  // 경로(점 배열) 위에서 p에 가장 가까운 점
+  function projectOnPath(pts, p) {
+    if (!pts || pts.length < 2) return null;
+    var best = null;
+    for (var i = 0; i < pts.length - 1; i++) {
+      var q = closestOnSeg(p, pts[i], pts[i + 1]);
+      var d = (q.x - p.x) * (q.x - p.x) + (q.y - p.y) * (q.y - p.y);
+      if (!best || d < best.d) best = { d: d, q: q };
+    }
+    return best ? best.q : null;
+  }
+
+  // 분기 끝점의 실제 좌표. seen은 순환 방지용(A가 B에, B가 A에 물린 경우).
+  function branchPos(ref, seen) {
+    var host = WE.model.getWire(ref.wireId);
+    if (!host) return null;                          // 호스트가 사라짐
+    seen = seen || {};
+    if (seen[ref.wireId]) return { x: ref.x, y: ref.y };   // 순환 → 마지막으로 알던 자리
+    seen[ref.wireId] = 1;
+    var pts = _cache[host.id] || routeOf(host, seen);
+    var q = pts && projectOnPath(pts, ref);
+    return q || { x: ref.x, y: ref.y };
+  }
+
+  // 단자/분기 공통 끝점 정보. 분기면 cmp·t가 없다(면 판정을 못 하므로 호출 쪽에서 갈라 쓴다).
+  function endpointFull(ref, seen) {
+    if (isBranchRef(ref)) {
+      var bp = branchPos(ref, seen);
+      return bp ? { cmp: null, t: null, pos: bp, branch: true } : null;
+    }
     var cmp = WE.model.getComponent(ref.componentId); if (!cmp) return null;
     var t = WE.model.getTerminal(cmp, ref.terminalId); if (!t) return null;
     return { cmp: cmp, t: t, pos: terminalAbs(cmp, t) };
@@ -367,15 +414,30 @@ WE.geometry = (function () {
     return clone(best.slice(1, best.length - 1));
   }
 
+  // 수동(꺾임점 있는) 배선의 경로 — 항상 직각으로 정리한다.
+  // 클릭으로 그린 배선은 애초에 수평·수직으로만 점이 찍히므로 여기서 바뀌는 게 없고
+  // (orthogonalize는 대각선일 때만 모서리를 끼운다), 예전에 만든 배선도 종전 그대로다.
+  // 덕분에 만든 방식과 무관하게 모든 수동배선이 똑같이 동작한다.
+  function manualPath(A, B, wire) {
+    return orthogonalize([A.pos].concat(wire.waypoints, [B.pos]));
+  }
+
   // 한 배선의 원시 경로 (너징 전)
-  function wireRouteRaw(wire) {
-    var A = endpointFull(wire.from), B = endpointFull(wire.to);
+  function wireRouteRaw(wire, seen) {
+    var A = endpointFull(wire.from, seen), B = endpointFull(wire.to, seen);
     if (!A || !B) return null;
     if (wire.waypoints && wire.waypoints.length) {
-      return { pts: orthogonalize([A.pos].concat(wire.waypoints, [B.pos])), auto: false };  // 수동 우선(직각 강제)
+      return { pts: manualPath(A, B, wire), auto: false };   // 수동 우선
     }
+    // 분기 끝점은 '어느 면에서 나가는가'가 없어 orthoStub를 못 쓴다 → 단순 직각 경로
+    if (A.branch || B.branch) return { pts: orthogonalize([A.pos, B.pos]), auto: false };
     if (WE.model.ui.wireRouting === "ortho") return { pts: simplify(orthoStub(A, B, wire)), auto: true };
     return { pts: [A.pos, B.pos], auto: false };
+  }
+  // 캐시를 거치지 않고 지금 계산 (분기 해석 도중에 쓰인다)
+  function routeOf(wire, seen) {
+    var r = wireRouteRaw(wire, seen);
+    return r ? r.pts : null;
   }
 
   // ---- 너징: 같은 선 위에서 겹치는 내부 세그먼트를 서로 다른 레인으로 분리 ----
@@ -437,12 +499,42 @@ WE.geometry = (function () {
 
   // 전체 배선 경로 계산 + 너징 → 캐시
   var _cache = {};
+  // 계산 순서가 중요하다.
+  //   1) 분기가 없는 배선만 먼저 라우팅 + 너징
+  //   2) 분기 배선을 '호스트가 이미 확정된 것부터' 차례로 (여러 겹 분기도 이 반복으로 풀린다)
+  // 분기 배선을 1단계 너징에 끼우면 서로를 참조해 결과가 흔들린다(부품을 옮길 때마다
+  // 접점이 미세하게 떨리는 증상). 또 투영은 반드시 '너징까지 끝난' 경로 위에서 해야
+  // 접점이 9px 옆으로 밀린 선에서 떠 보이지 않는다.
   function computeRoutes() {
     _cache = {};
     var wires = WE.model.project.wires;
-    var routes = wires.map(function (w) { var r = wireRouteRaw(w); if (r) r.id = w.id; return r; });
+    var plain = [], branchy = [];
+    wires.forEach(function (w) { (wireHasBranch(w) ? branchy : plain).push(w); });
+
+    var routes = plain.map(function (w) { var r = wireRouteRaw(w); if (r) r.id = w.id; return r; });
     nudge(routes);
     routes.forEach(function (r) { if (r) _cache[r.id] = r.pts; });
+
+    // 호스트가 준비된 것부터 차례로. 더 이상 진전이 없으면 남은 건 순환이므로
+    // 마지막으로 알던 좌표로 그려 두고 끝낸다(무한 루프 방지).
+    var pending = branchy.slice(), guard = pending.length + 1;
+    while (pending.length && guard-- > 0) {
+      var rest = [];
+      pending.forEach(function (w) {
+        var hostReady = ["from", "to"].every(function (k) {
+          return !isBranchRef(w[k]) || _cache[w[k].wireId];
+        });
+        if (!hostReady) { rest.push(w); return; }
+        var r = wireRouteRaw(w);
+        if (r) _cache[w.id] = r.pts;
+      });
+      if (rest.length === pending.length) break;   // 진전 없음 = 순환
+      pending = rest;
+    }
+    pending.forEach(function (w) {
+      var r = wireRouteRaw(w, {});   // seen을 새로 주면 순환 지점에서 마지막 좌표를 쓴다
+      if (r) _cache[w.id] = r.pts;
+    });
   }
 
   // 배선 경로 점 배열
@@ -451,7 +543,7 @@ WE.geometry = (function () {
     if (wire.waypoints && wire.waypoints.length) {
       var A = endpointFull(wire.from), B = endpointFull(wire.to);
       if (!A || !B) return null;
-      return orthogonalize([A.pos].concat(wire.waypoints, [B.pos]));   // 직각 강제
+      return manualPath(A, B, wire);
     }
     if (_cache[wire.id]) return _cache[wire.id];   // 자동배선: 너징 캐시
     var r = wireRouteRaw(wire);
@@ -685,6 +777,9 @@ WE.geometry = (function () {
     absToTerminal: absToTerminal,
     transformString: transformString,
     wireEndpoint: wireEndpoint,
+    isBranchRef: isBranchRef,
+    wireHasBranch: wireHasBranch,
+    projectOnPath: projectOnPath,
     computeRoutes: computeRoutes,
     wireRoutePoints: wireRoutePoints,
     nearestSegmentIndex: nearestSegmentIndex,

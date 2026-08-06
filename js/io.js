@@ -49,6 +49,7 @@ WE.io = (function () {
 
   function init() {
     document.getElementById("btnSave").addEventListener("click", save);
+    syncSaveTitle();
     document.getElementById("btnOpen").addEventListener("click", openFile);
     document.getElementById("fileOpen").addEventListener("change", onOpenFileInput);
     // 파일로 저장 안 한 변경이 있을 때만 닫기 확인 (문구는 브라우저 고정 문구가 뜸 — 커스텀 불가)
@@ -103,7 +104,18 @@ WE.io = (function () {
   }
 
   // 새 프로젝트 시작 시 호출 — 이전 파일과의 연결을 끊음(다음 저장은 "다른 이름으로" 새로 지정)
-  function clearFileHandle() { _fileHandle = null; }
+  function clearFileHandle() { _fileHandle = null; syncSaveTitle(); }
+
+  // 툴바 [저장]이 '어느 파일'을 덮어쓸지 툴팁에 밝혀 둔다.
+  // 이게 없으면 연결된 파일이 화면 어디에도 안 보여서, 누르고 나서야 덮어쓴 걸 알게 된다.
+  function currentFileName() { return _fileHandle ? _fileHandle.name : ""; }
+  function syncSaveTitle() {
+    var btn = document.getElementById("btnSave");
+    if (!btn) return;
+    var base = WE.i18n.t("프로젝트를 파일로 저장 (Ctrl+S)");
+    btn.title = _fileHandle ? base + WE.i18n.t(" · 현재 파일: ") + _fileHandle.name
+                            : base + WE.i18n.t(" · 아직 파일 없음 (위치를 묻습니다)");
+  }
 
   async function writeToHandle(handle, dataStr) {
     var writable = await handle.createWritable();
@@ -121,7 +133,7 @@ WE.io = (function () {
 
       if (_fileHandle) {
         writeToHandle(_fileHandle, data).then(function () {
-          markClean();
+          markClean(); syncSaveTitle();
           WE.app.setHint(WE.i18n.t("저장됨: ") + _fileHandle.name);
         }).catch(function () {
           _fileHandle = null;   // 파일이 삭제/이동된 경우 등 → 새로 지정하도록 폴백
@@ -133,12 +145,26 @@ WE.io = (function () {
     });
   }
 
+  // 다른 이름으로 저장: 연결된 파일이 있어도 항상 위치·이름을 새로 묻는다.
+  // 저장에 성공하면 연결을 '새 파일로 옮긴다' — 워드·VS Code와 같은 방식이라,
+  // 이후 Ctrl+S는 방금 저장한 쪽으로 간다(사본을 만들고 그쪽에서 계속 작업하는 흐름).
+  function saveAs() {
+    if (WE.app && WE.app.track) WE.app.track("save_project_as");
+    var fn = safeName(WE.model.project.meta.name) + ".ezc";
+    buildPayload().then(function (data) {
+      // File System Access API가 없는 브라우저(Safari·Firefox 등)는 저장이 원래 매번 다운로드라
+      // 이미 '다른 이름으로 저장'과 같다 → 그대로 내려받게 둔다.
+      if (!_supportsFS) { download(data, fn); markClean(); WE.app.setHint(WE.i18n.t("저장됨: ") + fn); return; }
+      saveAsNewHandle(data, fn);
+    });
+  }
+
   function saveAsNewHandle(data, fn) {
     window.showSaveFilePicker({ suggestedName: fn, types: FILE_TYPES }).then(function (handle) {
       _fileHandle = handle;
       return writeToHandle(handle, data);
     }).then(function () {
-      markClean();
+      markClean(); syncSaveTitle();
       WE.app.setHint(WE.i18n.t("저장됨: ") + _fileHandle.name);
     }).catch(function (err) {
       if (err && err.name === "AbortError") return;   // 사용자가 저장창 취소
@@ -156,7 +182,7 @@ WE.io = (function () {
       var handle = handles[0];
       return handle.getFile().then(function (file) {
         return file.arrayBuffer().then(function (buf) {
-          return loadProjectBuffer(buf, file.name).then(function (ok) { if (ok) _fileHandle = handle; });
+          return loadProjectBuffer(buf, file.name).then(function (ok) { if (ok) { _fileHandle = handle; syncSaveTitle(); } });
         });
       });
     }).catch(function (err) {
@@ -170,7 +196,7 @@ WE.io = (function () {
     if (!file) return;
     var reader = new FileReader();
     reader.onload = function (ev) {
-      _fileHandle = null;   // input 방식으로 연 파일은 핸들이 없어 Ctrl+S 시 "다른 이름으로 저장"부터 다시 시작
+      _fileHandle = null; syncSaveTitle();   // input 방식으로 연 파일은 핸들이 없어 Ctrl+S 시 "다른 이름으로 저장"부터 다시 시작
       loadProjectBuffer(ev.target.result, file.name);
     };
     reader.readAsArrayBuffer(file);
@@ -271,7 +297,8 @@ WE.io = (function () {
   }
 
   return {
-    init: init, save: save, clearFileHandle: clearFileHandle,
+    init: init, save: save, saveAs: saveAs, clearFileHandle: clearFileHandle,
+    currentFileName: currentFileName,
     loadProjectText: loadProjectText, loadProjectBuffer: loadProjectBuffer,
     buildBundle: buildBundle   // 테스트·진단용
   };

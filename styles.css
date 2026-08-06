@@ -677,6 +677,8 @@ body.panning #canvas, body.panning #canvas * { cursor: grabbing !important; }
 }
 .wire-label-guide { stroke: #ff3d7f; stroke-dasharray: 5 4; stroke-width: 1; pointer-events: none; }
 .align-guide { stroke: #1e88e5; stroke-width: 1; pointer-events: none; }   /* 부품 정렬 스마트 가이드 */
+/* 배선을 그릴 때 '이 단자에 높이를 맞췄다'를 보여주는 점선 (라벨 가이드와 같은 분홍 계열) */
+.wire-align-guide { stroke: #ff3d7f; stroke-dasharray: 5 4; stroke-width: 1; pointer-events: none; }
 .canvas-watermark {
   font: 600 26px "Segoe UI", "Malgun Gothic", sans-serif;
   fill: #7e8b99; opacity: .10;

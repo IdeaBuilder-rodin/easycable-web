@@ -446,6 +446,7 @@ WE.render = (function () {
       var lbl = buildWireLabel(w, labelObs);
       if (lbl) { layerWireLabels.appendChild(lbl); centerTubeText(lbl); }
     });
+    drawBranchDots();   // 선을 다 그린 뒤 — 접점이 선 위에 얹혀야 한다
   }
 
   // 배선 path 갱신 (너징은 전역이라 전부 다시 계산)
@@ -520,6 +521,8 @@ WE.render = (function () {
         "stroke-dasharray": "4 3", "pointer-events": "none"
       }));
     }
+    drawBranchTarget();     // 분기 대상 강조 — 미리보기 선 아래에 깔린다
+    drawWireAlignGuide();   // 배선 미리보기 아래에 깔리도록 먼저
     if (_rubber) layerOverlay.appendChild(_rubber);
     if (_snap) {
       layerOverlay.appendChild(el("circle", {
@@ -667,18 +670,90 @@ WE.render = (function () {
     });
   }
 
-  // 배선 그리기 프리뷰: 러버밴드 + 스냅 하이라이트
-  var _rubber = null, _snap = null;
-  function setWirePreview(a, b, snap) {
-    _rubber = (a && b) ? el("line", {
-      x1: a.x, y1: a.y, x2: b.x, y2: b.y,
-      stroke: WE.model.ui.wireColor, "stroke-width": WE.model.ui.wireWidth,
-      "stroke-dasharray": "6 4", "stroke-linecap": "round", "pointer-events": "none", opacity: 0.7
-    }) : null;
+  // 분기 접점 — 회로도 관례대로 물린 자리에 점을 찍는다.
+  // 점이 없으면 그냥 지나가는 선인지 실제로 물린 선인지 구분이 안 된다.
+  // 색은 호스트(물린 대상) 배선을 따른다 — 점이 그 선 위에 얹히므로 그 선의 일부로 보여야 한다.
+  function drawBranchDots() {
+    WE.model.project.wires.forEach(function (w) {
+      ["from", "to"].forEach(function (k) {
+        var ref = w[k];
+        if (!ref || !ref.wireId) return;
+        var host = WE.model.getWire(ref.wireId);
+        var pts = WE.geometry.wireRoutePoints(w);
+        if (!host || !pts || !pts.length) return;
+        var at = (k === "from") ? pts[0] : pts[pts.length - 1];
+        layerWires.appendChild(el("circle", {
+          cx: at.x, cy: at.y, r: Math.max(3, (host.width || 2) + 1.5),
+          fill: host.color, "pointer-events": "none"
+        }));
+      });
+    });
+  }
+
+  // 배선 그리기 프리뷰: 지금까지 찍은 경로 + 커서까지의 예상 구간 + 스냅 하이라이트.
+  // pts = [시작단자, ...찍은 점들, 커서] — 점을 하나도 안 찍었으면 예전처럼 고무줄 한 줄이 된다.
+  var _rubber = null, _snap = null, _wireAlign = null;
+  function setWirePreview(pts, snap, align) {
+    _rubber = null;
+    _wireAlign = align || null;
+    if (pts && pts.length >= 2) {
+      var g = el("g", { "pointer-events": "none" });
+      g.appendChild(el("polyline", {
+        points: pts.map(function (p) { return p.x + "," + p.y; }).join(" "),
+        fill: "none",
+        stroke: WE.model.ui.wireColor, "stroke-width": WE.model.ui.wireWidth,
+        "stroke-dasharray": "6 4", "stroke-linecap": "round", "stroke-linejoin": "round", opacity: 0.7
+      }));
+      // 찍어 둔 점을 동그라미로 — 몇 개를 어디에 찍었는지 보이게 (시작단자·커서는 뺀다)
+      pts.slice(1, -1).forEach(function (p) {
+        g.appendChild(el("circle", {
+          cx: p.x, cy: p.y, r: 3.5,
+          fill: "#fff", stroke: WE.model.ui.wireColor, "stroke-width": 2
+        }));
+      });
+      _rubber = g;
+    }
     _snap = snap || null;
     renderOverlay();
   }
-  function clearWirePreview() { _rubber = null; _snap = null; renderOverlay(); }
+  function clearWirePreview() {
+    _rubber = null; _snap = null; _wireAlign = null; _branchTarget = null; renderOverlay();
+  }
+
+  // 분기 대상 미리보기 — 지금 클릭하면 '이 배선의 이 자리'에 물린다는 것을 미리 보여 준다.
+  // 이게 없으면 인식이 된 건지 아닌지 알 수 없어, 엉뚱한 선에 붙거나 꺾임점을 찍으려다
+  // 배선이 끝나 버린다(빽빽한 도면에서 실제로 그런 일이 났다).
+  var _branchTarget = null;   // { wireId, pos }
+  function setBranchTarget(bt) { _branchTarget = bt || null; }
+  function drawBranchTarget() {
+    if (!_branchTarget) return;
+    var w = WE.model.getWire(_branchTarget.wireId); if (!w) return;
+    var d = WE.geometry.wirePath(w);
+    if (d) {
+      layerOverlay.appendChild(el("path", {
+        d: d, fill: "none", stroke: "#ffb300", "stroke-width": (w.width || 2) + 6,
+        "stroke-opacity": 0.5, "stroke-linecap": "round", "stroke-linejoin": "round", "pointer-events": "none"
+      }));
+    }
+    // 붙을 자리에 미리 접점을 찍어 둔다(실제 생성될 점과 같은 모양)
+    layerOverlay.appendChild(el("circle", {
+      cx: _branchTarget.pos.x, cy: _branchTarget.pos.y, r: Math.max(4, (w.width || 2) + 2.5),
+      fill: w.color, stroke: "#ffb300", "stroke-width": 2, "pointer-events": "none"
+    }));
+  }
+
+  // 정렬된 단자까지 잇는 점선 + 그 단자 강조 — "이 단자에 맞춘 것"임을 눈으로 알려 준다
+  function drawWireAlignGuide() {
+    if (!_wireAlign) return;
+    layerOverlay.appendChild(el("line", {
+      x1: _wireAlign.x1, y1: _wireAlign.y1, x2: _wireAlign.x2, y2: _wireAlign.y2,
+      "class": "wire-align-guide"
+    }));
+    layerOverlay.appendChild(el("circle", {
+      cx: _wireAlign.x2, cy: _wireAlign.y2, r: 5,
+      fill: "none", stroke: "#ff3d7f", "stroke-width": 1.5, "pointer-events": "none"
+    }));
+  }
 
   var _marquee = null;
   function setMarquee(r) { _marquee = r; renderOverlay(); }
@@ -831,6 +906,7 @@ WE.render = (function () {
     updateComponent: updateComponent,
     rerenderComponent: rerenderComponent,
     setWirePreview: setWirePreview,
+    setBranchTarget: setBranchTarget,
     clearWirePreview: clearWirePreview,
     setMarquee: setMarquee,
     clearMarquee: clearMarquee,
