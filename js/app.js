@@ -3274,6 +3274,19 @@ WE.app = (function () {
       c.hideTermLabels = e.target.checked;
       WE.render.renderAll();
     });
+    // 단자 이름 위치 초기화 — 부품 더블클릭과 같은 동작(그쪽은 눈에 안 띄어 버튼도 둔다)
+    document.getElementById("propTermLabelReset").addEventListener("click", function () {
+      var c = WE.model.getSelectedComponent(); if (!c) return;
+      if (!WE.interactions.resetTermLabels(c)) {
+        setHint(WE.i18n.t("옮겨 둔 단자 이름이 없습니다."));
+        return;
+      }
+      WE.render.rerenderComponent(c);
+      WE.render.renderOverlay();
+      WE.history.commit();
+      refreshProps();
+      setHint(WE.i18n.t("단자 이름 위치를 원래대로 되돌렸습니다."));
+    });
   }
 
   // ---- 프리셋 관리 모달 ----
@@ -3654,7 +3667,13 @@ WE.app = (function () {
   function applyProp(fn, fromInput) {
     var c = WE.model.getSelectedComponent();
     if (!c) return;
-    fn(c);
+    // 크기·회전·좌표를 바꾸면 단자가 움직인다 → 연결된 수동배선이 따라오게 감싼다.
+    // (드래그로 옮길 때와 같은 처리. 이게 없으면 꺾임점이 제자리에 남아 선이 위로 튄다)
+    if (WE.interactions && WE.interactions.withTermFollow) {
+      WE.interactions.withTermFollow([c.id], function () { fn(c); });
+    } else {
+      fn(c);
+    }
     WE.render.renderAll();
     if (!fromInput) refreshProps();
     else { WE.render.renderOverlay(); }

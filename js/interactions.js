@@ -164,7 +164,7 @@ WE.interactions = (function () {
     }
 
     // 단자 라벨 클릭 → 라벨만 드래그로 위치 이동
-    var lblEl = e.target.closest("[data-label-tid]");
+    var lblEl = dblTarget(e, "[data-label-tid]");
     if (lblEl) {
       var lCmpId = lblEl.getAttribute("data-cmp-id");
       WE.model.select("component", lCmpId);
@@ -203,7 +203,8 @@ WE.interactions = (function () {
       var rc = WE.model.getSelectedComponent();
       if (rc) {
         var center = WE.geometry.localToAbs(rc, rc.width / 2, rc.height / 2);
-        drag = { mode: "rotate", id: rc.id, cx: center.x, cy: center.y };
+        drag = { mode: "rotate", id: rc.id, cx: center.x, cy: center.y,
+                 termFollow: beginTermFollow([rc.id]) };
         svg.setPointerCapture(e.pointerId);
       }
       return;
@@ -217,7 +218,8 @@ WE.interactions = (function () {
       drag = {
         mode: "resize", id: cmp.id,
         startX: e.clientX, startY: e.clientY,
-        orig: { width: cmp.width, height: cmp.height }
+        orig: { width: cmp.width, height: cmp.height },
+        termFollow: beginTermFollow([cmp.id])   // 단자가 움직이므로 수동배선이 따라와야 한다
       };
       svg.setPointerCapture(e.pointerId);
       return;
@@ -800,6 +802,48 @@ WE.interactions = (function () {
       if (f.toMoving && n && f.b0) followEnd(wp[n - 1], f.orig[n - 1], f.b0, dx, dy);
     });
   }
+  // ---- 크기·배율·회전으로 '단자가 움직일 때' 수동배선 따라오게 하기 ----
+  // 이동(move)과 나눠 둔 이유: 이동은 모든 단자가 같은 양만큼 움직여 dx·dy 하나면 되지만,
+  // 크기·회전은 단자마다 이동량이 달라 끝점별로 각자 계산해야 한다.
+  // 이게 없으면 단자만 움직이고 꺾임점은 제자리에 남아, 직각 정리가 끼어들며 선이 위로 튄다.
+  function beginTermFollow(cmpIds) {
+    var set = {}; (cmpIds || []).forEach(function (id) { set[id] = 1; });
+    var arr = [];
+    WE.model.project.wires.forEach(function (w) {
+      if (!w.waypoints || !w.waypoints.length) return;   // 수동배선만(자동배선은 알아서 다시 잡힌다)
+      var fromIn = !!(w.from.componentId && set[w.from.componentId]);
+      var toIn = !!(w.to.componentId && set[w.to.componentId]);
+      if (!fromIn && !toIn) return;
+      arr.push({
+        w: w, fromIn: fromIn, toIn: toIn,
+        a0: fromIn ? WE.geometry.wireEndpoint(w.from) : null,
+        b0: toIn ? WE.geometry.wireEndpoint(w.to) : null,
+        orig: w.waypoints.map(function (p) { return { x: p.x, y: p.y }; })
+      });
+    });
+    return arr;
+  }
+  function applyTermFollow(snap) {
+    (snap || []).forEach(function (f) {
+      var wp = f.w.waypoints, n = wp.length;
+      if (!n) return;
+      if (f.fromIn && f.a0) {
+        var a1 = WE.geometry.wireEndpoint(f.w.from);
+        if (a1) followEnd(wp[0], f.orig[0], f.a0, a1.x - f.a0.x, a1.y - f.a0.y);
+      }
+      if (f.toIn && f.b0) {
+        var b1 = WE.geometry.wireEndpoint(f.w.to);
+        if (b1) followEnd(wp[n - 1], f.orig[n - 1], f.b0, b1.x - f.b0.x, b1.y - f.b0.y);
+      }
+    });
+  }
+  // 단자가 움직이는 변경을 감싸 실행한다 (크기·배율·회전 공용)
+  function withTermFollow(cmpIds, mutate) {
+    var snap = beginTermFollow(cmpIds);
+    mutate();
+    applyTermFollow(snap);
+  }
+
   function followEnd(wpPt, origPt, term0, dx, dy) {
     // 단자-인접 세그먼트가 수평이면 y를, 수직이면 x를 단자와 함께 이동(방향 유지)
     var horiz = Math.abs(term0.y - origPt.y) <= Math.abs(term0.x - origPt.x);
@@ -979,9 +1023,34 @@ WE.interactions = (function () {
     svg.setPointerCapture(e.pointerId);
   }
 
+  // 부품의 단자 이름 라벨을 자동 배치로 되돌린다. 하나라도 되돌렸으면 true.
+  // 손으로 옮긴 위치(labelPos)와 손으로 고정한 변(labelSide)을 함께 푼다 —
+  // 사용자에게 '원래대로'는 하나지, 둘로 나뉘어 있지 않다.
+  function resetTermLabels(cmp) {
+    var changed = false;
+    (cmp.terminals || []).forEach(function (t) {
+      if (t.labelPos) { delete t.labelPos; changed = true; }
+      if (t.labelSide) { delete t.labelSide; changed = true; }
+    });
+    return changed;
+  }
+
+  // 더블클릭 대상 찾기.
+  //
+  // e.target을 그대로 쓰면 안 된다 — pointerdown에서 svg.setPointerCapture()를 걸기 때문에
+  // 이후 click·dblclick의 대상이 캡처한 요소(svg)로 재지정된다. 그래서 closest(...)가 전부
+  // 빗나갔고, 더블클릭 기능(배선 자동경로 복귀 등)이 통째로 죽어 있었다.
+  // 좌표로 다시 조회해 실제로 그 자리에 있는 요소를 찾는다.
+  function dblTarget(e, sel) {
+    var direct = e.target && e.target.closest && e.target.closest(sel);
+    if (direct) return direct;
+    var el = document.elementFromPoint(e.clientX, e.clientY);
+    return el && el.closest ? el.closest(sel) : null;
+  }
+
   function onDblClick(e) {
     // 배선 라벨(수축튜브) 더블클릭 → 문구 수정 (비우면 라벨 삭제)
-    var wtube = e.target.closest("[data-wire-label-for]");
+    var wtube = dblTarget(e, "[data-wire-label-for]");
     if (wtube) {
       var tw = WE.model.getWire(wtube.getAttribute("data-wire-label-for"));
       if (tw) {
@@ -1005,14 +1074,26 @@ WE.interactions = (function () {
       if (lt) { delete lt.labelPos; WE.render.renderTermLabels(); WE.render.renderOverlay(); }
       return;
     }
-    // 배선 더블클릭 → 자동 경로로 초기화(수동 꺾임 제거)
-    var wireEl = e.target.closest("[data-wire-id]");
-    if (wireEl) {
-      var w = WE.model.getWire(wireEl.getAttribute("data-wire-id"));
-      if (w) { w.waypoints = []; WE.render.renderWires(); WE.render.renderOverlay(); }
+    // 배선 더블클릭은 일부러 두지 않는다.
+    // 예전에 '자동 경로로 초기화'가 있었으나 포인터 캡처 때문에 실제로는 한 번도 동작하지 않았고,
+    // 이제 클릭으로 경로를 직접 찍는 방식이 주가 되면서 실수 한 번에 그 경로가 통째로 날아가는
+    // 위험만 남는다. 자동으로 되돌리려면 꺾임점을 지우면 된다.
+    // 부품 더블클릭 → 단자 이름 위치를 자동 배치로 되돌린다.
+    // '더블클릭 = 자동 배치로 되돌리기'는 배선(자동 경로 복귀)과 같은 규칙이다.
+    // 라벨 글자는 13x9px밖에 안 돼 정확히 두 번 누르기 어려우므로, 부품 전체를 대상으로 삼는다.
+    var cmpEl = dblTarget(e, ".component");
+    if (cmpEl) {
+      var dc = WE.model.getComponent(cmpEl.getAttribute("data-id"));
+      if (dc && resetTermLabels(dc)) {
+        WE.render.rerenderComponent(dc);
+        WE.render.renderOverlay();
+        WE.history.commit();
+        if (WE.app.setHint) WE.app.setHint(WE.i18n.t("단자 이름 위치를 원래대로 되돌렸습니다."));
+      }
       return;
     }
-    var annoEl = e.target.closest("[data-anno-id]");
+
+    var annoEl = dblTarget(e, "[data-anno-id]");
     if (!annoEl) return;
     WE.model.select("annotation", annoEl.getAttribute("data-anno-id"));
     WE.render.renderOverlay();
@@ -1194,6 +1275,7 @@ WE.interactions = (function () {
         if (Math.abs(norm - n90) <= 10) norm = n90;
       }
       rc.rotation = Math.round(norm % 360);
+      applyTermFollow(drag.termFollow);
       WE.render.rerenderComponent(rc);   // 단자 라벨 수평 유지 위해 다시 그림
       WE.render.updateWiresFor(rc.id);
       WE.render.renderOverlay();
@@ -1297,6 +1379,7 @@ WE.interactions = (function () {
       }
     }
 
+    if (drag.mode === "resize") applyTermFollow(drag.termFollow);
     // 리사이즈 시엔 단자도 새 크기에 맞게 다시 그림(안 그러면 위치 어긋남)
     if (drag.mode === "resize" && cmp.terminals.length) WE.render.rerenderComponent(cmp);
     else WE.render.updateComponent(cmp);
@@ -1548,5 +1631,6 @@ WE.interactions = (function () {
     WE.render.clearWirePreview();
   }
 
-  return { init: init, resetWire: resetWire, isBusy: isBusy, getLastPointer: getLastPointer };
+  return { init: init, resetWire: resetWire, isBusy: isBusy, getLastPointer: getLastPointer,
+           withTermFollow: withTermFollow, resetTermLabels: resetTermLabels };
 })();
