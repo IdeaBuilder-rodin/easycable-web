@@ -681,33 +681,56 @@ WE.geometry = (function () {
   }
 
   // ---- 넷(전기적으로 이어진 배선·단자) 탐색 ----
-  // 시작 단자 ref({componentId, terminalId})에서 배선을 따라 연결된 전체를 BFS로 수집
+  // 끝점 식별키. 단자와 분기를 반드시 갈라야 한다 —
+  // 예전엔 `componentId + "" + terminalId` 하나로만 만들었는데, 분기 끝점은 두 값이 다 없어서
+  // 키가 전부 "undefinedundefined"가 됐다. 그러면 서로 무관한 분기들이 같은 단자 하나로 묶여
+  // 엉뚱한 배선까지 함께 하이라이트되고, 정작 분기와 호스트는 이어지지 않는다.
+  function netKey(r) {
+    return r.wireId ? ("w:" + r.wireId) : ("t:" + r.componentId + "|" + r.terminalId);
+  }
+
+  // 한 점에서 출발해 전기적으로 이어진 배선·단자를 모두 모은다(BFS).
+  // 분기는 호스트 배선에 물린 것이므로 호스트가 속한 네트와 같은 네트다.
+  //   · 분기 키(w:<호스트id>)를 만나면 → 그 호스트 배선을 네트에 넣는다
+  //   · 어떤 배선을 네트에 넣으면 → w:<자기id>도 큐에 넣어, 그 배선에 물린 분기들을 끌어온다
   function netFrom(startRefs) {
-    var tKey = function (r) { return r.componentId + "" + r.terminalId; };
     var visited = {}, wires = {}, queue = [];
-    (startRefs || []).forEach(function (r) {
-      var k = tKey(r);
-      if (!visited[k]) { visited[k] = r; queue.push(k); }
-    });
-    // 단자키 → 연결 배선 목록 인덱스
-    var byTerm = {};
+    var byKey = {};
     WE.model.project.wires.forEach(function (w) {
-      var a = tKey(w.from), b = tKey(w.to);
-      (byTerm[a] = byTerm[a] || []).push(w);
-      (byTerm[b] = byTerm[b] || []).push(w);
+      [w.from, w.to].forEach(function (r) {
+        var k = netKey(r);
+        (byKey[k] = byKey[k] || []).push(w);
+      });
     });
+
+    function pushKey(k, r) {
+      if (visited.hasOwnProperty(k)) return;
+      visited[k] = r || null;
+      queue.push(k);
+    }
+    function addWire(w) {
+      if (wires[w.id]) return;
+      wires[w.id] = true;
+      [w.from, w.to].forEach(function (r) { pushKey(netKey(r), r); });
+      pushKey("w:" + w.id, null);
+    }
+
+    (startRefs || []).forEach(function (r) { pushKey(netKey(r), r); });
     while (queue.length) {
       var k = queue.shift();
-      (byTerm[k] || []).forEach(function (w) {
-        wires[w.id] = true;
-        [w.from, w.to].forEach(function (r) {
-          var k2 = tKey(r);
-          if (!visited[k2]) { visited[k2] = r; queue.push(k2); }
-        });
-      });
+      (byKey[k] || []).forEach(addWire);
+      if (k.indexOf("w:") === 0) {
+        var host = WE.model.getWire(k.slice(2));
+        if (host) addWire(host);
+      }
     }
+
+    // 단자 표시용 목록에는 실제 단자만 (분기 키는 그릴 단자가 없다)
     var terms = [];
-    Object.keys(visited).forEach(function (k) { terms.push(visited[k]); });
+    Object.keys(visited).forEach(function (k) {
+      var r = visited[k];
+      if (r && r.componentId) terms.push(r);
+    });
     return { wireIds: Object.keys(wires), terms: terms };
   }
 

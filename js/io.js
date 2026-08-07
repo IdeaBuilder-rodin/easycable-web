@@ -123,25 +123,67 @@ WE.io = (function () {
     await writable.close();
   }
 
+  // 연결된 파일에 쓸 권한이 아직 있는지 확인하고, 없으면 다시 요청한다.
+  //
+  // File System Access의 파일 권한은 영구적이지 않다 — 탭이 한동안 유휴 상태였거나 브라우저가
+  // 회수하면 다음 저장에서 createWritable()이 NotAllowedError를 던진다. 이건 '파일이 사라진 것'이
+  // 아니라 '다시 물어봐야 하는 것'이고, requestPermission을 부르면 작은 확인만 뜨고 저장 위치는
+  // 그대로 유지된다. 예전에는 이 호출이 없어서 쓰기 실패를 전부 파일 소실로 보고 연결을 끊었고,
+  // 그래서 한참 뒤 Ctrl+S를 누르면 난데없이 "저장 위치를 지정하라"가 떴다.
+  //
+  // ※ requestPermission은 사용자 조작 직후에만 통한다. 그래서 gzip(buildPayload)보다 먼저 부른다 —
+  //   첨부가 많으면 압축에 시간이 걸려 그 사이 조작 유효시간이 만료된다.
+  function ensureWritePermission(handle) {
+    if (!handle || !handle.queryPermission) return Promise.resolve(true);
+    var opt = { mode: "readwrite" };
+    return handle.queryPermission(opt).then(function (st) {
+      if (st === "granted") return true;
+      return handle.requestPermission(opt).then(function (st2) { return st2 === "granted"; });
+    }).catch(function () { return false; });
+  }
+
+  // 쓰기 실패의 종류를 가린다. 파일이 정말 없어졌을 때만 연결을 끊어야 한다.
+  function isFileGone(err) {
+    return !!err && (err.name === "NotFoundError" || err.name === "NotReadableError");
+  }
+
   // 저장: 이미 연결된 파일이 있으면 그 파일에 조용히 덮어쓰기, 없으면 "다른 이름으로 저장" 새로 지정
   function save() {
     if (WE.app && WE.app.track) WE.app.track("save_project");
     var fn = safeName(WE.model.project.meta.name) + ".ezc";
 
-    buildPayload().then(function (data) {
-      if (!_supportsFS) { download(data, fn); markClean(); WE.app.setHint(WE.i18n.t("저장됨: ") + fn); return; }
+    if (!_supportsFS) {
+      buildPayload().then(function (data) {
+        download(data, fn); markClean(); WE.app.setHint(WE.i18n.t("저장됨: ") + fn);
+      });
+      return;
+    }
+    if (!_fileHandle) { saveAsNewHandle(fn); return; }
 
-      if (_fileHandle) {
-        writeToHandle(_fileHandle, data).then(function () {
-          markClean(); syncSaveTitle();
-          WE.app.setHint(WE.i18n.t("저장됨: ") + _fileHandle.name);
-        }).catch(function () {
-          _fileHandle = null;   // 파일이 삭제/이동된 경우 등 → 새로 지정하도록 폴백
-          saveAsNewHandle(data, fn);
-        });
+    // 권한부터(사용자 조작이 살아 있을 때) → 그다음 압축 → 쓰기
+    var handle = _fileHandle;
+    ensureWritePermission(handle).then(function (ok) {
+      if (!ok) {
+        // 사용자가 권한을 거절했다. 연결은 그대로 두고 알리기만 한다 —
+        // 여기서 끊어 버리면 다음 Ctrl+S가 또 저장 위치부터 묻게 된다.
+        WE.app.setHint(WE.i18n.t("파일 쓰기 권한이 필요합니다: ") + handle.name);
         return;
       }
-      saveAsNewHandle(data, fn);
+      return buildPayload().then(function (data) {
+        return writeToHandle(handle, data).then(function () {
+          markClean(); syncSaveTitle();
+          WE.app.setHint(WE.i18n.t("저장됨: ") + handle.name);
+        }).catch(function (err) {
+          if (isFileGone(err)) {
+            _fileHandle = null; syncSaveTitle();   // 파일이 지워지거나 옮겨졌다 → 새로 지정
+            WE.app.setHint(WE.i18n.t("파일을 찾을 수 없어 저장 위치를 다시 지정합니다: ") + handle.name);
+            saveAsNewHandle(fn);
+            return;
+          }
+          // 그 외 오류는 연결을 유지한 채 사유를 알린다(무엇 때문인지 알아야 대응할 수 있다)
+          WE.app.setHint(WE.i18n.t("저장 실패: ") + ((err && (err.name || err.message)) || err));
+        });
+      });
     });
   }
 
@@ -151,26 +193,35 @@ WE.io = (function () {
   function saveAs() {
     if (WE.app && WE.app.track) WE.app.track("save_project_as");
     var fn = safeName(WE.model.project.meta.name) + ".ezc";
-    buildPayload().then(function (data) {
-      // File System Access API가 없는 브라우저(Safari·Firefox 등)는 저장이 원래 매번 다운로드라
-      // 이미 '다른 이름으로 저장'과 같다 → 그대로 내려받게 둔다.
-      if (!_supportsFS) { download(data, fn); markClean(); WE.app.setHint(WE.i18n.t("저장됨: ") + fn); return; }
-      saveAsNewHandle(data, fn);
-    });
+    // File System Access API가 없는 브라우저(Safari·Firefox 등)는 저장이 원래 매번 다운로드라
+    // 이미 '다른 이름으로 저장'과 같다 → 그대로 내려받게 둔다.
+    if (!_supportsFS) {
+      buildPayload().then(function (data) {
+        download(data, fn); markClean(); WE.app.setHint(WE.i18n.t("저장됨: ") + fn);
+      });
+      return;
+    }
+    saveAsNewHandle(fn);
   }
 
-  function saveAsNewHandle(data, fn) {
+  // 저장 위치를 새로 묻고 거기에 쓴다.
+  // 압축은 파일 선택창을 띄운 '뒤에' 한다 — showSaveFilePicker도 사용자 조작이 살아 있어야
+  // 열리는데, 첨부가 많은 도면은 gzip에만 몇 초가 걸려 그 사이 유효시간이 만료된다.
+  function saveAsNewHandle(fn) {
+    var payload = null;
+    function data() { return payload || (payload = buildPayload()); }
     window.showSaveFilePicker({ suggestedName: fn, types: FILE_TYPES }).then(function (handle) {
       _fileHandle = handle;
-      return writeToHandle(handle, data);
+      return data().then(function (d) { return writeToHandle(handle, d); });
     }).then(function () {
       markClean(); syncSaveTitle();
       WE.app.setHint(WE.i18n.t("저장됨: ") + _fileHandle.name);
     }).catch(function (err) {
       if (err && err.name === "AbortError") return;   // 사용자가 저장창 취소
-      download(data, fn);                              // 그 외 실패 시 구식 다운로드로 폴백
-      markClean();
-      WE.app.setHint(WE.i18n.t("저장됨: ") + fn);
+      data().then(function (d) {                      // 그 외 실패 시 구식 다운로드로 폴백
+        download(d, fn); markClean();
+        WE.app.setHint(WE.i18n.t("저장됨: ") + fn);
+      });
     });
   }
 

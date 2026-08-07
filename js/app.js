@@ -2760,6 +2760,7 @@ WE.app = (function () {
       [WE.i18n.t("부품 복제"), "Ctrl+D"],
       [WE.i18n.t("화면 이동(팬)"), WE.i18n.t("Space 드래그 · 휠클릭 드래그")],
       [WE.i18n.t("확대 / 축소"), WE.i18n.t("Ctrl+휠")],
+      [WE.i18n.t("선택 항목 이동 (Shift: 1px 미세)"), WE.i18n.t("방향키")],
       [WE.i18n.t("선택 항목 삭제"), "Delete / Backspace"],
       [WE.i18n.t("즉시 저장"), "Ctrl+S"],
       [WE.i18n.t("다른 이름으로 저장"), "Ctrl+Shift+S"],

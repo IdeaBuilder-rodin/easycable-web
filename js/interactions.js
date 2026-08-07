@@ -5,7 +5,7 @@ window.WE = WE;
 WE.interactions = (function () {
   var svg, wrap;
   var drag = null;          // 진행 중 드래그
-  var wirePending = null;    // 배선 그리기 중 상태: { from: 끝점참조, waypoints, startAxis }
+  var wirePending = null;    // 배선 그리기 중 상태: { from: 끝점참조, waypoints }
                              //   from = { componentId, terminalId } 또는 { wireId, x, y }(배선에서 시작)
   var spaceDown = false;     // 스페이스바(팬)
   var lastX = 0, lastY = 0;  // 마지막 마우스 위치(화면 좌표) — 단축키로 여는 팝업 위치 계산용
@@ -479,14 +479,25 @@ WE.interactions = (function () {
     _alignGuide = null;
     var horiz = Math.abs(p.x - prev.x) >= Math.abs(p.y - prev.y);
     var best = null;
+    // 가로로 가는 중이면 자유 축은 x, 세로면 y
+    function consider(pos) {
+      if (!pos) return;
+      var d = horiz ? Math.abs(pos.x - p.x) : Math.abs(pos.y - p.y);
+      if (d <= TERM_ALIGN_TOL && (!best || d < best.d)) best = { d: d, pos: pos };
+    }
     WE.model.project.components.forEach(function (c) {
       (c.terminals || []).forEach(function (t) {
-        var pos = WE.geometry.wireEndpoint({ componentId: c.id, terminalId: t.id });
-        if (!pos) return;
-        // 가로로 가는 중이면 자유 축은 x, 세로면 y
-        var d = horiz ? Math.abs(pos.x - p.x) : Math.abs(pos.y - p.y);
-        if (d <= TERM_ALIGN_TOL && (!best || d < best.d)) best = { d: d, pos: pos };
+        consider(WE.geometry.wireEndpoint({ componentId: c.id, terminalId: t.id }));
       });
+    });
+    // 기존 배선의 꺾임점·접점에도 맞춘다 — 단자만큼이나 자주 기준이 되는 자리다.
+    // (경로의 양 끝은 단자나 접점이라 위에서 이미 봤거나 여기서 함께 걸린다)
+    WE.model.project.wires.forEach(function (w) {
+      var pts = WE.geometry.wireRoutePoints(w);
+      if (!pts) return;
+      for (var i = 1; i < pts.length - 1; i++) consider(pts[i]);
+      if (w.from && w.from.wireId) consider(pts[0]);
+      if (w.to && w.to.wireId) consider(pts[pts.length - 1]);
     });
     if (!best) return p;
     var out = horiz ? { x: best.pos.x, y: p.y } : { x: p.x, y: best.pos.y };
@@ -535,9 +546,15 @@ WE.interactions = (function () {
 
   // 배선 위에서 시작할 땐 첫 구간을 호스트와 '수직'으로 내보낸다.
   // 안 그러면 호스트를 따라 나란히 겹쳐 나가는 선이 생겨 어느 선인지 구분이 안 된다.
+  // 첫 걸음도 여느 점과 똑같이 '커서가 더 많이 벗어난 축'을 따른다.
+  //
+  // 예전엔 시작한 배선과 수직인 축으로 첫 걸음을 못박았는데, 꺾임점에서 시작하면
+  // 그 자리는 두 구간이 만나는 곳이라 어느 구간을 기준으로 삼느냐가 자의적이었다.
+  // 결과적으로 한쪽 방향이 길이 0이 되어 미리보기가 아예 안 보였다
+  // (꺾임점을 한 번 더 찍어야 잠금이 풀려 그제야 보였다).
+  // 축을 강제하지 않아도 수직으로 움직이면 수직으로 붙으므로 의도는 그대로 살아 있다.
   function firstStepLock(pend, prev, target) {
-    if (pend.waypoints.length || !pend.startAxis) return axisLock(prev, target);
-    return pend.startAxis === "h" ? { x: target.x, y: prev.y } : { x: prev.x, y: target.y };
+    return axisLock(prev, target);
   }
 
   // mode: "free"(빈 곳) | "terminal"(단자에서 끝) | "branch"(다른 배선에 물려 끝)
@@ -574,17 +591,7 @@ WE.interactions = (function () {
       var d = Math.hypot(v.x - p.x, v.y - p.y);
       if (d < best) { best = d; pos = { x: v.x, y: v.y }; }
     });
-    // 붙은 자리의 호스트 구간이 가로면 세로로, 세로면 가로로 첫 발을 뗀다
-    var axis = "h";
-    for (var i = 0; i < pts.length - 1; i++) {
-      var a = pts[i], b = pts[i + 1];
-      var q = WE.geometry.projectOnPath([a, b], pos);
-      if (q && Math.hypot(q.x - pos.x, q.y - pos.y) < 0.6) {
-        axis = Math.abs(b.x - a.x) >= Math.abs(b.y - a.y) ? "v" : "h";   // 호스트와 수직
-        break;
-      }
-    }
-    return { wire: hit.wire, pos: pos, axis: axis };
+    return { wire: hit.wire, pos: pos };
   }
 
   function branchTargetAt(pend, p) {
@@ -635,8 +642,7 @@ WE.interactions = (function () {
     if (!wirePending) {
       var st = branchStartAt(p);
       if (st) {
-        wirePending = { from: { wireId: st.wire.id, x: st.pos.x, y: st.pos.y },
-                        waypoints: [], startAxis: st.axis };
+        wirePending = { from: { wireId: st.wire.id, x: st.pos.x, y: st.pos.y }, waypoints: [] };
         updateWirePreview(p);
         e.preventDefault();
       }
@@ -734,6 +740,36 @@ WE.interactions = (function () {
   }
 
   // ---- 부품 이동 시 수동배선(정렬된 배선) 따라오게 하기 ----
+  // 방향키 이동 — 선택된 부품·주석을 함께 옮긴다.
+  // 되돌리기는 history의 주기 커밋(700ms)이 알아서 묶어 주므로 키를 누를 때마다 쌓지 않는다.
+  var ARROW_DELTA = {
+    ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1]
+  };
+  function nudgeSelection(dx, dy) {
+    var sel = WE.model.getSelection() || {};
+    var comps = (WE.model.getMulti() || []).slice();
+    var annos = (WE.model.getMultiAnno() || []).slice();
+    if (sel.type === "component" && comps.indexOf(sel.id) < 0) comps.push(sel.id);
+    if (sel.type === "annotation" && annos.indexOf(sel.id) < 0) annos.push(sel.id);
+    if (!comps.length && !annos.length) return false;
+
+    var follow = beginWireFollow(comps);
+    comps.forEach(function (id) {
+      var c = WE.model.getComponent(id); if (!c) return;
+      c.x += dx; c.y += dy;
+      WE.render.updateComponent(c);
+    });
+    annos.forEach(function (id) {
+      var a = WE.model.getAnnotation(id); if (!a) return;
+      a.x += dx; a.y += dy;
+    });
+    applyWireFollow(follow, dx, dy);
+    if (comps.length) WE.render.updateWiresFor(comps[0]);
+    if (annos.length) WE.render.renderAnnotations();
+    WE.render.renderOverlay();
+    return true;
+  }
+
   // 이동 시작 시 연결된 수동배선의 원본 꺾임점·단자위치를 스냅샷
   function beginWireFollow(movingIds) {
     var set = {}; movingIds.forEach(function (id) { set[id] = 1; });
@@ -1380,6 +1416,17 @@ WE.interactions = (function () {
     if (wirePending && (e.key === "Escape" || e.key === "Backspace" || e.key === "Delete")) {
       if (e.key === "Escape") cancelWireDraw(); else undoWirePoint();
       e.preventDefault(); return;
+    }
+
+    // 방향키로 선택한 부품·주석 미세 이동.
+    //   그냥      → 그리드 한 칸 (스냅이 꺼져 있으면 1px)
+    //   Shift 함께 → 1px — 그리드에서 살짝 벗어나게 두고 싶을 때
+    // 드래그와 같은 경로를 타야 수동배선이 함께 따라온다(applyWireFollow).
+    if (!e.ctrlKey && !e.metaKey && !e.altKey && ARROW_DELTA[e.key]) {
+      var d = ARROW_DELTA[e.key];
+      var cv = WE.model.project.meta.canvas;
+      var step = e.shiftKey ? 1 : (cv.snap ? (cv.grid || 10) : 1);
+      if (nudgeSelection(d[0] * step, d[1] * step)) { e.preventDefault(); return; }
     }
 
     // Esc → 어떤 모드에서든 기본(선택) 모드로 복귀
