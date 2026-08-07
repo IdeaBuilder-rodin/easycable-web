@@ -91,7 +91,7 @@ WE.i18n = (function () {
     "비고 칸 펼치기 / 접기": "Expand / collapse notes",
     "비고는 최대 4줄까지 넣을 수 있습니다.": "Notes are limited to 4 lines.",
     "폴더 전체 접기 / 펼치기 (Shift+C)": "Collapse / expand all folders (Shift+C)",
-    "단자 → 단자를 클릭하면 자동 배선. 중간에 빈 곳을 클릭하면 수평·수직으로 꺾여 그 지점을 지나갑니다. (Esc·우클릭: 취소 · Backspace: 한 점 무르기)": "Click terminal → terminal to auto-route. Click empty space in between to bend horizontally/vertically through that point. (Esc / right-click: cancel · Backspace: undo last point)",
+    "단자·기존 배선 어디서든 시작해 다른 단자나 배선에서 끝냅니다. 중간에 빈 곳을 클릭하면 수평·수직으로 꺾입니다. (Esc·우클릭: 취소 · Backspace: 한 점 무르기)": "Start from a terminal or an existing wire and end on another terminal or wire. Click empty space in between to bend horizontally/vertically. (Esc / right-click: cancel · Backspace: undo last point)",
     "다른 이름으로 저장…": "Save As…",
     "다른 이름으로 저장": "Save As",
     "위치와 이름을 새로 지정해 저장합니다 (이후 Ctrl+S는 새 파일로 저장됩니다)": "Save to a new location and name (Ctrl+S then saves to the new file)",

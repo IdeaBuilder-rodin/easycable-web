@@ -1974,7 +1974,7 @@ WE.app = (function () {
     if (WE.render.setLabelPreview) WE.render.setLabelPreview(null);   // 모드 전환 시 미리보기 정리
     if (mode !== "select") { WE.model.clearSelection(); WE.render.renderOverlay(); refreshProps(); }
     setHint(
-      mode === "wire" ? WE.i18n.t("단자 → 단자를 클릭하면 자동 배선. 중간에 빈 곳을 클릭하면 수평·수직으로 꺾여 그 지점을 지나갑니다. (Esc·우클릭: 취소 · Backspace: 한 점 무르기)") :
+      mode === "wire" ? WE.i18n.t("단자·기존 배선 어디서든 시작해 다른 단자나 배선에서 끝냅니다. 중간에 빈 곳을 클릭하면 수평·수직으로 꺾입니다. (Esc·우클릭: 취소 · Backspace: 한 점 무르기)") :
       mode === "text" ? WE.i18n.t("캔버스를 클릭해 텍스트를 추가하세요. (더블클릭으로 편집)") :
       mode === "label" ? WE.i18n.t("라벨을 붙일 배선을 클릭하세요. 번호는 자동으로 매겨집니다. (더블클릭: 수정)") : ""
     );

@@ -5,7 +5,8 @@ window.WE = WE;
 WE.interactions = (function () {
   var svg, wrap;
   var drag = null;          // 진행 중 드래그
-  var wirePending = null;    // 배선 그리기: 첫 단자 { cmpId, tid }
+  var wirePending = null;    // 배선 그리기 중 상태: { from: 끝점참조, waypoints, startAxis }
+                             //   from = { componentId, terminalId } 또는 { wireId, x, y }(배선에서 시작)
   var spaceDown = false;     // 스페이스바(팬)
   var lastX = 0, lastY = 0;  // 마지막 마우스 위치(화면 좌표) — 단축키로 여는 팝업 위치 계산용
 
@@ -447,8 +448,11 @@ WE.interactions = (function () {
       WE.render.setBranchTarget(bt ? { wireId: bt.wire.id, pos: bt.pos } : null);
       WE.render.setWirePreview(path, snap, _alignGuide);
     } else {
+      // 그리는 중이 아닐 때도 배선 위에 커서를 올리면 강조한다 —
+      // "여기서 시작할 수 있다"를 보여 줘야 기능이 있는 줄 안다
       _alignGuide = null;
-      WE.render.setBranchTarget(null);
+      var st = snap ? null : branchStartAt(p);
+      WE.render.setBranchTarget(st ? { wireId: st.wire.id, pos: st.pos } : null);
       WE.render.setWirePreview(null, snap, null);
     }
   }
@@ -512,19 +516,37 @@ WE.interactions = (function () {
   // "보이는 대로 만들어진다"가 보장된다.
   //   toTerminal=true → 끝점이 단자다. 축이 어긋나면 모서리를 하나 끼워 ㄱ자로 맞춘다
   //                     (단자 위치는 우리가 못 정하니, 마지막 구간이 대각선이 되는 걸 여기서 막는다)
-  // 지금까지 확정된 마지막 점 (시작 단자 또는 마지막 꺾임점)
+  // 그리기 시작점의 좌표. 단자에서 시작했을 수도, 기존 배선 위에서 시작했을 수도 있다.
+  function pendStartPos(pend) {
+    var r = pend.from;
+    if (r.wireId) {
+      var host = WE.model.getWire(r.wireId);
+      var pts = host && WE.geometry.wireRoutePoints(host);
+      return (pts && WE.geometry.projectOnPath(pts, r)) || { x: r.x, y: r.y };
+    }
+    return WE.geometry.wireEndpoint(r);
+  }
+
+  // 지금까지 확정된 마지막 점 (시작점 또는 마지막 꺾임점)
   function pendPrev(pend) {
     if (pend.waypoints.length) return pend.waypoints[pend.waypoints.length - 1];
-    return WE.geometry.wireEndpoint({ componentId: pend.cmpId, terminalId: pend.tid });
+    return pendStartPos(pend);
+  }
+
+  // 배선 위에서 시작할 땐 첫 구간을 호스트와 '수직'으로 내보낸다.
+  // 안 그러면 호스트를 따라 나란히 겹쳐 나가는 선이 생겨 어느 선인지 구분이 안 된다.
+  function firstStepLock(pend, prev, target) {
+    if (pend.waypoints.length || !pend.startAxis) return axisLock(prev, target);
+    return pend.startAxis === "h" ? { x: target.x, y: prev.y } : { x: prev.x, y: target.y };
   }
 
   // mode: "free"(빈 곳) | "terminal"(단자에서 끝) | "branch"(다른 배선에 물려 끝)
   function wireDraftPath(pend, target, mode) {
-    var a = WE.geometry.wireEndpoint({ componentId: pend.cmpId, terminalId: pend.tid });
+    var a = pendStartPos(pend);
     if (!a) return null;
     var pts = [a].concat(pend.waypoints);
     var prev = pts[pts.length - 1];
-    if (mode === "free") { pts.push(alignToTerminal(prev, axisLock(prev, target))); return pts; }
+    if (mode === "free") { pts.push(alignToTerminal(prev, firstStepLock(pend, prev, target))); return pts; }
     _alignGuide = null;   // 끝점에 붙는 순간엔 가이드가 필요 없다
     // 분기는 접점이 호스트 선 위를 미끄러질 수 있으므로 모서리를 끼우지 않는다.
     // 들어온 방향 그대로 선에 닿게 하는 게 맞다(끼우면 접점 직전에 쓸데없이 한 번 꺾인다).
@@ -540,6 +562,31 @@ WE.interactions = (function () {
   // 분기 대상 찾기 — 커서를 그대로 쓰지 않고 '축에 맞춘 점'으로 찾는다.
   // 세로로 내려오는 중이면 x가 직전 점에 묶여 있으므로, 그 x선이 호스트와 만나는 자리가
   // 접점이 된다 → 들어온 방향 그대로 선에 닿고 꺾임이 생기지 않는다.
+  // 배선 위에서 '시작'할 자리 찾기. 꺾임점(경로의 꼭짓점) 근처면 정확히 그 점으로 붙인다 —
+  // 사용자가 눈으로 볼 수 있는 점이 그것뿐이라, 거기서 시작하고 싶어 하는 경우가 많다.
+  var VERTEX_SNAP = 10;
+  function branchStartAt(p) {
+    var hit = wireUnder(p, null);
+    if (!hit) return null;
+    var pts = WE.geometry.wireRoutePoints(hit.wire) || [];
+    var pos = hit.pos, best = VERTEX_SNAP;
+    pts.forEach(function (v) {
+      var d = Math.hypot(v.x - p.x, v.y - p.y);
+      if (d < best) { best = d; pos = { x: v.x, y: v.y }; }
+    });
+    // 붙은 자리의 호스트 구간이 가로면 세로로, 세로면 가로로 첫 발을 뗀다
+    var axis = "h";
+    for (var i = 0; i < pts.length - 1; i++) {
+      var a = pts[i], b = pts[i + 1];
+      var q = WE.geometry.projectOnPath([a, b], pos);
+      if (q && Math.hypot(q.x - pos.x, q.y - pos.y) < 0.6) {
+        axis = Math.abs(b.x - a.x) >= Math.abs(b.y - a.y) ? "v" : "h";   // 호스트와 수직
+        break;
+      }
+    }
+    return { wire: hit.wire, pos: pos, axis: axis };
+  }
+
   function branchTargetAt(pend, p) {
     if (!pend) return null;
     var prev = pendPrev(pend);
@@ -557,9 +604,10 @@ WE.interactions = (function () {
     var hit = nearestTerminal(p, SNAP_DIST);
     if (hit) {
       if (!wirePending) {
-        wirePending = { cmpId: hit.cmpId, tid: hit.tid, waypoints: [] };
-      } else if (!(wirePending.cmpId === hit.cmpId && wirePending.tid === hit.tid)) {
-        var w = WE.model.addWire(wirePending.cmpId, wirePending.tid, hit.cmpId, hit.tid);
+        wirePending = { from: { componentId: hit.cmpId, terminalId: hit.tid }, waypoints: [] };
+      } else if (!(wirePending.from.componentId === hit.cmpId && wirePending.from.terminalId === hit.tid)) {
+        var w = WE.model.addWireRef(wirePending.from,
+          { componentId: hit.cmpId, terminalId: hit.tid });
         if (w) {
           if (wirePending.waypoints.length) {
             // 미리보기와 같은 계산을 써서 보이던 그대로 만든다(끝 모서리 보정 포함).
@@ -582,12 +630,24 @@ WE.interactions = (function () {
       e.preventDefault();
       return;
     }
+    // 아직 아무것도 안 그리는 중 + 기존 배선 클릭 → 그 배선에서 새 배선을 시작
+    // (단자와 같은 규칙: 그리는 중이 아니면 '시작', 그리는 중이면 '끝')
+    if (!wirePending) {
+      var st = branchStartAt(p);
+      if (st) {
+        wirePending = { from: { wireId: st.wire.id, x: st.pos.x, y: st.pos.y },
+                        waypoints: [], startAxis: st.axis };
+        updateWirePreview(p);
+        e.preventDefault();
+      }
+      return;
+    }
+
     // 기존 배선 위를 클릭 → 그 배선에 물리는 분기로 마무리
     var host = branchTargetAt(wirePending, p);
     if (host && wirePending) {
       var bp = wireDraftPath(wirePending, host.pos, "branch");
-      var wb = WE.model.addWireRef(
-        { componentId: wirePending.cmpId, terminalId: wirePending.tid },
+      var wb = WE.model.addWireRef(wirePending.from,
         { wireId: host.wire.id, x: host.pos.x, y: host.pos.y });
       if (wb && bp) wb.waypoints = bp.slice(1, -1);
       wirePending = null;
@@ -655,6 +715,17 @@ WE.interactions = (function () {
     res.push(out[out.length - 1]);
     return res;
   }
+  // 분기 접점과 같은 자리에 겹친 양 끝 꺾임점 제거 (길이 0인 구간 정리)
+  function dropWaypointsOnBranchAnchor(w) {
+    var wps = w.waypoints;
+    if (!wps || !wps.length) return;
+    function same(p, ref) {
+      return ref && ref.wireId && Math.abs(p.x - ref.x) < 0.5 && Math.abs(p.y - ref.y) < 0.5;
+    }
+    while (wps.length && same(wps[wps.length - 1], w.to)) wps.pop();
+    while (wps.length && same(wps[0], w.from)) wps.shift();
+  }
+
   // 배선 경로를 직각으로 정리해 waypoints 갱신
   function cleanupWire(w) {
     var pts = WE.geometry.wireRoutePoints(w);
@@ -1035,6 +1106,9 @@ WE.interactions = (function () {
         if (!W2 || !W2[it.wpi1] || !W2[it.wpi2]) return;
         if (drag.isHoriz) { W2[it.wpi1].y = W2[it.wpi2].y = it.baseY + d; }
         else { W2[it.wpi1].x = W2[it.wpi2].x = it.baseX + d; }
+        // 분기 배선이면 접점도 호스트를 타고 함께 미끄러지게 한다.
+        // 드래그 '중'에만 부른다 — 시작 시점(cleanupWire)에 부르면 손대기 전에 접점이 튄다.
+        WE.geometry.syncBranchAnchors(w2);
       });
       WE.render.renderWires(); WE.render.renderOverlay();
       return;
@@ -1244,6 +1318,16 @@ WE.interactions = (function () {
           WE.render.renderWires(); WE.render.renderOverlay();
         }
       }
+    }
+    // 구간 드래그가 끝나면 접점 위에 겹쳐 남은 꺾임점을 정리한다.
+    // prepWireSeg가 끝단 구간을 잡을 때 끝점 복사본을 꺾임점으로 하나 끼워 넣는데,
+    // 접점이 그 점을 따라 움직이고 나면 둘이 같은 자리가 되어 길이 0인 구간이 남는다.
+    // 눈에는 안 보이지만 핸들이 접점 위에 겹쳐 다음 드래그를 방해한다.
+    if (drag.mode === "wseg") {
+      (drag.items || [{ wireId: drag.wireId }]).forEach(function (it) {
+        var w2 = WE.model.getWire(it.wireId);
+        if (w2) dropWaypointsOnBranchAnchor(w2);
+      });
     }
     // 부품 이동 종료 → 정렬 가이드선 정리
     if (drag.mode === "move") WE.render.setAlignGuides(null);

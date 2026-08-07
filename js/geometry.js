@@ -105,6 +105,28 @@ WE.geometry = (function () {
     return q || { x: ref.x, y: ref.y };
   }
 
+  // 분기 접점을 배선이 실제로 도달하는 자리로 다시 맞춘다 — 배선을 끌면 접점도 호스트를 타고
+  // 같이 미끄러져야 한다. 안 하면 접점은 제자리에 남고 마지막 구간만 ㄱ자로 늘어난다.
+  //
+  // 기준은 접점 바로 옆 꺾임점이다. 그 점을 호스트에 투영하면 호스트와 수직으로 만나므로
+  // 마지막 구간이 들어온 방향(가로/세로) 그대로 유지된다.
+  // 호스트 끝을 넘어가면 투영이 끝점에서 멈추므로 접점도 거기 붙어 있게 된다(끌리다 만 것처럼
+  // 보이지만, 그 이상은 호스트가 없어 물릴 데가 없다).
+  //
+  // ※ 드래그 '중'에만 부를 것. cleanupWire처럼 드래그 시작 시점에 부르면 손도 대기 전에 접점이 튄다.
+  function syncBranchAnchors(wire) {
+    var wps = wire.waypoints || [];
+    if (!wps.length) return;   // 꺾임점이 없으면 기준 삼을 게 없다(단자에서 곧장 물린 배선)
+    ["from", "to"].forEach(function (k) {
+      var ref = wire[k];
+      if (!isBranchRef(ref)) return;
+      var host = WE.model.getWire(ref.wireId); if (!host) return;
+      var hostPts = _cache[host.id] || wireRoutePoints(host); if (!hostPts) return;
+      var q = projectOnPath(hostPts, (k === "from") ? wps[0] : wps[wps.length - 1]);
+      if (q) { ref.x = q.x; ref.y = q.y; }
+    });
+  }
+
   // 단자/분기 공통 끝점 정보. 분기면 cmp·t가 없다(면 판정을 못 하므로 호출 쪽에서 갈라 쓴다).
   function endpointFull(ref, seen) {
     if (isBranchRef(ref)) {
@@ -778,6 +800,7 @@ WE.geometry = (function () {
     transformString: transformString,
     wireEndpoint: wireEndpoint,
     isBranchRef: isBranchRef,
+    syncBranchAnchors: syncBranchAnchors,
     wireHasBranch: wireHasBranch,
     projectOnPath: projectOnPath,
     computeRoutes: computeRoutes,
