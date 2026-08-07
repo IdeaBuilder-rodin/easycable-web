@@ -138,11 +138,12 @@ WE.model = (function () {
   }
   function removeTerminal(cmp, termId) {
     cmp.terminals = cmp.terminals.filter(function (t) { return t.id !== termId; });
-    // 이 단자에 연결된 배선 제거
-    project.wires = project.wires.filter(function (w) {
-      return !(w.from.componentId === cmp.id && w.from.terminalId === termId) &&
-             !(w.to.componentId === cmp.id && w.to.terminalId === termId);
-    });
+    // 이 단자에 연결된 배선 제거 — removeWire를 거쳐야 그 배선에 물린 분기선까지 연쇄로 없어진다.
+    // 직접 걸러내면 분기선이 호스트를 잃은 채 남아, 화면엔 안 그려지는데 저장 파일에는 실려 다닌다.
+    project.wires.filter(function (w) {
+      return (w.from.componentId === cmp.id && w.from.terminalId === termId) ||
+             (w.to.componentId === cmp.id && w.to.terminalId === termId);
+    }).map(function (w) { return w.id; }).forEach(function (wid) { removeWire(wid); });
     if (ui.selectedTerminalId === termId) ui.selectedTerminalId = null;
   }
 
@@ -159,6 +160,10 @@ WE.model = (function () {
       to: toRef,
       color: color || ui.wireColor,
       width: width || ui.wireWidth,
+      // 새 배선은 '겹침 허용'이 기본. 그린 자리에 그대로 있는 편이 낫다는 판단 —
+      // 자동 회피가 켜져 있으면 옆 선을 피해 멋대로 옮겨 가서, 매번 다시 잡아 줘야 했다.
+      // 겹치는 건 눈에 보이니 필요할 때 속성 패널에서 끄고 정렬로 정리하면 된다.
+      allowOverlap: true,
       waypoints: []
     };
     project.wires.push(w);

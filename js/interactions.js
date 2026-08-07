@@ -204,7 +204,7 @@ WE.interactions = (function () {
       if (rc) {
         var center = WE.geometry.localToAbs(rc, rc.width / 2, rc.height / 2);
         drag = { mode: "rotate", id: rc.id, cx: center.x, cy: center.y,
-                 termFollow: beginTermFollow([rc.id]) };
+                 termFollow: beginTermFollow([rc.id]), branchFollow: beginBranchFollow([rc.id]) };
         svg.setPointerCapture(e.pointerId);
       }
       return;
@@ -219,7 +219,8 @@ WE.interactions = (function () {
         mode: "resize", id: cmp.id,
         startX: e.clientX, startY: e.clientY,
         orig: { width: cmp.width, height: cmp.height },
-        termFollow: beginTermFollow([cmp.id])   // 단자가 움직이므로 수동배선이 따라와야 한다
+        termFollow: beginTermFollow([cmp.id]),   // 단자가 움직이므로 수동배선이 따라와야 한다
+        branchFollow: beginBranchFollow([cmp.id])
       };
       svg.setPointerCapture(e.pointerId);
       return;
@@ -290,7 +291,8 @@ WE.interactions = (function () {
         mode: "move", id: id,
         startX: e.clientX, startY: e.clientY,
         orig: { x: c.x, y: c.y },
-        follow: beginWireFollow([id])
+        follow: beginWireFollow([id]),
+        branchFollow: beginBranchFollow([id])
       };
       svg.setPointerCapture(e.pointerId);
     } else {
@@ -310,7 +312,8 @@ WE.interactions = (function () {
     var origs = {};
     comps.forEach(function (id) { var c = WE.model.getComponent(id); if (c) origs["c" + id] = { x: c.x, y: c.y }; });
     annos.forEach(function (id) { var a = WE.model.getAnnotation(id); if (a) origs["a" + id] = { x: a.x, y: a.y }; });
-    drag = { mode: "move-group", comps: comps, annos: annos, origs: origs, startX: e.clientX, startY: e.clientY, follow: beginWireFollow(comps) };
+    drag = { mode: "move-group", comps: comps, annos: annos, origs: origs, startX: e.clientX, startY: e.clientY,
+             follow: beginWireFollow(comps), branchFollow: beginBranchFollow(comps) };
     svg.setPointerCapture(e.pointerId);
   }
 
@@ -446,7 +449,7 @@ WE.interactions = (function () {
       // 단자가 우선, 없으면 분기 대상 배선, 그것도 없으면 빈 곳
       var bt = snap ? null : branchTargetAt(wirePending, p);
       var mode = snap ? "terminal" : (bt ? "branch" : "free");
-      var path = wireDraftPath(wirePending, snap || (bt ? bt.pos : p), mode);   // _alignGuide 갱신
+      var path = wireDraftPath(wirePending, snap || (bt ? bt.pos : p), mode, hit);   // _alignGuide 갱신
       WE.render.setBranchTarget(bt ? { wireId: bt.wire.id, pos: bt.pos } : null);
       WE.render.setWirePreview(path, snap, _alignGuide);
     } else {
@@ -559,8 +562,28 @@ WE.interactions = (function () {
     return axisLock(prev, target);
   }
 
+  // 단자에 들어가는 마지막 구간이 가로여야 하는가.
+  // 기준은 단자가 붙은 '면'이다 — 옆면(L/R) 단자는 가로로, 위/아래(T/B) 면은 세로로 들어가야
+  // 부품에 제대로 꽂힌 것처럼 보인다. 부품 회전·수동 고정(labelSide)까지 반영된 값을 쓴다.
+  //
+  // 예전엔 직전 구간의 방향만 보고 번갈아 꺾었다. 그래서 세로로 내려오다 옆면 단자를 찍으면
+  // '왼쪽으로 갔다가 아래로' 꺾여 단자 위에서 수직으로 꽂히는 선이 나왔다.
+  // 면을 모를 때만 예전 규칙으로 돌아간다.
+  function arrivesHoriz(pts, termRef) {
+    if (termRef) {
+      var cmp = WE.model.getComponent(termRef.cmpId);
+      var t = cmp && WE.model.getTerminal(cmp, termRef.tid);
+      if (cmp && t) {
+        var side = WE.geometry.termSideScreen(cmp, t);
+        return side === "L" || side === "R";
+      }
+    }
+    return lastSegHoriz(pts);
+  }
+
   // mode: "free"(빈 곳) | "terminal"(단자에서 끝) | "branch"(다른 배선에 물려 끝)
-  function wireDraftPath(pend, target, mode) {
+  // termRef: 단자로 끝날 때의 { cmpId, tid } — 마지막 구간을 그 단자의 면에 맞추는 데 쓴다
+  function wireDraftPath(pend, target, mode, termRef) {
     var a = pendStartPos(pend);
     if (!a) return null;
     var pts = [a].concat(pend.waypoints);
@@ -572,7 +595,7 @@ WE.interactions = (function () {
     // 단자는 위치가 고정이라 축이 어긋나면 모서리가 꼭 필요하다.
     if (mode === "terminal" && pend.waypoints.length &&
         target.x !== prev.x && target.y !== prev.y) {
-      pts.push(lastSegHoriz(pts) ? { x: prev.x, y: target.y } : { x: target.x, y: prev.y });
+      pts.push(arrivesHoriz(pts, termRef) ? { x: prev.x, y: target.y } : { x: target.x, y: prev.y });
     }
     pts.push(target);
     return pts;
@@ -622,7 +645,10 @@ WE.interactions = (function () {
             // 미리보기와 같은 계산을 써서 보이던 그대로 만든다(끝 모서리 보정 포함).
             // 점들은 이미 수평·수직으로만 찍히므로 여느 수동배선과 똑같이 다뤄진다
             // (구간 드래그·꺾임점 편집·부품 따라오기가 전부 그대로 동작).
-            var path = wireDraftPath(wirePending, hit.pos, "terminal");
+            var path = wireDraftPath(wirePending, hit.pos, "terminal", hit);
+            // 일직선 위에 겹쳐 놓인 점은 지운다 — 마무리 모서리를 끼우면서 직전 점과
+            // 한 줄이 되는 경우가 생기는데, 그대로 두면 잡을 게 없는 꺾임점 손잡이만 남는다
+            if (path) path = WE.geometry.simplify(path);
             w.waypoints = path ? path.slice(1, -1) : wirePending.waypoints;
           }
           if (WE.app.trackOnce) WE.app.trackOnce("create_wire");
@@ -657,7 +683,7 @@ WE.interactions = (function () {
       var bp = wireDraftPath(wirePending, host.pos, "branch");
       var wb = WE.model.addWireRef(wirePending.from,
         { wireId: host.wire.id, x: host.pos.x, y: host.pos.y });
-      if (wb && bp) wb.waypoints = bp.slice(1, -1);
+      if (wb && bp) wb.waypoints = WE.geometry.simplify(bp).slice(1, -1);
       wirePending = null;
       WE.render.clearWirePreview();
       WE.render.renderWires();
@@ -756,6 +782,7 @@ WE.interactions = (function () {
     if (!comps.length && !annos.length) return false;
 
     var follow = beginWireFollow(comps);
+    var bFollow = beginBranchFollow(comps);
     comps.forEach(function (id) {
       var c = WE.model.getComponent(id); if (!c) return;
       c.x += dx; c.y += dy;
@@ -766,10 +793,64 @@ WE.interactions = (function () {
       a.x += dx; a.y += dy;
     });
     applyWireFollow(follow, dx, dy);
+    applyBranchFollow(bFollow);
     if (comps.length) WE.render.updateWiresFor(comps[0]);
     if (annos.length) WE.render.renderAnnotations();
     WE.render.renderOverlay();
     return true;
+  }
+
+  // ---- 단자가 움직일 때 반대쪽 분기 접점도 함께 미끄러뜨리기 ----
+  // 부품을 옮기면 단자는 따라가는데 접점은 제자리에 남아, 곧던 선이 ㄱ자로 꺾였다.
+  // 꺾임점이 없는 배선(단자 → 접점 한 줄)도 반드시 포함해야 한다 —
+  // beginWireFollow는 '수동배선만' 보기 때문에 이런 배선이 통째로 빠져 있었고,
+  // 사실 그런 배선이 가장 흔하다(버스에 물린 전원선 등).
+  function beginBranchFollow(cmpIds) {
+    var set = {}; (cmpIds || []).forEach(function (id) { set[id] = 1; });
+    var arr = [];
+    WE.model.project.wires.forEach(function (w) {
+      ["from", "to"].forEach(function (k) {
+        var ref = w[k], other = w[k === "from" ? "to" : "from"];
+        if (!ref || !ref.wireId) return;                             // 이 끝이 분기여야
+        if (!other || !other.componentId || !set[other.componentId]) return;  // 반대쪽이 움직이는 부품이어야
+        var t0 = WE.geometry.wireEndpoint(other);
+        if (!t0) return;
+        arr.push({ w: w, key: k, t0: { x: t0.x, y: t0.y }, a0: { x: ref.x, y: ref.y } });
+      });
+    });
+    return arr;
+  }
+  function applyBranchFollow(snap) {
+    (snap || []).forEach(function (f) {
+      var ref = f.w[f.key];
+      var host = WE.model.getWire(ref.wireId);
+      var pts = host && WE.geometry.wireRoutePoints(host);
+      if (!pts) return;
+      var wps = f.w.waypoints || [];
+      if (wps.length) {
+        // 꺾임점이 있는 배선은 접점 바로 옆 꺾임점을 호스트에 투영해서 자리를 잡는다.
+        // 단자가 움직인 거리를 접점에 그대로 더하면 안 된다 — 접점 쪽 구간은 제자리인데
+        // 접점만 끌려가 마지막 구간이 대각선이 되고, 직각 보정이 모서리를 끼워 넣어
+        // 선이 목표를 지나쳐 위로 쭉 튀었다가 되돌아온다.
+        // 접점 옆 꺾임점이 실제로 움직인 경우(단자와 맞닿은 꺾임점)에는 이 투영이
+        // 곧 따라간 결과가 되므로, 두 경우가 한 규칙으로 처리된다.
+        var near = (f.key === "from") ? wps[0] : wps[wps.length - 1];
+        var q0 = WE.geometry.placeOnHost(ref, pts, near);
+        if (q0) { ref.x = q0.x; ref.y = q0.y; }
+        return;
+      }
+      // 꺾임점이 없는 배선은 단자와 접점이 한 구간으로 곧장 이어져 있다.
+      // 이때는 단자가 움직인 만큼 접점도 따라가야 수평/수직이 유지된다
+      // (세로 버스에 물린 수평 배선이면 x는 버스에 고정되고 y만 따라간다).
+      var other = f.w[f.key === "from" ? "to" : "from"];
+      var t1 = WE.geometry.wireEndpoint(other);
+      if (!t1) return;
+      var q = WE.geometry.placeOnHost(ref, pts, {
+        x: f.a0.x + (t1.x - f.t0.x),
+        y: f.a0.y + (t1.y - f.t0.y)
+      });
+      if (q) { ref.x = q.x; ref.y = q.y; }
+    });
   }
 
   // 이동 시작 시 연결된 수동배선의 원본 꺾임점·단자위치를 스냅샷
@@ -840,8 +921,10 @@ WE.interactions = (function () {
   // 단자가 움직이는 변경을 감싸 실행한다 (크기·배율·회전 공용)
   function withTermFollow(cmpIds, mutate) {
     var snap = beginTermFollow(cmpIds);
+    var bSnap = beginBranchFollow(cmpIds);
     mutate();
     applyTermFollow(snap);
+    applyBranchFollow(bSnap);
   }
 
   function followEnd(wpPt, origPt, term0, dx, dy) {
@@ -1251,6 +1334,7 @@ WE.interactions = (function () {
         WE.render.updateComponent(mc);
       });
       applyWireFollow(drag.follow, snapVal(gdx), snapVal(gdy));
+      applyBranchFollow(drag.branchFollow);
       WE.render.updateWiresFor(drag.comps[0]);   // 모든 배선 경로 일괄 갱신
       drag.annos.forEach(function (aid) {
         var a = WE.model.getAnnotation(aid); if (!a) return;
@@ -1276,6 +1360,7 @@ WE.interactions = (function () {
       }
       rc.rotation = Math.round(norm % 360);
       applyTermFollow(drag.termFollow);
+      applyBranchFollow(drag.branchFollow);
       WE.render.rerenderComponent(rc);   // 단자 라벨 수평 유지 위해 다시 그림
       WE.render.updateWiresFor(rc.id);
       WE.render.renderOverlay();
@@ -1364,6 +1449,7 @@ WE.interactions = (function () {
       cmp.y = snapVal(drag.orig.y + dy);
       applyAlignSnap(cmp);   // 다른 부품의 변/중심과 정렬되면 착 붙이고 파란 가이드선 표시
       applyWireFollow(drag.follow, cmp.x - drag.orig.x, cmp.y - drag.orig.y);
+      applyBranchFollow(drag.branchFollow);
     } else if (drag.mode === "resize") {
       // 회전된 부품도 올바르게 리사이즈되도록 이동량을 로컬 좌표로 변환
       var rad = cmp.rotation * Math.PI / 180, cos = Math.cos(rad), sin = Math.sin(rad);
@@ -1379,7 +1465,7 @@ WE.interactions = (function () {
       }
     }
 
-    if (drag.mode === "resize") applyTermFollow(drag.termFollow);
+    if (drag.mode === "resize") { applyTermFollow(drag.termFollow); applyBranchFollow(drag.branchFollow); }
     // 리사이즈 시엔 단자도 새 크기에 맞게 다시 그림(안 그러면 위치 어긋남)
     if (drag.mode === "resize" && cmp.terminals.length) WE.render.rerenderComponent(cmp);
     else WE.render.updateComponent(cmp);

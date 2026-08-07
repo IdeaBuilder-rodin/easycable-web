@@ -462,6 +462,9 @@ WE.render = (function () {
         paths[1].setAttribute("d", d);
       }
     });
+    // 분기 접점도 함께 옮긴다. 이 함수는 드래그 중 가볍게 돌리려고 경로만 갱신했는데,
+    // 접점 점은 renderWires()에서만 그려져 옛 자리에 남아 있었다(선은 따라갔는데 점만 뒤처짐).
+    redrawBranchDots();
     // 배선 번호 라벨도 경로 위에 다시 배치(드래그 중 라벨이 옛 위치에 남지 않게)
     _termRects = null;
     layerWireLabels.innerHTML = "";
@@ -673,6 +676,12 @@ WE.render = (function () {
   // 분기 접점 — 회로도 관례대로 물린 자리에 점을 찍는다.
   // 점이 없으면 그냥 지나가는 선인지 실제로 물린 선인지 구분이 안 된다.
   // 색은 호스트(물린 대상) 배선을 따른다 — 점이 그 선 위에 얹히므로 그 선의 일부로 보여야 한다.
+  // 이미 그려진 접점 점만 지우고 다시 그린다 (경로만 갱신하는 가벼운 경로에서 함께 부른다)
+  function redrawBranchDots() {
+    var old = layerWires.querySelectorAll("circle.branch-dot");
+    for (var i = 0; i < old.length; i++) old[i].parentNode.removeChild(old[i]);
+    drawBranchDots();
+  }
   function drawBranchDots() {
     WE.model.project.wires.forEach(function (w) {
       ["from", "to"].forEach(function (k) {
@@ -683,6 +692,7 @@ WE.render = (function () {
         if (!host || !pts || !pts.length) return;
         var at = (k === "from") ? pts[0] : pts[pts.length - 1];
         layerWires.appendChild(el("circle", {
+          "class": "branch-dot",
           cx: at.x, cy: at.y, r: Math.max(3, (host.width || 2) + 1.5),
           fill: host.color, "pointer-events": "none"
         }));

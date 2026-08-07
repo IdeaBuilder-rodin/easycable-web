@@ -2761,6 +2761,7 @@ WE.app = (function () {
       [WE.i18n.t("화면 이동(팬)"), WE.i18n.t("Space 드래그 · 휠클릭 드래그")],
       [WE.i18n.t("확대 / 축소"), WE.i18n.t("Ctrl+휠")],
       [WE.i18n.t("선택 항목 이동 (Shift: 1px 미세)"), WE.i18n.t("방향키")],
+      [WE.i18n.t("단자 이름 위치 초기화"), WE.i18n.t("부품 더블클릭")],
       [WE.i18n.t("선택 항목 삭제"), "Delete / Backspace"],
       [WE.i18n.t("즉시 저장"), "Ctrl+S"],
       [WE.i18n.t("다른 이름으로 저장"), "Ctrl+Shift+S"],
@@ -3016,6 +3017,8 @@ WE.app = (function () {
       // 이름은 '무엇이 움직이는가' 기준 — 세로선을 고르면 세로선 균등을 누른다
       else if (m === "distVert") distributeSelectedWires(true);    // 세로선 균등(세로선들의 x를 균등 간격으로)
       else if (m === "distHoriz") distributeSelectedWires(false);  // 가로선 균등(가로선들의 y를 균등 간격으로)
+      else if (m === "alignVert") alignSelectedWiresAxis(true);    // 세로선 정렬(세로선들의 x를 한 줄로)
+      else if (m === "alignHoriz") alignSelectedWiresAxis(false);  // 가로선 정렬(가로선들의 y를 한 줄로)
       else if (m === "merge") mergeSelectedWires();
       else if (m === "unmerge") unmergeSelectedWires();
     });
@@ -3059,18 +3062,54 @@ WE.app = (function () {
     box.innerHTML = html || WE.i18n.t("<span class='muted'>전력이 입력된 부하 부품이 없습니다.</span>");
   }
 
-  // 배선의 가장 긴 세로(vertical=true)/가로 구간 → {i, coord}
-  function wireMainSeg(pts, vertical) {
-    var best = null, bestLen = -1;
-    for (var i = 0; i < pts.length - 1; i++) {
-      var a = pts[i], b = pts[i + 1];
-      if (vertical && Math.abs(a.x - b.x) < 0.5) {
-        var L = Math.abs(a.y - b.y); if (L > bestLen) { bestLen = L; best = { i: i, coord: a.x }; }
-      } else if (!vertical && Math.abs(a.y - b.y) < 0.5) {
-        var L2 = Math.abs(a.x - b.x); if (L2 > bestLen) { bestLen = L2; best = { i: i, coord: a.y }; }
+  // 이 구간을 정렬로 옮길 수 있는가.
+  //
+  // 단자에 맞닿은 구간은 못 옮긴다. 단자 좌표는 부품에서 나오는 값이라 옮겨도 제자리에 남고,
+  // 옆 꺾임점만 끌려간다. 그러면 둘이 어긋나 직각 보정이 모서리를 새로 끼워 넣고,
+  // 배선이 단자에서 위/아래로 꺾여 나가는 낯선 모양이 된다(점 3개가 5개가 되는 그 증상).
+  // 렌더 시 겹침 분리(nudge)도 같은 이유로 같은 규칙을 쓴다 — "양끝이 모두 내부점이어야 이동 가능".
+  //
+  // 분기로 끝나는 쪽은 예외다. 접점은 호스트 선 위를 미끄러질 수 있어 진짜로 움직인다.
+  // 길이 0인 구간도 뺀다 — 두 좌표가 같아 '세로'로 분류되지만 실제로는 방향이 없어서,
+  // 그대로 두면 엉뚱한 자리가 정렬 대상으로 뽑힌다.
+  // 양끝이 모두 꺾임점인 '내부 구간'인가 — 이런 구간은 언제나 자유롭게 옮길 수 있다.
+  function segInterior(wire, pts, i) {
+    var last = pts.length - 1;
+    if (i === 0 && !WE.geometry.isBranchRef(wire.from)) return false;
+    if (i + 1 === last && !WE.geometry.isBranchRef(wire.to)) return false;
+    return true;
+  }
+  function segMovable(wire, pts, i) {
+    var last = pts.length - 1;
+    if (i < 0 || i + 1 > last) return false;
+    var a = pts[i], b = pts[i + 1];
+    if (Math.abs(a.x - b.x) < 0.5 && Math.abs(a.y - b.y) < 0.5) return false;   // 길이 0
+    if (segInterior(wire, pts, i)) return true;
+    // 단자에 맞닿은 구간은 반대쪽 끝이 분기일 때만 옮길 수 있다.
+    // 접점은 호스트 선 위를 미끄러지므로 배선이 통째로 다시 놓이는 정상적인 결과가 나온다.
+    // 양끝이 모두 단자면 좌표가 못 박혀 있어, 옮겨도 단자는 제자리에 남고 옆 꺾임점만 끌려간다
+    // → 직각 보정이 모서리를 새로 끼워 넣어 배선이 단자에서 꺾여 나가는 낯선 모양이 된다.
+    return WE.geometry.isBranchRef(wire.from) || WE.geometry.isBranchRef(wire.to);
+  }
+  // 배선의 가장 긴 세로(vertical=true)/가로 구간 → {i, coord}.
+  // 내부 구간을 먼저 찾고, 없을 때만 단자에 맞닿은 구간까지 본다 — 옮길 수 있어도
+  // 단자 옆을 건드리면 배선 모양이 크게 바뀌므로 마지막 수단이어야 한다.
+  function wireMainSeg(pts, vertical, wire) {
+    function pick(interiorOnly) {
+      var best = null, bestLen = -1;
+      for (var i = 0; i < pts.length - 1; i++) {
+        if (wire && !segMovable(wire, pts, i)) continue;
+        if (wire && interiorOnly && !segInterior(wire, pts, i)) continue;
+        var a = pts[i], b = pts[i + 1];
+        if (vertical && Math.abs(a.x - b.x) < 0.5) {
+          var L = Math.abs(a.y - b.y); if (L > bestLen) { bestLen = L; best = { i: i, coord: a.x }; }
+        } else if (!vertical && Math.abs(a.y - b.y) < 0.5) {
+          var L2 = Math.abs(a.x - b.x); if (L2 > bestLen) { bestLen = L2; best = { i: i, coord: a.y }; }
+        }
       }
+      return best;
     }
-    return best;
+    return pick(true) || pick(false);
   }
   function segIsVertical(pts, i) { return Math.abs(pts[i].x - pts[i + 1].x) < 0.5; }
   // 이 배선에서 정렬 대상 구간 인덱스: 클릭한 구간 우선, 없으면 원하는 방향의 가장 긴 구간
@@ -3078,11 +3117,20 @@ WE.app = (function () {
     var pt = WE.model.getWireClickPt(wire.id);
     if (pt) {
       var idx = WE.geometry.nearestSegmentIndex(pts, pt);
-      if (idx >= 0 && (wantVertical == null || segIsVertical(pts, idx) === wantVertical)) return idx;
+      // 클릭해 둔 구간(굵게 표시)이 곧 대상이다. 방향이 안 맞으면 이 배선은 건너뛴다(-1).
+      // 예전엔 여기서 그 배선의 '다른' 가로/세로 구간을 대신 집었다. 그래서 세로 구간을 잡아 둔
+      // 배선에 가로 정렬을 누르면 엉뚱한 구간이 끌려가 경로가 통째로 일그러졌다.
+      // 지정해 둔 구간을 못 쓰면 아무것도 안 하는 편이 맞다 — 사용자가 이미 뜻을 밝혔으니까.
+      // 잡아 둔 구간이 단자에 물려 있어 못 옮기는 자리여도 건너뛴다. 다른 구간을 대신 집으면
+      // 사용자가 보고 있는 굵은 구간과 실제로 움직이는 구간이 달라진다.
+      if (idx >= 0) {
+        if (!segMovable(wire, pts, idx)) return -1;
+        return (wantVertical == null || segIsVertical(pts, idx) === wantVertical) ? idx : -1;
+      }
     }
-    var seg = wireMainSeg(pts, wantVertical == null ? true : wantVertical);
+    var seg = wireMainSeg(pts, wantVertical == null ? true : wantVertical, wire);
     if (seg) return seg.i;
-    if (wantVertical == null) { var sh = wireMainSeg(pts, false); if (sh) return sh.i; }
+    if (wantVertical == null) { var sh = wireMainSeg(pts, false, wire); if (sh) return sh.i; }
     return -1;
   }
   function setWireSeg(w, pts, idx, vertical, coord) {
@@ -3091,6 +3139,24 @@ WE.app = (function () {
     else { np[idx].y = coord; np[idx + 1].y = coord; }
     np = WE.geometry.simplify(np);   // 일직선상 중간점 제거(불필요한 꺾임점 방지)
     w.waypoints = np.slice(1, np.length - 1);
+    // 분기로 끝나는 배선은 접점도 호스트 선 위에서 함께 옮겨야 한다.
+    // 안 그러면 구간만 이동하고 접점은 남아 마지막이 ㄱ자로 꺾인다(구간 정렬에서 그랬다).
+    snapBranchEndsTo(w, np, vertical, coord);
+  }
+  // 옮긴 구간의 좌표에 맞춰 분기 접점을 호스트 선 위로 다시 붙인다
+  function snapBranchEndsTo(w, np, vertical, coord) {
+    ["from", "to"].forEach(function (k) {
+      var ref = w[k];
+      if (!ref || !ref.wireId) return;
+      var host = WE.model.getWire(ref.wireId);
+      var hp = host && WE.geometry.wireRoutePoints(host);
+      if (!hp) return;
+      // 그 끝이 붙어 있던 자리를 정렬된 좌표로 옮긴 뒤 호스트에 투영
+      var end = (k === "from") ? np[0] : np[np.length - 1];
+      var moved = vertical ? { x: coord, y: end.y } : { x: end.x, y: coord };
+      var q = WE.geometry.placeOnHost(ref, hp, moved);
+      if (q) { ref.x = q.x; ref.y = q.y; }
+    });
   }
   // 처음 클릭한 배선(anchor)의 클릭한 구간에 나머지 선택 배선을 맞춤(세로/가로 자동)
   // 간격(px)>0이면 기준선에서 그 간격씩 벌려 평행 배치(방향은 현재 위치 쪽 자동)
@@ -3100,7 +3166,9 @@ WE.app = (function () {
     if (!ids || ids.length < 2) return;
     var anchor = WE.model.getWire(ids[0]); if (!anchor) return;
     var aPts = WE.geometry.wireRoutePoints(anchor); if (!aPts) return;
-    var aIdx = wireTargetSeg(anchor, aPts, null); if (aIdx < 0) return;
+    // 기준선에서 옮길 수 있는 구간을 못 찾으면(단자에 물린 구간만 잡아 둔 경우 등) 아무것도 안 한다
+    var aIdx = wireTargetSeg(anchor, aPts, null);
+    if (aIdx < 0) { setHint(WE.i18n.t("기준 배선에서 옮길 수 있는 구간을 찾지 못했습니다. 단자에 바로 붙은 구간은 옮길 수 없습니다.")); return; }
     var vertical = segIsVertical(aPts, aIdx);
     var C = vertical ? aPts[aIdx].x : aPts[aIdx].y;
     var gapEl = document.getElementById("wireGap");
@@ -3109,7 +3177,9 @@ WE.app = (function () {
     var others = [];
     for (var k = 1; k < ids.length; k++) {
       var w = WE.model.getWire(ids[k]); if (!w) continue;
-      var pts = WE.geometry.wireRoutePoints(w); if (!pts || pts.length < 3) continue;
+      // 점 2개짜리(단자 → 접점 한 줄)도 대상이다. 예전엔 3점 이상만 봐서,
+      // 버스에 곧게 물린 배선이 통째로 빠졌다 — 정작 이런 배선이 가장 흔하다.
+      var pts = WE.geometry.wireRoutePoints(w); if (!pts || pts.length < 2) continue;
       var idx = wireTargetSeg(w, pts, vertical); if (idx < 0) continue;
       var s1 = pts[idx], s2 = pts[idx + 1];
       others.push({
@@ -3118,7 +3188,11 @@ WE.app = (function () {
         hi: vertical ? Math.max(s1.y, s2.y) : Math.max(s1.x, s2.x)
       });
     }
-    if (!others.length) return;
+    if (!others.length) {
+      setHint(WE.i18n.t("맞출 수 있는 ") + (vertical ? WE.i18n.t("세로선") : WE.i18n.t("가로선")) +
+              WE.i18n.t(" 구간이 없습니다. 단자에 바로 붙은 구간은 옮길 수 없습니다."));
+      return;
+    }
     // 앵커 쪽 방향(현재 배선들이 있는 쪽)으로 밀기 우선
     var avg = others.reduce(function (s, o) { return s + o.coord; }, 0) / others.length;
     var dir = (avg - C) < 0 ? -1 : 1;
@@ -3146,6 +3220,36 @@ WE.app = (function () {
     WE.render.renderAll(); WE.render.renderOverlay(); refreshProps();
     setHint((vertical ? WE.i18n.t("세로선") : WE.i18n.t("가로선")) + WE.i18n.t(" 정렬: ") + others.length + WE.i18n.t("개") + (gap > 0 ? (WE.i18n.t(" · 간격 ") + gap + "px") : ""));
   }
+  // 축 정렬: alongX=true → 세로선들의 x를 한 줄로 / false → 가로선들의 y를 한 줄로.
+  // 균등 배치와 짝이고, 구간 정렬과는 쓰임이 다르다 —
+  //   구간 정렬은 방향을 앵커 구간에서 자동으로 정하고 '간격'만큼 나란히 벌린다.
+  //   이건 방향을 버튼으로 못 박고 간격 없이 한 줄에 모은다. 멀리 떨어진 선을 줄 맞출 때 쓴다.
+  // 기준 좌표는 처음 선택한 배선(구간 정렬과 같은 규칙) — 어디로 모일지 미리 알 수 있다.
+  function alignSelectedWiresAxis(alongX) {
+    var ids = WE.model.getMultiWire();
+    if (!ids || ids.length < 2) { setHint(WE.i18n.t("정렬은 배선 2개 이상 선택하세요.")); return; }
+    var items = [], crossed = 0;
+    ids.forEach(function (id) {
+      var w = WE.model.getWire(id); if (!w) return;
+      var pts = WE.geometry.wireRoutePoints(w); if (!pts || pts.length < 2) return;
+      var idx = wireTargetSeg(w, pts, alongX);
+      if (idx < 0) { crossed++; return; }   // 잡아 둔 구간이 반대 방향 → 이 배선은 손대지 않음
+      items.push({ w: w, pts: pts, idx: idx, coord: alongX ? pts[idx].x : pts[idx].y });
+    });
+    var dirName = alongX ? WE.i18n.t("세로선") : WE.i18n.t("가로선");
+    if (items.length < 2) {
+      // 반대 방향 구간을 잡아 놓고 이 버튼을 누른 것 — 어느 버튼을 눌러야 하는지 알려 준다
+      setHint(crossed
+        ? (WE.i18n.t("선택한 구간이 ") + (alongX ? WE.i18n.t("가로선") : WE.i18n.t("세로선")) +
+           WE.i18n.t(" 구간입니다. ") + (alongX ? WE.i18n.t("가로선") : WE.i18n.t("세로선")) + WE.i18n.t(" 정렬을 쓰세요."))
+        : (WE.i18n.t("정렬할 ") + dirName + WE.i18n.t(" 구간이 부족합니다.")));
+      return;
+    }
+    var C = items[0].coord;   // 처음 선택한 배선이 기준 — 그 선은 그대로 두고 나머지가 모인다
+    items.forEach(function (it) { setWireSeg(it.w, it.pts, it.idx, alongX, C); });
+    WE.render.renderAll(); WE.render.renderOverlay(); refreshProps();
+    setHint(dirName + WE.i18n.t(" 정렬: ") + items.length + WE.i18n.t("개"));
+  }
   // 균등 배치: alongX=true → 세로선들의 x를 균등 간격 / false → 가로선들의 y를 균등
   function distributeSelectedWires(alongX) {
     var ids = WE.model.getMultiWire();
@@ -3153,9 +3257,10 @@ WE.app = (function () {
     var items = [];
     ids.forEach(function (id) {
       var w = WE.model.getWire(id); if (!w) return;
-      var pts = WE.geometry.wireRoutePoints(w); if (!pts || pts.length < 3) return;
+      // 점 2개짜리(단자 → 접점 한 줄)도 대상 — 구간 정렬과 같은 이유로 예전엔 빠져 있었다
+      var pts = WE.geometry.wireRoutePoints(w); if (!pts || pts.length < 2) return;
       var idx = wireTargetSeg(w, pts, alongX); if (idx < 0) return;
-      if (segIsVertical(pts, idx) !== alongX) { var s = wireMainSeg(pts, alongX); if (!s) return; idx = s.i; }
+      if (segIsVertical(pts, idx) !== alongX) { var s = wireMainSeg(pts, alongX, w); if (!s) return; idx = s.i; }
       items.push({ w: w, pts: pts, idx: idx, coord: alongX ? pts[idx].x : pts[idx].y });
     });
     if (items.length < 3) { setHint(WE.i18n.t("균등 배치할 ") + (alongX ? WE.i18n.t("세로선") : WE.i18n.t("가로선")) + WE.i18n.t(" 구간이 부족합니다.")); return; }
@@ -3273,19 +3378,6 @@ WE.app = (function () {
       var c = WE.model.getSelectedComponent(); if (!c) return;
       c.hideTermLabels = e.target.checked;
       WE.render.renderAll();
-    });
-    // 단자 이름 위치 초기화 — 부품 더블클릭과 같은 동작(그쪽은 눈에 안 띄어 버튼도 둔다)
-    document.getElementById("propTermLabelReset").addEventListener("click", function () {
-      var c = WE.model.getSelectedComponent(); if (!c) return;
-      if (!WE.interactions.resetTermLabels(c)) {
-        setHint(WE.i18n.t("옮겨 둔 단자 이름이 없습니다."));
-        return;
-      }
-      WE.render.rerenderComponent(c);
-      WE.render.renderOverlay();
-      WE.history.commit();
-      refreshProps();
-      setHint(WE.i18n.t("단자 이름 위치를 원래대로 되돌렸습니다."));
     });
   }
 
@@ -3644,23 +3736,13 @@ WE.app = (function () {
     document.getElementById("propRot90").addEventListener("click", function () {
       applyProp(function (c) { c.rotation = (c.rotation + 90) % 360; }, false);
     });
-    document.getElementById("propDelete").addEventListener("click", function () {
-      var c = WE.model.getSelectedComponent();
-      if (c) { WE.model.removeComponent(c.id); WE.render.renderAll(); refreshProps(); }
-    });
     document.getElementById("propBgRemove").addEventListener("click", function () {
       var c = WE.model.getSelectedComponent();
       if (!c || !c.image) return;
       WE.bgremove.open(c.image, function (url, tf, size) { applyInstanceImage(c, url, tf, size); }, { width: c.width, height: c.height });
     });
-    document.getElementById("propDuplicate").addEventListener("click", function () {
-      var c = WE.model.getSelectedComponent();
-      if (c) {
-        var copy = WE.model.duplicateComponent(c.id);
-        WE.model.select("component", copy.id);
-        WE.render.renderAll(); refreshProps();
-      }
-    });
+    // 삭제·복제 버튼은 두지 않는다 — Delete / Ctrl+D 가 있고, 파괴적 동작을
+    // 다른 버튼과 같은 비중으로 패널에 두면 잘못 누르기 쉽다.
   }
 
   // 속성 변경 적용 후 렌더 (fromInput=true면 입력창 값은 다시 안 덮어씀)

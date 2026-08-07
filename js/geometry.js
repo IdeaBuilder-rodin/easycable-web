@@ -93,6 +93,52 @@ WE.geometry = (function () {
     return best ? best.q : null;
   }
 
+  // ---- 접점이 '어느 구간에 붙어 있는가' ----
+  // 접점은 좌표만 들고 있었다. 그래서 다시 그릴 때마다 호스트 경로 전체에서 제일 가까운 점을
+  // 새로 찾았고, 호스트가 움직여 그 구간이 멀어지면 다른 구간이 더 가까워지는 순간
+  // 접점이 거기로 갈아탔다(세로선에 물려 있던 접점이 갑자기 아래 가로선으로 순간이동).
+  //
+  // 그래서 붙어 있는 구간의 정체를 함께 기억한다. 구간 번호가 아니라 '방향 + 좌표'다 —
+  // 번호는 호스트에 꺾임점이 늘거나 줄면 어긋나지만 방향과 좌표는 그대로다.
+  function segIdentity(a, b) {
+    if (Math.abs(a.x - b.x) < 0.5 && Math.abs(a.y - b.y) < 0.5) return null;   // 길이 0 → 방향 없음
+    return (Math.abs(a.x - b.x) < 0.5) ? { axis: "v", coord: a.x } : { axis: "h", coord: a.y };
+  }
+  // 접점을 호스트 경로 위에 놓고, 붙은 구간을 ref.seg 에 기록한다.
+  //   기록이 있으면 → 같은 방향 구간만 후보로 두고, 기억한 좌표에 가장 가까운 것에만 투영한다.
+  //                   (구간이 움직였으면 기억을 갱신해 계속 따라간다)
+  //   기록이 없으면 → 예전처럼 경로 전체에서 찾고, 그 구간을 새로 기록한다.
+  //                   새로 그린 배선과 옛 파일이 이 경로로 자동으로 채워진다.
+  // p를 주면 ref 대신 그 점을 투영한다(배선을 끌 때 접점 옆 꺾임점을 기준으로 삼는 경우).
+  function placeOnHost(ref, pts, p) {
+    if (!pts || pts.length < 2) return null;
+    var src = p || ref, i, best = null;
+    var want = ref.seg;
+    if (want && (want.axis === "v" || want.axis === "h")) {
+      for (i = 0; i < pts.length - 1; i++) {
+        var idn = segIdentity(pts[i], pts[i + 1]);
+        if (!idn || idn.axis !== want.axis) continue;
+        var d = Math.abs(idn.coord - want.coord);
+        if (!best || d < best.d) best = { d: d, i: i, coord: idn.coord };
+      }
+    }
+    if (best) {
+      ref.seg = { axis: want.axis, coord: best.coord };   // 구간이 움직였으면 따라간다
+      return closestOnSeg(src, pts[best.i], pts[best.i + 1]);
+    }
+    // 기억이 없거나 그 방향 구간이 사라짐(호스트 모양이 통째로 바뀐 경우) → 전체에서 다시 찾는다
+    var near = null;
+    for (i = 0; i < pts.length - 1; i++) {
+      var q = closestOnSeg(src, pts[i], pts[i + 1]);
+      var dd = (q.x - src.x) * (q.x - src.x) + (q.y - src.y) * (q.y - src.y);
+      if (!near || dd < near.d) near = { d: dd, q: q, i: i };
+    }
+    if (!near) return null;
+    var nid = segIdentity(pts[near.i], pts[near.i + 1]);
+    if (nid) ref.seg = nid;
+    return near.q;
+  }
+
   // 분기 끝점의 실제 좌표. seen은 순환 방지용(A가 B에, B가 A에 물린 경우).
   function branchPos(ref, seen) {
     var host = WE.model.getWire(ref.wireId);
@@ -101,7 +147,7 @@ WE.geometry = (function () {
     if (seen[ref.wireId]) return { x: ref.x, y: ref.y };   // 순환 → 마지막으로 알던 자리
     seen[ref.wireId] = 1;
     var pts = _cache[host.id] || routeOf(host, seen);
-    var q = pts && projectOnPath(pts, ref);
+    var q = pts && placeOnHost(ref, pts);
     return q || { x: ref.x, y: ref.y };
   }
 
@@ -122,7 +168,7 @@ WE.geometry = (function () {
       if (!isBranchRef(ref)) return;
       var host = WE.model.getWire(ref.wireId); if (!host) return;
       var hostPts = _cache[host.id] || wireRoutePoints(host); if (!hostPts) return;
-      var q = projectOnPath(hostPts, (k === "from") ? wps[0] : wps[wps.length - 1]);
+      var q = placeOnHost(ref, hostPts, (k === "from") ? wps[0] : wps[wps.length - 1]);
       if (q) { ref.x = q.x; ref.y = q.y; }
     });
   }
@@ -645,18 +691,31 @@ WE.geometry = (function () {
   // 겹침 회피: 이동하는 배선(movingId)의 선분을 startCoord에 두려 할 때, 다른 배선의 같은 방향
   // 평행 선분과 (좌표 근접 + 수직범위 겹침) 충돌하면 gap씩 밀어 가장 가까운 빈 좌표를 반환.
   // 단, 같은 분기점(단자 공유) 배선과 '겹침 허용' 배선은 장애물로 보지 않음(매니폴드 유지).
+  // 자동 회피가 원래 자리에서 벗어날 수 있는 최대 칸 수.
+  // 간격 10px 기준 최대 60px — 이 안에 빈 자리가 없으면 억지로 밀지 않는다.
+  var MAX_AVOID_LANES = 6;
   // vertical=true → coord는 x, [lo,hi]는 y범위
   function avoidOverlapCoord(movingId, vertical, startCoord, lo, hi, gap, preferDir) {
     var g = gap > 0 ? gap : 9;
     var mv = WE.model.getWire(movingId);
     if (!mv || mv.allowOverlap) return startCoord;   // 겹침 허용 배선은 회피 안 함
+    // 끝점을 공유하는 배선끼리는 서로 밀어내지 않는다(같은 자리에서 만나는 게 정상이므로).
+    // ⚠ 예전엔 terminalId만 봤다. 분기 끝점은 terminalId가 없어 키가 전부 undefined가 되면서
+    //   **무관한 분기 배선들이 모두 "같은 단자를 공유"로 판정되어 회피에서 통째로 빠졌다.**
+    //   (네트 하이라이트의 "undefinedundefined"와 같은 유형)
+    //   분기는 호스트 id + 붙은 자리까지 키에 넣어, 정말 같은 지점에서 만날 때만 제외한다.
+    function endKey(r) {
+      if (!r) return "?";
+      if (r.wireId) return "w:" + r.wireId + "@" + Math.round(r.x) + "," + Math.round(r.y);
+      return "t:" + r.componentId + "|" + r.terminalId;
+    }
     var mvTerms = {};
-    mvTerms[mv.from.terminalId] = 1; mvTerms[mv.to.terminalId] = 1;
+    mvTerms[endKey(mv.from)] = 1; mvTerms[endKey(mv.to)] = 1;
     var obs = [];
     WE.model.project.wires.forEach(function (w) {
       if (w.id === movingId) return;
-      if (w.allowOverlap) return;                                            // 겹침 허용 배선 제외
-      if (mvTerms[w.from.terminalId] || mvTerms[w.to.terminalId]) return;    // 같은 분기점(단자) 공유 → 무시
+      if (w.allowOverlap) return;                                          // 겹침 허용 배선 제외
+      if (mvTerms[endKey(w.from)] || mvTerms[endKey(w.to)]) return;        // 같은 끝점 공유 → 무시
       var pts = wireRoutePoints(w); if (!pts) return;
       for (var i = 0; i < pts.length - 1; i++) {
         var a = pts[i], b = pts[i + 1];
@@ -673,7 +732,11 @@ WE.geometry = (function () {
     }
     if (!hit(startCoord)) return startCoord;
     var d = preferDir || 1;
-    for (var s = 1; s <= 400; s++) {
+    // 빈 레인을 찾아 양옆으로 번갈아 나간다. 다만 멀리는 안 간다 —
+    // 예전엔 400칸(=4000px)까지 걸어가서, 빽빽한 구간에서는 선이 캔버스 밖으로 날아갔다.
+    // 몇 칸 안에 자리가 없으면 겹친 채 두는 편이 낫다. 사용자가 놓은 자리에서 크게 벗어나지 않고,
+    // 겹친 건 눈에 보이니 직접 정리하면 된다.
+    for (var s = 1; s <= MAX_AVOID_LANES; s++) {
       if (!hit(startCoord + d * g * s)) return startCoord + d * g * s;
       if (!hit(startCoord - d * g * s)) return startCoord - d * g * s;
     }
@@ -826,6 +889,7 @@ WE.geometry = (function () {
     syncBranchAnchors: syncBranchAnchors,
     wireHasBranch: wireHasBranch,
     projectOnPath: projectOnPath,
+    placeOnHost: placeOnHost,
     computeRoutes: computeRoutes,
     wireRoutePoints: wireRoutePoints,
     nearestSegmentIndex: nearestSegmentIndex,

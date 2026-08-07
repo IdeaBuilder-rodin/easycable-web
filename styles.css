@@ -261,9 +261,11 @@ body.note-open .canvas-corner-tools { bottom: 131px; }
 .wire-align-row button, .te-align-row button { display: flex; align-items: center; justify-content: center; gap: 6px; }
 .wire-align-row button svg, .te-align-row button svg { width: 18px; height: 18px; flex: none; }
 .wire-align-row button svg rect, .te-align-row button svg rect,
+.wire-align-row button svg path, .te-align-row button svg path,
 .wire-align-row button svg circle, .te-align-row button svg circle { fill: #9db4d6; }
 .wire-align-row button svg line, .te-align-row button svg line { stroke: #555; stroke-width: 1.6; stroke-linecap: round; }
 .wire-align-row button:hover svg rect, .te-align-row button:hover svg rect,
+.wire-align-row button:hover svg path, .te-align-row button:hover svg path,
 .wire-align-row button:hover svg circle, .te-align-row button:hover svg circle { fill: #1e88e5; }
 
 /* 주석 속성 */
@@ -651,6 +653,28 @@ body.panning #canvas, body.panning #canvas * { cursor: grabbing !important; }
 #propBody input[type="checkbox"] { width: auto; margin: 0; }
 .row2 { display: flex; gap: 8px; }
 .row2 label, .row2 button { flex: 1; }
+
+/* ---- 패널 섹션 (그룹핑) ----
+   근접성 원칙: 그룹 '안쪽' 간격보다 그룹 '사이' 간격이 커야 묶여 보인다.
+   안 6~8px / 사이 16px + 옅은 선. 예전엔 전부 같은 간격이라 어디까지가 한 묶음인지
+   알 수 없었다(제목·체크박스·버튼이 나란히 떠 있었다). */
+.p-sec { margin-top: var(--sp5); padding-top: var(--sp4); border-top: 1px solid var(--bd2); }
+.p-sec-title {
+  font-size: var(--fs-sm); color: var(--tx3); font-weight: 600;
+  margin: 0 0 var(--sp3); letter-spacing: .2px;
+}
+/* 섹션의 주 동작 — 섹션마다 하나만 전폭으로 둔다(여러 개면 무엇이 중요한지 사라진다) */
+#propBody button.p-main {
+  width: 100%; margin: 0 0 var(--sp2);
+  padding: 6px 10px; font-size: var(--fs);
+}
+/* 한 줄에 성격이 다른 컨트롤을 나란히 둘 때 — 폭은 내용에 맞춰 배분하고,
+   기준선은 '입력칸 아래'에 맞춘다. 라벨이 입력 위에 얹히는 구조라 가운데 정렬하면
+   체크박스만 붕 떠 보인다(회전° 줄이 그랬다). */
+.row2.p-inline { align-items: flex-end; }
+.row2.p-inline label.chk { flex: 1.3; margin: 0 0 5px; font-size: var(--fs-sm); }
+.row2.p-inline label { flex: 1; margin: 0; }
+.row2.p-inline button { flex: none; padding: 5px 10px; margin-bottom: 0; }
 #propBody button {
   padding: 6px; border: 1px solid #bbb; border-radius: 4px;
   background: #fff; cursor: pointer; margin-top: 4px;
@@ -720,6 +744,11 @@ body.panning #canvas, body.panning #canvas * { cursor: grabbing !important; }
 .te-align-row { display: flex; flex-wrap: wrap; gap: 4px; }
 .te-align-row button { flex: 1 1 44%; padding: 6px 4px; border: 1px solid #cfd6de; background: #fff; border-radius: 5px; cursor: pointer; font-size: 12px; font-family: inherit; }
 .te-align-row button:hover { background: #e8f1fc; border-color: #1e88e5; color: #1e88e5; }
+/* 정렬 간격 — 버튼 아래 한 줄. 부품 이미지의 픽셀 단위로 받는다 */
+.te-gap-row { display: flex; align-items: center; gap: 8px; margin-top: 6px; flex-wrap: wrap; }
+.te-gap { display: flex; align-items: center; gap: 4px; font-size: 12px; color: #555; white-space: nowrap; }
+.te-gap input { width: 58px; padding: 4px 6px; border: 1px solid #cfd6de; border-radius: 5px; font-family: inherit; font-size: 12px; }
+.te-gap-row .muted { font-size: 11px; }
 .te-mode { padding: 5px 10px; border: 1px solid #cfd6de; background: #fff; border-radius: 5px; cursor: pointer; font-size: 12px; font-family: inherit; }
 .te-mode.active { background: #1e88e5; color: #fff; border-color: #1e88e5; }
 

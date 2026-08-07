@@ -63,8 +63,22 @@ WE.termeditor = (function () {
       var first = s[0][k], step = (s[s.length - 1][k] - first) / (s.length - 1);
       s.forEach(function (t, i) { t[k] = first + step * i; });
     }
-    if (mode === "x") { var ax = avg("rx"); ts.forEach(function (t) { t.rx = ax; }); }
-    else if (mode === "y") { var ay = avg("ry"); ts.forEach(function (t) { t.ry = ay; }); }
+    // 정렬 간격(px). 단자 좌표는 비율(0~1)로 저장하지만, 입력은 부품 이미지의 픽셀로 받는다 —
+    // 사진을 보며 잰 실제 단자 간격을 그대로 넣을 수 있어야 쓸모가 있다.
+    var gapEl = document.getElementById("teGap");
+    var gapPx = gapEl ? parseFloat(gapEl.value) : 0;
+    if (isNaN(gapPx) || gapPx < 0) gapPx = 0;
+    // 한 줄로 모은 뒤 그 줄을 따라 일정 간격으로 벌린다. 간격 0이면 모으기만 한다(예전 동작).
+    // 순서는 지금 놓인 순서를 그대로 지킨다 — 사용자가 잡아 둔 위아래 배치가 뒤집히면 곤란하다.
+    function spread(k, size) {
+      if (gapPx <= 0 || !size) return;
+      var step = gapPx / size;
+      var s = ts.slice().sort(function (a, b) { return a[k] - b[k]; });
+      var first = s[0][k];
+      s.forEach(function (t, i) { t[k] = Math.max(0, Math.min(1, first + step * i)); });
+    }
+    if (mode === "x") { var ax = avg("rx"); ts.forEach(function (t) { t.rx = ax; }); spread("ry", baseH); }
+    else if (mode === "y") { var ay = avg("ry"); ts.forEach(function (t) { t.ry = ay; }); spread("rx", baseW); }
     else if (mode === "distX") distrib("rx");
     else if (mode === "distY") distrib("ry");
     renderTerminals(); buildList(); teCommit();
