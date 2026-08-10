@@ -15,7 +15,7 @@ WE.io = (function () {
   var _supportsGzip = typeof CompressionStream === "function" && typeof DecompressionStream === "function";
   var _fileHandle = null;   // 현재 연결된 파일(FileSystemFileHandle) — 있으면 Ctrl+S가 여기로 조용히 저장됨
   var FILE_TYPES = [{ description: WE.i18n.t("이지케이블 프로젝트"), accept: { "application/octet-stream": [".ezc"], "application/json": [".json"] } }];
-  var FORMAT = "easycable", FORMAT_VERSION = 2;
+  var FORMAT = "easycable", FORMAT_VERSION = 3;   // 3 = 시트(배선도 여러 장). 2 이하는 열 때 시트 한 장으로 감싼다
 
   // ---- gzip (브라우저 내장, 외부 라이브러리 없음) ----
   function gzip(str) {
@@ -69,13 +69,18 @@ WE.io = (function () {
   function buildBundle() {
     var proj = WE.model.project;
     var seen = {}, parts = [];
-    (proj.components || []).forEach(function (c) {
+    // ★ 모든 시트를 훑는다. 현재 시트만 보면 다른 시트에서만 쓰는 부품이 파일에 안 실려,
+    //   그 파일을 다른 PC에서 열면 그 부품들이 라이브러리와 끊긴다.
+    WE.model.allComponents().forEach(function (c) {
       if (!c.libraryId || seen[c.libraryId]) return;
       var p = WE.library.get(c.libraryId);
       if (p) { seen[c.libraryId] = 1; parts.push(p); }
     });
     // 첨부물은 참조로 빼고 실제 데이터는 assets에 한 벌만 담는다(같은 이미지가 여러 번 들어가지 않게)
     var packed = WE.assets.pack({ project: proj, parts: parts });
+    // 마지막에 보던 시트는 저장본에만 적는다. 살아 있는 project에 넣으면 탭을 누르는 것만으로
+    // JSON이 바뀌어 ①실행취소에 '시트 전환'이 쌓이고 ②안 고쳤는데 '수정됨'으로 잡힌다.
+    packed.project.activeSheetId = WE.model.getActiveSheetId();
     var used = WE.assets.collectRefs(packed);
     var assets = {};
     for (var k in used) { var v = WE.assets.get(k); if (v != null) assets[k] = v; }
@@ -290,9 +295,15 @@ WE.io = (function () {
         var res = mergeLibraryParts(incomingParts);
         added = res.added;
         // 프로젝트 부품의 libraryId를 받는 쪽 실제 부품 id로 재연결(전기정보·재배치 연동 유지)
-        (project.components || []).forEach(function (c) {
-          if (c.libraryId && res.idMap[c.libraryId]) c.libraryId = res.idMap[c.libraryId];
-        });
+        // 옛 파일은 최상위 components, 새 파일은 sheets[].components — 둘 다 훑는다.
+        // (여기 project 는 아직 모델에 넣기 전의 '읽어들인 원본' 이라 별칭이 없다)
+        var relink = function (list) {
+          (list || []).forEach(function (c) {
+            if (c.libraryId && res.idMap[c.libraryId]) c.libraryId = res.idMap[c.libraryId];
+          });
+        };
+        relink(project.components);
+        (project.sheets || []).forEach(function (s) { relink(s.components); });
       }
 
       WE.model.loadProject(project);

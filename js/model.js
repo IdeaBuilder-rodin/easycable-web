@@ -23,12 +23,48 @@ WE.model = (function () {
     };
   }
 
+  // ---- 시트(배선도 한 장) ----
+  // 한 프로젝트에 배선도가 여러 장 들어간다. **부품·배선·주석은 시트가 하나씩 갖는다.**
+  // 캔버스 크기·팔레트·BOM은 프로젝트가 공유한다(사용자 확정, 2026-08-08).
+  var _sheetSeq = 0;
+  function makeSheet(name) {
+    _sheetSeq++;
+    return {
+      id: "sh" + Date.now().toString(36) + "_" + _sheetSeq,
+      name: name || WE.i18n.t("배선도"),
+      components: [], wires: [], annotations: []
+    };
+  }
+  // 새 배선도 이름 — 지금 보고 있는 도면 이름 뒤에 _01, _02 … 를 붙인다.
+  // "퍼미어스 미니 V1" 로 이름을 지어 두면 다음 장이 "퍼미어스 미니 V1_01" 이 되어
+  // 같은 프로젝트의 장들이 한눈에 묶여 보인다.
+  // 이미 _NN 이 붙은 이름에서 추가하면 그 꼬리를 떼고 번호를 잇는다(_01 에서 추가 → _02).
+  // 이름에 든 숫자는 건드리지 않는다 — "V1" 의 1까지 떼면 "퍼미어스 미니 V" 가 되어 버린다.
+  function nextSheetName(baseName) {
+    var base = String(baseName || "").replace(/_\d+\s*$/, "").trim();
+    if (!base) base = WE.i18n.t("배선도");
+    var esc = base.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");   // 이름에 든 정규식 기호를 그대로 글자로
+    var re = new RegExp("^" + esc + "_(\\d+)$");
+    var used = {}, max = 0;
+    project.sheets.forEach(function (sh) {
+      var nm = String(sh.name || "");
+      used[nm] = 1;
+      var m = re.exec(nm);
+      if (m) max = Math.max(max, parseInt(m[1], 10));
+    });
+    var n = max + 1, name;
+    do {
+      name = base + "_" + (n < 10 ? "0" + n : String(n));
+      n++;
+    } while (used[name]);
+    return name;
+  }
+
   // 전체 프로젝트 상태
   var project = {
     meta: defaultMeta(),
-    components: [],   // 배치된 부품 인스턴스
-    wires: [],        // 배선
-    annotations: [],  // Phase 5
+    sheets: [makeSheet()],
+    // components / wires / annotations 는 아래에서 '현재 시트' 별칭으로 정의한다.
     palette: DEFAULT_PALETTE.map(function (p) { return { color: p.color, label: p.label }; }),
     manualBom: [],    // BOM 표에 수동 추가한 품목 [{id, name, spec, qty, price, link}]
     bomPrice: {},     // BOM 단가 프로젝트별 덮어쓰기 { <key>: 숫자 } (라이브러리 기본단가보다 우선)
@@ -41,6 +77,195 @@ WE.model = (function () {
     bomColOrder: []   // 열 표시 순서 (colKey 배열)
   };
   function defaultBomColShow() { return { spec: true, price: true, sum: true, link: true }; }
+
+  // ---- 현재 시트 별칭 ----
+  // `project.components` / `.wires` / `.annotations` 는 **현재 시트를 가리키는 창**이다.
+  // 이렇게 둔 이유: 이 셋을 참조하는 코드가 66곳이라 전부 고치면 그 자체가 큰 위험이다.
+  // 별칭으로 두면 그리기·선택·드래그·라우팅 같은 '보고 있는 도면'을 다루는 코드가 한 줄도 안 바뀐다.
+  //
+  // ※ 게터만 두면 안 된다. `project.wires = project.wires.filter(...)` 처럼 **대입하는 곳이 10군데**라
+  //    세터가 없으면 그 대입이 에러 없이 조용히 무시된다(부품을 지워도 안 지워지는데 콘솔은 조용함).
+  // ※ enumerable:false 인 이유 — `JSON.stringify(project)`(저장·자동저장·실행취소)와
+  //    `assets.pack`의 for…in 이 이 별칭을 건너뛰어야 sheets만 한 번 저장된다.
+  //
+  // ★ 새 기능이 **프로젝트 전체**를 다뤄야 하면 이 별칭이 아니라 allComponents()/allWires()를 쓸 것.
+  //   (BOM 집계·전력 요약·팔레트 색 일괄 변경·라벨 번호·id 검사 등)
+  var _activeSheetId = project.sheets[0].id;
+  function activeSheet() {
+    for (var i = 0; i < project.sheets.length; i++) {
+      if (project.sheets[i].id === _activeSheetId) return project.sheets[i];
+    }
+    // 가리키던 시트가 사라졌으면 첫 장으로 되돌린다(빈 배열을 돌려주면 그리기가 통째로 멈춘다)
+    if (!project.sheets.length) project.sheets.push(makeSheet());
+    _activeSheetId = project.sheets[0].id;
+    return project.sheets[0];
+  }
+  ["components", "wires", "annotations"].forEach(function (k) {
+    Object.defineProperty(project, k, {
+      get: function () { return activeSheet()[k]; },
+      set: function (v) { activeSheet()[k] = v; },
+      enumerable: false, configurable: true
+    });
+  });
+  function getActiveSheetId() { return activeSheet().id; }
+  function setActiveSheet(id) {
+    for (var i = 0; i < project.sheets.length; i++) {
+      if (project.sheets[i].id === id) { _activeSheetId = id; return true; }
+    }
+    return false;
+  }
+  // 프로젝트 전체를 훑어야 하는 기능용. 시트 경계를 넘는 집계는 반드시 이걸 쓴다.
+  function allOf(k) {
+    var out = [];
+    project.sheets.forEach(function (s) { out = out.concat(s[k] || []); });
+    return out;
+  }
+  function allComponents() { return allOf("components"); }
+  function allWires() { return allOf("wires"); }
+  function allAnnotations() { return allOf("annotations"); }
+
+  // ---- 시트 편집 ----
+  function sheetIndex(id) {
+    for (var i = 0; i < project.sheets.length; i++) if (project.sheets[i].id === id) return i;
+    return -1;
+  }
+  function addSheet(name) {
+    var s = makeSheet(name || nextSheetName(activeSheet().name));
+    project.sheets.push(s);
+    return s;
+  }
+  function renameSheet(id, name) {
+    var i = sheetIndex(id); if (i < 0) return false;
+    name = (name || "").trim();
+    if (!name) return false;
+    project.sheets[i].name = name;
+    return true;
+  }
+  function removeSheet(id) {
+    if (project.sheets.length <= 1) return false;   // 마지막 한 장은 남긴다
+    var i = sheetIndex(id); if (i < 0) return false;
+    project.sheets.splice(i, 1);
+    if (_activeSheetId === id) _activeSheetId = project.sheets[Math.min(i, project.sheets.length - 1)].id;
+    clearSelection();
+    return true;
+  }
+  function moveSheet(id, dir) {
+    var i = sheetIndex(id); if (i < 0) return false;
+    var j = i + dir;
+    if (j < 0 || j >= project.sheets.length) return false;
+    var t = project.sheets[i]; project.sheets[i] = project.sheets[j]; project.sheets[j] = t;
+    return true;
+  }
+  // ---- id 재발급 ----
+  // 부품·배선·주석 덩어리의 id를 전부 새로 발급하고 **내부 참조까지 함께 갈아 끼운다.**
+  // 이걸 빠뜨리면 복제본의 배선이 원본 부품에 붙는다(에러 없이 조용히 틀리는 유형).
+  // 갈아야 할 참조: 배선의 from/to(단자 또는 분기), 다발(bundleId).
+  // 시트 복제와 붙여넣기가 이 함수를 함께 쓴다 — 규칙이 갈라지면 한쪽만 틀린다.
+  // b = { components, wires, annotations } 를 제자리에서 고친다.
+  function remapBundle(b) {
+    var cmpMap = {}, termMap = {}, wireMap = {}, bidMap = {};
+    (b.components || []).forEach(function (c) {
+      var oldC = c.id;
+      c.id = nextId("cmp"); cmpMap[oldC] = c.id;
+      (c.terminals || []).forEach(function (t) {
+        var oldT = t.id;
+        t.id = nextId("t");
+        termMap[oldC + "|" + oldT] = t.id;   // 단자 id는 부품 안에서만 유일하므로 부품과 묶어 기억
+      });
+    });
+    (b.wires || []).forEach(function (w) { var oldW = w.id; w.id = nextId("w"); wireMap[oldW] = w.id; });
+    (b.annotations || []).forEach(function (a) { a.id = nextId("a"); });
+
+    (b.wires || []).forEach(function (w) {
+      ["from", "to"].forEach(function (k) {
+        var r = w[k]; if (!r) return;
+        if (r.wireId) { r.wireId = wireMap[r.wireId] || r.wireId; return; }   // 분기 → 호스트 배선
+        if (!r.componentId) return;
+        var oldC = r.componentId;                                            // 단자 id를 먼저 찾고
+        var nt = termMap[oldC + "|" + r.terminalId];                         // 그 다음에 부품 id를 바꾼다
+        if (nt) r.terminalId = nt;
+        if (cmpMap[oldC]) r.componentId = cmpMap[oldC];
+      });
+      if (w.bundleId) {   // 다발도 새로 — 원본의 다발과 한 묶음이 되면 안 된다
+        if (!bidMap[w.bundleId]) bidMap[w.bundleId] = "b" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+        w.bundleId = bidMap[w.bundleId];
+      }
+    });
+    return b;
+  }
+
+  // 시트 복제
+  function duplicateSheet(id) {
+    var i = sheetIndex(id); if (i < 0) return null;
+    var copy = JSON.parse(JSON.stringify(project.sheets[i]));
+    copy.id = makeSheet().id;
+    copy.name = project.sheets[i].name + WE.i18n.t(" 복사본");
+    remapBundle(copy);
+    project.sheets.splice(i + 1, 0, copy);
+    return copy;
+  }
+
+  // ---- 복사 / 붙여넣기 ----
+  // 선택한 것들을 한 덩어리로 떠낸다(현재 시트에서).
+  // 배선 규칙: **양 끝이 모두 덩어리 안에 있는 배선만** 담는다.
+  //   한쪽 끝만 담으면 붙여넣는 순간 상대 단자가 없어 깨진다.
+  //   분기 배선은 호스트 배선도 함께 담겨야 하므로, 더 담을 게 없을 때까지 반복해서 끌어온다.
+  function extractSelection(cmpIds, annoIds, wireIds) {
+    var cset = {}, aset = {}, wset = {}, picked = {};
+    (cmpIds || []).forEach(function (id) { cset[id] = 1; });
+    (annoIds || []).forEach(function (id) { aset[id] = 1; });
+    (wireIds || []).forEach(function (id) { wset[id] = 1; });
+    function endOk(r) {
+      if (!r) return false;
+      if (r.wireId) return !!picked[r.wireId];     // 분기 → 호스트가 이미 담겼는가
+      return !!cset[r.componentId];
+    }
+    var changed = true;
+    while (changed) {
+      changed = false;
+      project.wires.forEach(function (w) {
+        if (picked[w.id]) return;
+        // 직접 고른 배선이거나, 선택한 부품끼리 잇는 배선
+        if (!wset[w.id] && !(endOk(w.from) && endOk(w.to))) return;
+        if (!endOk(w.from) || !endOk(w.to)) return;   // 직접 골랐어도 끝점이 없으면 제외
+        picked[w.id] = 1; changed = true;
+      });
+    }
+    return {
+      components: project.components.filter(function (c) { return cset[c.id]; })
+        .map(function (c) { return JSON.parse(JSON.stringify(c)); }),
+      wires: project.wires.filter(function (w) { return picked[w.id]; })
+        .map(function (w) { return JSON.parse(JSON.stringify(w)); }),
+      annotations: project.annotations.filter(function (a) { return aset[a.id]; })
+        .map(function (a) { return JSON.parse(JSON.stringify(a)); })
+    };
+  }
+  // 덩어리를 현재 시트에 붙인다. dx·dy 만큼 밀어서 놓는다(0이면 원래 자리 그대로).
+  // 원본은 건드리지 않는다 — 클립보드에 남겨 두고 여러 번 붙일 수 있어야 한다.
+  function pasteBundle(bundle, dx, dy) {
+    if (!bundle) return null;
+    var b = JSON.parse(JSON.stringify(bundle));
+    b.components = b.components || []; b.wires = b.wires || []; b.annotations = b.annotations || [];
+    remapBundle(b);
+    dx = dx || 0; dy = dy || 0;
+    if (dx || dy) {
+      b.components.forEach(function (c) { c.x += dx; c.y += dy; });
+      b.annotations.forEach(function (a) { a.x += dx; a.y += dy; });
+      b.wires.forEach(function (w) {
+        (w.waypoints || []).forEach(function (p) { p.x += dx; p.y += dy; });
+        ["from", "to"].forEach(function (k) {
+          var r = w[k];
+          if (r && r.wireId) { r.x += dx; r.y += dy; if (r.seg) r.seg.coord += (r.seg.axis === "v" ? dx : dy); }
+        });
+        if (w.labelPos) { w.labelPos.x += dx; w.labelPos.y += dy; }
+      });
+    }
+    var base = project.components.length;
+    b.components.forEach(function (c, i) { c.z = base + i + 1; project.components.push(c); });
+    b.wires.forEach(function (w) { project.wires.push(w); });
+    b.annotations.forEach(function (a) { project.annotations.push(a); });
+    return b;
+  }
 
   // 선택 상태 (단일 선택)
   var selection = { type: null, id: null }; // type: 'component' | 'wire' | 'annotation' | null
@@ -197,9 +422,11 @@ WE.model = (function () {
   // ---- 직렬화 ----
   function newProject() {
     project.meta = defaultMeta();
-    project.components = [];
-    project.wires = [];
-    project.annotations = [];
+    // 시트는 통째로 갈아끼운다. `project.components = []` 로는 **현재 시트만** 비워져
+    // 이전 도면의 나머지 시트가 그대로 살아남는다(별칭이므로).
+    _sheetSeq = 0;
+    project.sheets = [makeSheet()];
+    _activeSheetId = project.sheets[0].id;
     project.palette = DEFAULT_PALETTE.map(function (p) { return { color: p.color, label: p.label }; });
     project.manualBom = [];
     project.bomPrice = {};
@@ -220,9 +447,28 @@ WE.model = (function () {
     project.meta = data.meta || project.meta;
     // 예전 파일에는 문서 id가 없다 → 지금 발급해 자기 슬롯을 갖게 한다
     if (!project.meta.id) project.meta.id = newDocId();
-    project.components = data.components || [];
-    project.wires = data.wires || [];
-    project.annotations = data.annotations || [];
+    // ---- 시트 복원 / 옛 파일 마이그레이션 ----
+    // 옛 파일에는 sheets가 없고 components·wires·annotations가 최상위에 있다 → 시트 한 장으로 감싼다.
+    // 사용자가 할 일은 없고, 다시 저장하면 새 형식으로 나간다.
+    _sheetSeq = 0;
+    if (data.sheets && data.sheets.length) {
+      project.sheets = data.sheets.map(function (s, i) {
+        _sheetSeq = Math.max(_sheetSeq, i + 1);
+        return {
+          id: s.id || ("sh" + Date.now().toString(36) + "_" + (i + 1)),
+          name: s.name || (WE.i18n.t("배선도") + " " + (i + 1)),
+          components: s.components || [], wires: s.wires || [], annotations: s.annotations || []
+        };
+      });
+    } else {
+      var one = makeSheet(project.meta.name || undefined);
+      one.components = data.components || [];
+      one.wires = data.wires || [];
+      one.annotations = data.annotations || [];
+      project.sheets = [one];
+    }
+    _activeSheetId = project.sheets[0].id;
+    if (data.activeSheetId) setActiveSheet(data.activeSheetId);
     project.palette = data.palette || project.palette;
     project.manualBom = data.manualBom || [];
     // 예전 파일: 수동품목에 id 없으면 부여
@@ -237,13 +483,19 @@ WE.model = (function () {
     project.bomColOrder = data.bomColOrder || [];
     clearSelection();
     ui.selectedTerminalId = null;
-    // id 카운터를 기존 최대값 뒤로 보정 (충돌 방지)
+    // id 카운터를 기존 최대값 뒤로 보정 (충돌 방지).
+    // ★ 반드시 **모든 시트**를 훑어야 한다. 현재 시트만 보면 새로 만든 부품이 다른 시트의
+    //   기존 부품과 같은 id를 갖고, 배선의 from/to·분기의 wireId가 엉뚱한 걸 가리킨다.
+    //   에러가 안 나고 조용히 틀리는 유형이라 특히 위험하다.
     var maxN = 0;
     function scan(id) { var m = /_(\d+)_/.exec(id || ""); if (m) maxN = Math.max(maxN, +m[1]); }
-    project.components.forEach(function (c) {
-      scan(c.id); (c.terminals || []).forEach(function (t) { scan(t.id); });
+    project.sheets.forEach(function (s) {
+      (s.components || []).forEach(function (c) {
+        scan(c.id); (c.terminals || []).forEach(function (t) { scan(t.id); });
+      });
+      (s.wires || []).forEach(function (w) { scan(w.id); });
+      (s.annotations || []).forEach(function (a) { scan(a.id); });
     });
-    project.wires.forEach(function (w) { scan(w.id); });
     _idCounter = maxN + 1;
   }
 
@@ -323,6 +575,23 @@ WE.model = (function () {
   return {
     project: project,
     ui: ui,
+    // ---- 시트 ----
+    activeSheet: activeSheet,
+    getActiveSheetId: getActiveSheetId,
+    setActiveSheet: setActiveSheet,
+    makeSheet: makeSheet,
+    addSheet: addSheet,
+    nextSheetName: nextSheetName,
+    renameSheet: renameSheet,
+    removeSheet: removeSheet,
+    moveSheet: moveSheet,
+    duplicateSheet: duplicateSheet,
+    extractSelection: extractSelection,
+    pasteBundle: pasteBundle,
+    // 프로젝트 전체 집계용 — 시트 경계를 넘는 기능은 반드시 이걸 쓴다
+    allComponents: allComponents,
+    allWires: allWires,
+    allAnnotations: allAnnotations,
     DEFAULT_TERMINAL_COLOR: DEFAULT_TERMINAL_COLOR,
     addTerminal: addTerminal,
     getTerminal: getTerminal,

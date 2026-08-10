@@ -374,14 +374,15 @@ WE.app = (function () {
           datasheets: _editDatasheets
         });
         // 이미 배치된 부품의 이름표(캔버스 라벨)도 같이 갱신 (전기정보·BOM은 라이브러리를 실시간 참조라 자동 반영됨)
-        var placed = WE.model.project.components.filter(function (x) { return x.libraryId === _editLibId; });
+        // 전체 시트 — 다른 시트에 놓인 같은 부품도 이름표가 갱신돼야 한다
+        var placed = WE.model.allComponents().filter(function (x) { return x.libraryId === _editLibId; });
         if (placed.length) {
           placed.forEach(function (x) { x.name = newName; });
           WE.render.renderAll();
           refreshProps();
         }
         renderLibrary();
-        renderPowerSummary();
+        if (SHOW_POWER_SUMMARY) renderPowerSummary();
         if (_view === "bom") renderBOMView();   // BOM 열려 있으면 갱신
       }
       document.getElementById("libEditModal").hidden = true; _editLibId = null;
@@ -1181,7 +1182,8 @@ WE.app = (function () {
   // 집계: 캔버스 부품을 라이브러리/이름 기준으로 묶고 수량 합산
   function buildBOM() {
     var map = {}, order = [];
-    WE.model.project.components.forEach(function (c) {
+    // 자재 발주는 프로젝트 단위 → 모든 시트의 부품을 합산한다(사용자 확정 2026-08-08)
+    WE.model.allComponents().forEach(function (c) {
       var lib = c.libraryId ? WE.library.get(c.libraryId) : null;
       var key = c.libraryId || ("name:" + c.name);
       if (!map[key]) {
@@ -1218,12 +1220,214 @@ WE.app = (function () {
   // 지금 쓰임새가 없어 화면·인쇄·CSV에서 감춰 두었다. 기능 코드(wireListData·renderWireListView·
   // 인쇄 섹션)는 그대로 살아 있으므로, 다시 필요해지면 이 값만 true로 되돌리면 된다.
   var SHOW_WIRE_LIST = false;
+  // 전력/배터리 요약은 계산이 아직 불안정해 화면·인쇄에서 모두 감춰 둔다(사용자 확정 2026-08-10).
+  // 기능 자체는 코드로 살려 둔다 — 다시 켤 땐 이 값만 true 로.
+  var SHOW_POWER_SUMMARY = false;
 
   // ---- BOM 표 뷰(하단 탭) ----
   var _view = "wiring";
   function setActiveTab(view) {
-    var tabs = document.querySelectorAll(".view-tab");
+    var tabs = document.querySelectorAll("#viewTabs > .view-tab");
     for (var i = 0; i < tabs.length; i++) tabs[i].classList.toggle("active", tabs[i].dataset.view === view);
+    // 시트 탭은 '배선도를 보고 있을 때'만 활성으로 보인다
+    var cur = WE.model.getActiveSheetId();
+    document.querySelectorAll("#sheetTabs .sheet-tab").forEach(function (b) {
+      b.classList.toggle("active", view === "wiring" && b.dataset.sid === cur);
+    });
+  }
+
+  // ---- 복사 / 붙여넣기 (Ctrl+C · Ctrl+V) ----
+  // 목적은 하나다: **작업해 둔 것을 그대로 다른 배선도로 가져오기.**
+  // 그래서 복사한 내용은 손대지 않는다 — 라벨(W번호)·색·굵기·AWG 전부 원본 그대로 붙는다.
+  // 클립보드는 앱 안에서만 도는 변수다. 시스템 클립보드에 넣으면 다른 앱에서 Ctrl+V 했을 때
+  // JSON 덩어리가 튀어나오고 권한 처리가 붙는다 — 필요해지면 그때 얹는다.
+  var _clip = null;   // { sheetId, data:{components,wires,annotations} }
+  function copySelection() {
+    var cmpIds = (WE.model.getMulti() || []).slice();
+    var annoIds = (WE.model.getMultiAnno() || []).slice();
+    var wireIds = (WE.model.getMultiWire() || []).slice();
+    var b = WE.model.extractSelection(cmpIds, annoIds, wireIds);
+    var n = b.components.length + b.wires.length + b.annotations.length;
+    if (!n) { setHint(WE.i18n.t("복사할 대상을 먼저 선택하세요.")); return false; }
+    // lastSheetId = 이 내용이 지금 '놓여 있는' 배선도. 붙일 때 어긋나게 할지 판단하는 기준.
+    _clip = { sheetId: WE.model.getActiveSheetId(), lastSheetId: WE.model.getActiveSheetId(), off: 0, data: b };
+    var parts = [];
+    if (b.components.length) parts.push(WE.i18n.t("부품 ") + b.components.length);
+    if (b.wires.length) parts.push(WE.i18n.t("배선 ") + b.wires.length);
+    if (b.annotations.length) parts.push(WE.i18n.t("주석 ") + b.annotations.length);
+    setHint(WE.i18n.t("복사: ") + parts.join(" · ") + WE.i18n.t("  (Ctrl+V로 붙여넣기 · 다른 배선도에도 됩니다)"));
+    return true;
+  }
+  function pasteClipboard() {
+    if (!_clip) { setHint(WE.i18n.t("복사한 것이 없습니다.")); return false; }
+    // 자리 규칙:
+    //   다른 배선도로 처음 가져올 땐 **원래 있던 자리 그대로** — 그게 '그대로 가져오기'다.
+    //   방금 붙인 그 배선도에 또 붙이면 20px씩 누적해 어긋나게 — 겹쳐 놓으면 뭐가 새 건지 안 보인다.
+    var cur = WE.model.getActiveSheetId();
+    if (_clip.lastSheetId === cur) _clip.off += 20; else _clip.off = 0;
+    _clip.lastSheetId = cur;
+    var off = _clip.off;
+    var made = WE.model.pasteBundle(_clip.data, off, off);
+    if (!made) return false;
+    // 붙인 것을 바로 선택해 둔다 — 방향키·드래그로 곧장 옮길 수 있게
+    WE.model.setMultiSelection(
+      made.components.map(function (c) { return c.id; }),
+      made.annotations.map(function (a) { return a.id; }),
+      made.wires.map(function (w) { return w.id; }));
+    WE.render.renderAll(); WE.render.renderOverlay(); refreshProps();
+    if (WE.history) WE.history.commit();
+    if (WE.store) WE.store.saveNow();
+    var parts = [];
+    if (made.components.length) parts.push(WE.i18n.t("부품 ") + made.components.length);
+    if (made.wires.length) parts.push(WE.i18n.t("배선 ") + made.wires.length);
+    if (made.annotations.length) parts.push(WE.i18n.t("주석 ") + made.annotations.length);
+    setHint(WE.i18n.t("붙여넣기: ") + parts.join(" · "));
+    return true;
+  }
+
+  // ---- 배선도 시트 탭 ----
+  // 한 프로젝트에 배선도가 여러 장. 탭 하나 = 도면 한 장.
+  function renderSheetTabs() {
+    var box = document.getElementById("sheetTabs");
+    if (!box) return;
+    var sheets = WE.model.project.sheets, cur = WE.model.getActiveSheetId();
+    box.innerHTML = "";
+    sheets.forEach(function (s) {
+      var b = document.createElement("button");
+      b.className = "view-tab sheet-tab" + (_view === "wiring" && s.id === cur ? " active" : "");
+      b.dataset.sid = s.id;
+      b.title = WE.i18n.t("더블클릭 = 이름 바꾸기 · 우클릭 = 메뉴");
+      var sp = document.createElement("span");
+      sp.textContent = "📐 " + s.name;
+      b.appendChild(sp);
+      box.appendChild(b);
+    });
+    var add = document.createElement("button");
+    add.className = "view-tab"; add.id = "sheetAdd";
+    add.textContent = "＋";
+    add.title = WE.i18n.t("배선도 추가");
+    box.appendChild(add);
+  }
+  // 시트 전환 — 그리던 배선·선택을 정리하고 새 시트를 그린다.
+  // (별칭이 가리키는 곳만 바뀌므로 모델은 건드릴 게 없다)
+  function selectSheet(id) {
+    if (id === WE.model.getActiveSheetId() && _view === "wiring") return;
+    if (WE.interactions && WE.interactions.resetWire) WE.interactions.resetWire();   // 그리던 배선이 다른 시트로 넘어가지 않게
+    WE.model.setActiveSheet(id);
+    WE.model.clearSelection();
+    if (WE.model.setMultiSelection) WE.model.setMultiSelection([], [], []);   // 다중 선택·배선 클릭 지점까지 비운다
+    switchView("wiring");
+    WE.render.renderAll(); WE.render.renderOverlay();
+    renderSheetTabs(); refreshProps();
+  }
+  function afterSheetChange(msg) {
+    WE.render.renderAll(); WE.render.renderOverlay();
+    renderSheetTabs(); setActiveTab(_view); refreshProps();
+    if (WE.history) WE.history.commit();
+    if (WE.store) WE.store.saveNow();
+    if (msg) setHint(msg);
+  }
+  // 탭 위에서 제자리 이름 편집 (Enter/포커스아웃 = 저장, Esc = 취소)
+  function beginRenameSheet(btn) {
+    var id = btn.dataset.sid, s = null;
+    WE.model.project.sheets.forEach(function (x) { if (x.id === id) s = x; });
+    if (!s || btn.querySelector("input")) return;
+    var old = s.name;
+    var inp = document.createElement("input");
+    inp.type = "text"; inp.value = old; inp.maxLength = 40;
+    btn.innerHTML = ""; btn.appendChild(inp);
+    inp.focus(); inp.select();
+    var done = false;
+    function finish(ok) {
+      if (done) return; done = true;
+      if (ok && inp.value.trim() && inp.value.trim() !== old) {
+        WE.model.renameSheet(id, inp.value);
+        renderSheetTabs(); setActiveTab(_view);
+        if (WE.history) WE.history.commit();
+        if (WE.store) WE.store.saveNow();
+      } else { renderSheetTabs(); setActiveTab(_view); }
+    }
+    inp.addEventListener("keydown", function (e) {
+      if (e.key === "Enter") { e.preventDefault(); finish(true); }
+      else if (e.key === "Escape") { e.preventDefault(); finish(false); }
+      e.stopPropagation();   // 캔버스 단축키(Delete 등)로 새지 않게
+    });
+    inp.addEventListener("blur", function () { finish(true); });
+  }
+  var _smSid = null;   // 우클릭 메뉴가 겨냥한 시트
+  function openSheetMenu(sid, x, y) {
+    var m = document.getElementById("sheetMenu"); if (!m) return;
+    _smSid = sid;
+    var sheets = WE.model.project.sheets, i = -1;
+    sheets.forEach(function (s, k) { if (s.id === sid) i = k; });
+    m.querySelector('[data-sm="del"]').disabled = sheets.length <= 1;
+    m.querySelector('[data-sm="left"]').disabled = i <= 0;
+    m.querySelector('[data-sm="right"]').disabled = i < 0 || i >= sheets.length - 1;
+    m.hidden = false;
+    // 화면 밖으로 나가지 않게
+    var r = m.getBoundingClientRect();
+    m.style.left = Math.max(4, Math.min(x, window.innerWidth - r.width - 6)) + "px";
+    m.style.top = Math.max(4, Math.min(y - r.height, window.innerHeight - r.height - 6)) + "px";
+  }
+  function closeSheetMenu() {
+    var m = document.getElementById("sheetMenu");
+    if (m && !m.hidden) { m.hidden = true; _smSid = null; }
+  }
+  function bindSheetTabs() {
+    var box = document.getElementById("sheetTabs");
+    if (!box) return;
+    box.addEventListener("click", function (e) {
+      if (e.target.closest("#sheetAdd")) {
+        var s = WE.model.addSheet();
+        WE.model.setActiveSheet(s.id);
+        WE.model.clearSelection();
+        switchView("wiring");
+        afterSheetChange(WE.i18n.t("배선도 추가: ") + s.name);
+        return;
+      }
+      var b = e.target.closest(".sheet-tab");
+      if (b && !b.querySelector("input")) selectSheet(b.dataset.sid);
+    });
+    box.addEventListener("dblclick", function (e) {
+      var b = e.target.closest(".sheet-tab");
+      if (b) { e.preventDefault(); beginRenameSheet(b); }
+    });
+    box.addEventListener("contextmenu", function (e) {
+      var b = e.target.closest(".sheet-tab");
+      if (!b) return;
+      e.preventDefault();
+      selectSheet(b.dataset.sid);
+      openSheetMenu(b.dataset.sid, e.clientX, e.clientY);
+    });
+    document.getElementById("sheetMenu").addEventListener("click", function (e) {
+      var b = e.target.closest("button[data-sm]"); if (!b || b.disabled) return;
+      var act = b.dataset.sm, sid = _smSid;
+      closeSheetMenu();
+      if (!sid) return;
+      var sheets = WE.model.project.sheets, name = "";
+      sheets.forEach(function (s) { if (s.id === sid) name = s.name; });
+      if (act === "rename") {
+        var tab = document.querySelector('.sheet-tab[data-sid="' + sid + '"]');
+        if (tab) beginRenameSheet(tab);
+      } else if (act === "add") {
+        var ns = WE.model.addSheet(); WE.model.setActiveSheet(ns.id);
+        WE.model.clearSelection(); switchView("wiring");
+        afterSheetChange(WE.i18n.t("배선도 추가: ") + ns.name);
+      } else if (act === "dup") {
+        var cp = WE.model.duplicateSheet(sid);
+        if (cp) { WE.model.setActiveSheet(cp.id); WE.model.clearSelection(); switchView("wiring");
+          afterSheetChange(WE.i18n.t("복제 완료: ") + cp.name); }
+      } else if (act === "del") {
+        if (!confirm(WE.i18n.t("배선도 '") + name + WE.i18n.t("'를 삭제할까요? 되돌리기(Ctrl+Z)로 복구할 수 있습니다."))) return;
+        if (WE.model.removeSheet(sid)) { switchView("wiring"); afterSheetChange(WE.i18n.t("배선도 삭제: ") + name); }
+      } else if (act === "left" || act === "right") {
+        if (WE.model.moveSheet(sid, act === "left" ? -1 : 1)) afterSheetChange(null);
+      }
+    });
+    document.addEventListener("pointerdown", function (e) {
+      if (!e.target.closest("#sheetMenu")) closeSheetMenu();
+    }, true);
+    document.addEventListener("keydown", function (e) { if (e.key === "Escape") closeSheetMenu(); });
   }
   // 배선도는 항상 표시. BOM/배선 리스트 탭 = 배선도 아래에 해당 창을 추가 표시(스크롤 이동), 배선도 탭 = 둘 다 숨김.
   function switchView(view) {
@@ -1482,7 +1686,7 @@ WE.app = (function () {
         WE.library.updatePart(libId, patch);
       } else {
         var key = tr.dataset.key;
-        WE.model.project.components.forEach(function (c) {
+        WE.model.allComponents().forEach(function (c) {   // 전체 시트 — 다른 시트 부품 이름표도 갱신
           if ((c.libraryId ? c.libraryId : "name:" + c.name) !== key) return;
           if (f === "name") c.name = text;
           else if (f === "spec") c.bomSpec = text;
@@ -1833,17 +2037,19 @@ WE.app = (function () {
       setSavedLayouts(arr); sel.value = ""; refreshLayoutSel();
     });
 
-    var tabs = document.querySelectorAll(".view-tab");
+    var tabs = document.querySelectorAll("#viewTabs > .view-tab");
     for (var i = 0; i < tabs.length; i++) {
       tabs[i].addEventListener("click", function () { switchView(this.dataset.view); });
     }
+    bindSheetTabs();
+    renderSheetTabs();
     applyWireListVisibility();
   }
 
   // 배선 리스트 관련 UI를 한 곳에서 감춘다 (탭 · BOM 툴바의 CSV 버튼)
   function applyWireListVisibility() {
     if (SHOW_WIRE_LIST) return;
-    var tab = document.querySelector('.view-tab[data-view="wirelist"]');
+    var tab = document.querySelector('#viewTabs > .view-tab[data-view="wirelist"]');
     if (tab) tab.hidden = true;
     var csv = document.getElementById("bomExportWires");
     if (csv) csv.hidden = true;
@@ -1858,7 +2064,7 @@ WE.app = (function () {
   }
   function buildPowerSummary() {
     var loadW = 0, effs = [], battWh = 0, battV = 0, hasBatt = false, hasLoad = false;
-    WE.model.project.components.forEach(function (c) {
+    WE.model.allComponents().forEach(function (c) {   // BOM과 같은 이유로 전체 시트
       var lib = c.libraryId ? WE.library.get(c.libraryId) : null;
       if (!lib) return;
       var role = lib.role || "load";
@@ -1894,6 +2100,7 @@ WE.app = (function () {
   }
   // PDF용: 요약을 [라벨, 값] 배열로
   function powerSummaryRows() {
+    if (!SHOW_POWER_SUMMARY) return [];   // 인쇄·PDF에서도 통째로 빠진다(pdf.js가 길이로 판단)
     var s = buildPowerSummary();
     if (!s.hasLoad && !s.hasBatt) return [];
     var rows = [[WE.i18n.t("총 소비전력(평균)"), fmt(s.loadW, 2) + " W"]];
@@ -1982,13 +2189,16 @@ WE.app = (function () {
 
   // 다음 자동 라벨 번호: 사용자가 마지막에 쓴 접두사(W/B/C 등)를 이어감 — "B3"까지 썼으면 "B4"
   function nextWireLabel() {
+    // ★ 전체 시트를 훑는다. 현재 시트만 보면 시트마다 W1이 또 생겨,
+    //   작업 지시서에서 같은 번호가 두 장에 나온다.
     var prefix = "W", maxN = 0;
     var re = /^([A-Za-z]+)-?(\d+)$/;
-    WE.model.project.wires.forEach(function (w) {
+    var all = WE.model.allWires();
+    all.forEach(function (w) {
       var m = re.exec((w.labelText || "").trim());
       if (m) prefix = m[1];   // 가장 나중 배선의 접두사가 남음
     });
-    WE.model.project.wires.forEach(function (w) {
+    all.forEach(function (w) {
       var m = re.exec((w.labelText || "").trim());
       if (m && m[1].toLowerCase() === prefix.toLowerCase()) maxN = Math.max(maxN, parseInt(m[2], 10));
     });
@@ -2825,7 +3035,7 @@ WE.app = (function () {
         var oldC = p.color, newC = e.target.value;
         p.color = newC;
         // 이 색으로 그려진 기존 배선도 함께 갱신
-        WE.model.project.wires.forEach(function (w) { if (w.color === oldC) w.color = newC; });
+        WE.model.allWires().forEach(function (w) { if (w.color === oldC) w.color = newC; });   // 전체 시트
         if (WE.model.ui.wireColor === oldC) WE.model.ui.wireColor = newC;
         WE.render.renderWires(); WE.render.renderOverlay();
       } else if (e.target.classList.contains("plabel")) p.label = e.target.value;
@@ -3048,7 +3258,7 @@ WE.app = (function () {
   function renderWireLoadList() {
     var box = document.getElementById("wireLoadList"); if (!box) return;
     var seen = {}, html = "";
-    WE.model.project.components.forEach(function (c) {
+    WE.model.allComponents().forEach(function (c) {   // 전체 시트 — 다른 시트 부품도 부하로 고를 수 있게
       var lib = c.libraryId ? WE.library.get(c.libraryId) : null;
       var role = lib ? (lib.role || "load") : "load";
       if (role !== "load") return;
@@ -3817,7 +4027,7 @@ WE.app = (function () {
     var c = WE.model.getSelectedComponent();
     if (!c) {
       empty.hidden = false; body.hidden = true;
-      powerPanel.hidden = false; renderPowerSummary();   // 무선택 = 전력 요약 표시
+      if (SHOW_POWER_SUMMARY) { powerPanel.hidden = false; renderPowerSummary(); }   // 무선택 = 전력 요약 표시
       return;
     }
     empty.hidden = true; body.hidden = false;
@@ -3879,7 +4089,7 @@ WE.app = (function () {
   // 연결이 끊기면 BOM의 스펙·가격·구매링크·데이터시트가 전부 빈칸으로 보이므로 열 때마다 복구 시도.
   function relinkOrphanComponents() {
     var fixed = 0;
-    WE.model.project.components.forEach(function (c) {
+    WE.model.allComponents().forEach(function (c) {   // 전체 시트 — 끊긴 라이브러리 연결 점검
       if (!c.libraryId || WE.library.get(c.libraryId)) return;   // 정상 연결이면 통과
       var byName = WE.library.findByName(c.name);
       if (byName) { c.libraryId = byName.id; fixed++; }
@@ -3897,11 +4107,13 @@ WE.app = (function () {
     document.getElementById("wireRoutingSel").value = WE.model.ui.wireRouting;
     relinkOrphanComponents();
     renderPalette();
+    renderSheetTabs();          // 연 파일의 시트 구성으로 탭 줄을 다시 그린다
     WE.render.renderAll();
     refreshProps();
   }
 
   return {
+    copySelection: copySelection, pasteClipboard: pasteClipboard,
     init: init, refreshProps: refreshProps, setHint: setHint, setSavedHint: setSavedHint, reloadUI: reloadUI,
     renderLibrary: renderLibrary,
     toggleAllFolders: toggleAllFolders,

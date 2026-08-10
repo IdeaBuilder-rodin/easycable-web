@@ -1580,6 +1580,17 @@ WE.interactions = (function () {
     var tag = (document.activeElement && document.activeElement.tagName) || "";
     if (tag === "INPUT" || tag === "TEXTAREA") return;
 
+    // Ctrl/⌘+C · Ctrl/⌘+V — 선택한 부품·배선·주석을 그대로 복사해 다른 배선도로 가져오기.
+    // 반드시 위 입력창 가드 **뒤에** 둘 것 — 이름·비고·BOM 칸에서는 평소대로 텍스트 복사가 되어야 한다.
+    if ((e.ctrlKey || e.metaKey) && !e.altKey && e.key.toLowerCase() === "c") {
+      if (WE.app.copySelection && WE.app.copySelection()) e.preventDefault();
+      return;
+    }
+    if ((e.ctrlKey || e.metaKey) && !e.altKey && e.key.toLowerCase() === "v") {
+      if (WE.app.pasteClipboard && WE.app.pasteClipboard()) e.preventDefault();
+      return;
+    }
+
     // 배선을 그리는 중이면 Esc·Backspace가 먼저다 — 모드 복귀보다 '그리던 것 정리'가 우선.
     // (Esc 한 번에 배선도 버리고 모드까지 빠져나가면 실수로 눌렀을 때 되돌리기 번거롭다)
     if (wirePending && (e.key === "Escape" || e.key === "Backspace" || e.key === "Delete")) {
