@@ -15,7 +15,7 @@
   <meta name="twitter:card" content="summary" />
   <link rel="canonical" href="https://easycable.co.kr/" />
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔌</text></svg>" />
-  <link rel="stylesheet" href="styles.css?v=a486c1a5" />
+  <link rel="stylesheet" href="styles.css?v=86060c66" />
   <!-- Google Analytics 4 (방문/재방문·사용 패턴 분석) -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-LN9RMMTF8M"></script>
   <script>
@@ -130,7 +130,7 @@
     <div class="resizer" id="resizerLeft" title="드래그로 너비 조절 · 더블클릭하면 기본 너비로"></div>
 
     <!-- 인쇄용 제목 (화면에선 숨김) -->
-    <div id="printTitle" class="print-only">
+    <div id="printTitle" class="print-only pr-orig">
       <span id="printTitleName"></span>
       <span id="printTitleDate"></span>
     </div>
@@ -146,7 +146,7 @@
                title="숫자만 입력해도 됩니다 (예: 20260723 → 2026.07.23) · 비우면 최종 수정일이 자동으로 들어갑니다" />
       </div>
     <!-- 중앙 캔버스 -->
-    <section id="canvasWrap">
+    <section id="canvasWrap" class="pr-orig">
       <svg id="canvas" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 900">
         <defs>
           <pattern id="gridPattern" width="10" height="10" patternUnits="userSpaceOnUse">
@@ -247,8 +247,8 @@
         <!-- 배선도 시트 탭들 + ＋ 버튼 (JS가 채운다). 우클릭 = 이름 바꾸기·복제·삭제·순서 -->
         <div id="sheetTabs"></div>
         <span class="vt-divider" aria-hidden="true"></span>
-        <button class="view-tab" data-view="bom">📋 BOM</button>
-        <button class="view-tab" data-view="wirelist">🔌 배선 리스트</button>
+        <button class="view-tab" data-view="bom">BOM</button>
+        <button class="view-tab" data-view="wirelist">배선 리스트</button>
       </div>
 
       <!-- 시트 탭 우클릭 메뉴 -->
@@ -271,7 +271,7 @@
          비고 4줄 + 범례 4색을 도면(158mm)을 1mm도 줄이지 않고 넣을 수 있다.
          높이는 4줄로 묶어 두어 내용이 늘어도 다음 장으로 밀리지 않는다.
          범례 색이 5개 이상이면 아래로 넘기지 않고 왼쪽으로 열을 늘린다(그만큼 비고 폭이 준다). -->
-    <div id="printFooter" class="print-only">
+    <div id="printFooter" class="print-only pr-orig">
       <div id="printNote">
         <span class="pf-head">비고</span>
         <span id="printNoteBody"></span>
@@ -281,6 +281,14 @@
         <span id="printLegendItems"></span>
       </div>
     </div>
+
+    <!-- 배선도가 여러 장일 때만 쓰는 인쇄 블록. 시트마다 [제목 + 도면 + 하단 밴드] 한 세트를
+         담고, 장마다 페이지를 나눈다. 그 뒤에 BOM이 붙는다(1번 → 2번 → … → BOM).
+         내용은 위의 #printTitle · #canvas · #printFooter 를 시트별로 그려서 통째로 복제한 것이라,
+         한 장짜리 인쇄물과 모양이 정확히 같다.
+         ※ 반드시 원본들보다 '뒤'에 있어야 한다 — 복제본이 id를 그대로 갖고 있어서
+            getElementById가 원본을 먼저 찾아야 하기 때문(CSS는 같은 id 전부에 적용된다). -->
+    <div id="printSheets" class="print-only"></div>
 
     <div id="printBOM" class="print-only"></div>
 
@@ -837,12 +845,12 @@
   </div>
 
   <!-- 스크립트: file:// 호환 위해 일반 script (모듈 아님), 순서 중요 -->
-  <script src="js/i18n.js?v=50b9ef6c"></script>   <!-- 가장 먼저: DOMContentLoaded 번역이 app.js 초기화보다 앞서야 함 -->
+  <script src="js/i18n.js?v=bfdd8a4c"></script>   <!-- 가장 먼저: DOMContentLoaded 번역이 app.js 초기화보다 앞서야 함 -->
   <script src="js/awg.js?v=8af811c8"></script>
-  <script src="js/model.js?v=39db9bbc"></script>
+  <script src="js/model.js?v=178ec961"></script>
   <script src="js/presets.js?v=76c3b945"></script>
   <script src="js/geometry.js?v=516c1a78"></script>
-  <script src="js/render.js?v=72e4d5ba"></script>
+  <script src="js/render.js?v=69050ffe"></script>
   <script src="js/bgremove.js?v=31bcadf0"></script>
   <script src="js/termeditor.js?v=74a41e8b"></script>
   <script src="js/interactions.js?v=20490ecd"></script>
@@ -851,7 +859,11 @@
   <script src="js/history.js?v=efecdc9e"></script>
   <script src="js/library.js?v=d371703b"></script>
   <script src="js/io.js?v=f73f9ca1"></script>
-  <script src="js/pdf.js?v=852c34f6"></script>
-  <script src="js/app.js?v=11c90adc"></script>
+  <script src="js/pdf.js?v=24c35afc"></script>
+  <script src="js/app.js?v=c1306535"></script>
+  <!-- 인쇄 전용: 페이지 전체를 덮는 워터마크. 도면 칸 안에만 찍히던 것을 종이 전체로 넓혔다.
+       position:fixed 라 인쇄 시 '모든 장'에 반복해서 나온다(도면 장 · BOM 장 전부). -->
+  <div id="pageWatermark" aria-hidden="true"></div>
+
 </body>
 </html>

@@ -522,7 +522,9 @@ body.label-mode #canvas, body.label-mode #canvas * { cursor: copy !important; } 
   flex: none; align-self: stretch; width: 1px; margin: 4px 15px 0;
   background: linear-gradient(to bottom, transparent, #b7bec8 35%, #b7bec8);
 }
-.sheet-tab { max-width: 190px; }
+/* 탭 폭은 이름 길이를 따라 늘어나되, 여기까지만. 더 길면 말줄임(…)으로 자르고
+   전체 이름은 마우스를 올렸을 때 보여 준다. 한없이 늘리면 탭 몇 개에 줄이 다 차 버린다. */
+.sheet-tab { max-width: 300px; }
 .sheet-tab span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sheet-tab input {                                 /* 이름 바꾸기(제자리 편집) */
   width: 130px; padding: 0; border: none; outline: none; background: transparent;
@@ -748,6 +750,8 @@ body.panning #canvas, body.panning #canvas * { cursor: grabbing !important; }
 }
 /* 작업 중에는 워터마크 숨김 — PDF 저장(인쇄) 시에만 나타남 (아래 @media print에서 복원) */
 #layerWatermark { display: none; }
+/* 인쇄용 페이지 워터마크 — 화면에선 항상 숨김 */
+#pageWatermark { display: none; }
 .wire-label-hover { fill: rgba(30,136,229,.10); stroke: #90b8dd; stroke-width: 1; pointer-events: none; }
 .wire-label-selected { fill: rgba(30,136,229,.16); stroke: #1e88e5; stroke-width: 1.5; pointer-events: none; }
 .term-label {
@@ -995,7 +999,21 @@ body.term-mode #canvas { cursor: crosshair; }
 /* ===== 인쇄(PDF) ===== */
 @media print {
   @page { size: landscape; margin: 8mm; }
-  #layerWatermark { display: block; }   /* 화면에선 숨긴 워터마크를 PDF에는 표시 */
+  /* 워터마크는 도면 칸이 아니라 '종이 전체'에 찍는다.
+     position:fixed 라 크롬이 인쇄할 때 모든 장에 반복해 그린다(도면 장 · BOM 장 전부).
+     ※ 뒤에 깔면(z-index:-1) 안 된다 — 캔버스와 body의 흰 배경에 가려 아예 안 보인다.
+        내용 위에 아주 옅게 얹는다. 워터마크가 원래 그렇게 동작한다. */
+  #layerWatermark { display: none !important; }   /* 캔버스 안 워터마크는 인쇄에선 끈다(PNG 내보내기는 계속 씀) */
+  #pageWatermark {
+    display: block; position: fixed; inset: 0; z-index: 9999;
+    overflow: hidden; pointer-events: none;
+  }
+  #pageWatermark .pw-t {
+    position: absolute; transform: rotate(-30deg); transform-origin: 0 0; white-space: nowrap;
+    font: 600 13pt "Segoe UI", "Malgun Gothic", sans-serif;
+    color: #8b97a4; opacity: .13;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;   /* 옅은 회색이 인쇄에서 날아가지 않게 */
+  }
   /* 화면 전용 UI는 종이에 나오지 않게. (복원 안내 띠가 빠져 있어 PDF 1페이지 머리에 찍혔다) */
   #toolbar, #leftPanel, #rightPanel, .modal, #cmpMenu, #viewTabs, #bomView, #wireListView,
   .canvas-corner-tools, #canvasHeader, #canvasFooter, #restoreBanner { display: none !important; }
@@ -1012,6 +1030,21 @@ body.term-mode #canvas { cursor: crosshair; }
   #gridBg, #layerOverlay { display: none !important; }  /* 그리드·선택표시 숨김 */
 
   .print-only { display: block; }
+
+  /* ---- 배선도가 여러 장일 때 (body.pr-multi) ----
+     시트마다 [제목 + 도면 + 하단 밴드] 한 세트를 #printSheets 안에 담고 장마다 페이지를 나눈다.
+     원본 한 세트(#printTitle · #canvasWrap · #printFooter)는 감춘다 — 복제본이 그 자리를 대신한다.
+     복제본은 id를 그대로 갖고 있어 위의 인쇄 규칙이 그대로 적용된다.
+
+     ※ 원본을 'id'로 숨기면 안 된다 — CSS의 id 선택자는 '같은 id를 가진 요소 전부'에 걸려서
+        복제본까지 같이 사라진다(제목·작성일·비고·범례가 통째로 빠졌다).
+        그래서 원본에만 붙는 표식(.pr-orig)으로 숨기고, 복제할 때 그 표식을 떼어 낸다. */
+  body.pr-multi .pr-orig { display: none !important; }
+  body:not(.pr-multi) #printSheets { display: none !important; }
+  .pr-sheet { display: block; }
+  .pr-sheet.pr-break { page-break-before: always; break-before: page; }
+  /* 한 장이 통째로 넘어가지 않도록 — 도면과 밴드가 갈라지면 종이 두 장에 걸쳐 찍힌다 */
+  .pr-sheet > svg { page-break-inside: avoid; break-inside: avoid; }
   /* 도면 머리글: 제목(좌) · 작성일(우). 아래 얇은 선으로 도면과 묶어 준다 */
   #printTitle {
     display: flex; align-items: baseline; justify-content: space-between; gap: 12px;

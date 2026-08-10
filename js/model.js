@@ -32,6 +32,7 @@ WE.model = (function () {
     return {
       id: "sh" + Date.now().toString(36) + "_" + _sheetSeq,
       name: name || WE.i18n.t("배선도"),
+      note: "",                     // 도면 비고 — 인쇄물 하단 좌측. 도면마다 다르므로 시트가 갖는다
       components: [], wires: [], annotations: []
     };
   }
@@ -134,6 +135,8 @@ WE.model = (function () {
     project.sheets.push(s);
     return s;
   }
+  function getSheetNote() { return activeSheet().note || ""; }
+  function setSheetNote(v) { activeSheet().note = String(v == null ? "" : v); }
   function renameSheet(id, name) {
     var i = sheetIndex(id); if (i < 0) return false;
     name = (name || "").trim();
@@ -457,11 +460,14 @@ WE.model = (function () {
         return {
           id: s.id || ("sh" + Date.now().toString(36) + "_" + (i + 1)),
           name: s.name || (WE.i18n.t("배선도") + " " + (i + 1)),
+          note: s.note || "",
           components: s.components || [], wires: s.wires || [], annotations: s.annotations || []
         };
       });
     } else {
       var one = makeSheet(project.meta.name || undefined);
+      // 옛 파일은 비고가 프로젝트(meta.note)에 있었다 → 그 한 장의 비고로 옮긴다
+      one.note = (project.meta && project.meta.note) || "";
       one.components = data.components || [];
       one.wires = data.wires || [];
       one.annotations = data.annotations || [];
@@ -583,6 +589,8 @@ WE.model = (function () {
     addSheet: addSheet,
     nextSheetName: nextSheetName,
     renameSheet: renameSheet,
+    getSheetNote: getSheetNote,
+    setSheetNote: setSheetNote,
     removeSheet: removeSheet,
     moveSheet: moveSheet,
     duplicateSheet: duplicateSheet,

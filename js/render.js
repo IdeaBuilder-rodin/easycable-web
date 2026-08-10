@@ -15,6 +15,7 @@ WE.render = (function () {
     layerAnnotations = document.getElementById("layerAnnotations");
     layerOverlay = document.getElementById("layerOverlay");
     buildWatermark();
+    buildPageWatermark();
   }
 
   // 워터마크: 반투명 대각선 문구를 캔버스 전체에 타일 배치 (부품 아래 레이어라 작업 방해 없음).
@@ -34,6 +35,29 @@ WE.render = (function () {
         });
         t.textContent = TEXT;
         g.appendChild(t);
+      }
+    }
+  }
+
+  // 인쇄용 페이지 워터마크 — 도면 칸이 아니라 '종이 전체'를 덮는다.
+  // 캔버스 안 워터마크(위)는 PNG 내보내기가 계속 쓰므로 그대로 두고, 인쇄에서만 이걸로 바꾼다.
+  // 위치를 %로 잡아 두면 용지 크기·방향이 달라져도 그대로 채워진다.
+  function buildPageWatermark() {
+    var box = document.getElementById("pageWatermark");
+    if (!box) return;
+    box.innerHTML = "";
+    var TEXT = "EasyCable · easycable.co.kr";
+    // 간격은 넉넉히. 촘촘하면 글자끼리 붙어 한 덩어리로 보이고 도면·표를 읽기 힘들어진다.
+    // 가로 52% · 세로 26% = A4 가로 한 장에 대략 3열 x 5행.
+    for (var row = 0, y = -6; y < 115; row++, y += 26) {
+      var offset = (row % 2) ? 26 : 0;           // 벽돌식 엇배치
+      for (var x = -18 + offset; x < 115; x += 52) {
+        var t = document.createElement("span");
+        t.className = "pw-t";
+        t.style.left = x + "%";
+        t.style.top = y + "%";
+        t.textContent = TEXT;
+        box.appendChild(t);
       }
     }
   }

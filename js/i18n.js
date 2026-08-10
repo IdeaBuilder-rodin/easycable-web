@@ -141,8 +141,7 @@ WE.i18n = (function () {
     "데이터시트": "Datasheet",
     "부품 목록 (BOM)": "Bill of Materials (BOM)",
     "배선 리스트": "Wire List",
-    "📐 배선도": "📐 Diagram",
-    "🔌 배선 리스트": "🔌 Wire List",
+    "배선 리스트": "Wire List",
 
     // ===== 속성 패널 =====
     "속성": "Properties",

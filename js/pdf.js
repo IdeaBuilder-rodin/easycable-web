@@ -52,7 +52,7 @@ WE.pdf = (function () {
   var BAND_MAX_LINES = 4;   // 이 이상은 도면을 밀기 시작한다 (세로 예산 21mm)
 
   function fillFooter() {
-    var note = String((WE.model.project.meta || {}).note || "").trim();
+    var note = String(WE.model.getSheetNote ? WE.model.getSheetNote() : "").trim();
     var foot = document.getElementById("printFooter");
     document.getElementById("printNoteBody").textContent = note;
     foot.classList.toggle("pf-nonote", !note);
@@ -106,12 +106,71 @@ WE.pdf = (function () {
     return d;
   }
 
+  // ---- 배선도가 여러 장일 때: 시트마다 한 페이지씩 ----
+  // 출력 순서 = 1번 배선도 → 2번 배선도 → … → BOM (사용자 확정 2026-08-10).
+  //
+  // 만드는 방법: 시트를 하나씩 활성으로 바꿔 화면을 그린 뒤, 그때의
+  // [#printTitle + #canvas + #printFooter] 를 통째로 복제해 한 세트로 담는다.
+  // 새로 그리지 않고 '지금 쓰는 인쇄물을 그대로 복제'하는 이유 —
+  // 한 장짜리 인쇄 레이아웃(도면 161mm 상한, 하단 밴드 높이 계산 등)은 수십 번 다듬어 확정한 것이라
+  // 다시 만들면 어딘가 어긋난다. 복제하면 모양이 정확히 같다는 게 구조적으로 보장된다.
+  //
+  // 복제본은 id를 그대로 갖고 있다(CSS가 id 선택자로 잡혀 있어 지우면 스타일이 통째로 빠진다).
+  // 같은 id가 여럿이어도 CSS는 전부에 적용되고, getElementById는 문서 순서상 '먼저 나오는' 원본을
+  // 돌려준다 — 그래서 #printSheets 는 반드시 원본들보다 뒤에 둔다(index.html 참고).
+  function buildSheetPages() {
+    var box = document.getElementById("printSheets");
+    if (!box) return;
+    box.innerHTML = "";
+    var sheets = (WE.model.project.sheets || []);
+    var multi = sheets.length > 1;
+    document.body.classList.toggle("pr-multi", multi);
+    if (!multi) return;   // 한 장이면 예전 경로 그대로 — 손대지 않는다
+
+    var keep = WE.model.getActiveSheetId();
+    var titleEl = document.getElementById("printTitle");
+    var footEl = document.getElementById("printFooter");
+    var projName = (WE.model.project.meta || {}).name || "";
+    sheets.forEach(function (s, i) {
+      WE.model.setActiveSheet(s.id);
+      WE.render.renderAll();
+      // 장마다 제목은 "프로젝트 이름 — 시트 이름". 어느 도면인지 종이만 봐도 알아야 한다.
+      document.getElementById("printTitleName").textContent =
+        projName ? (projName + " — " + s.name) : s.name;
+      document.getElementById("printTitleDate").textContent = drawnDate();
+      fillFooter();   // 범례는 그 시트의 배선 기준으로 다시 채워진다
+
+      var sec = document.createElement("section");
+      sec.className = "pr-sheet" + (i ? " pr-break" : "");
+      // 복제본에서는 '원본 표식'을 뗀다 — 안 떼면 원본을 숨기는 규칙에 복제본도 함께 걸려
+      // 제목·작성일·비고·범례가 통째로 사라진다.
+      var ttl = titleEl.cloneNode(true); ttl.classList.remove("pr-orig");
+      sec.appendChild(ttl);
+      var svg = document.getElementById("canvas").cloneNode(true);
+      // 화면 전용 레이어는 복제본에서 지운다(인쇄 CSS가 원본에만 걸려 있다)
+      ["gridBg", "layerOverlay"].forEach(function (id) {
+        var n = svg.querySelector("#" + id); if (n) n.parentNode.removeChild(n);
+      });
+      sec.appendChild(svg);
+      var band = footEl.cloneNode(true); band.classList.remove("pr-orig");
+      sec.appendChild(band);
+      box.appendChild(sec);
+    });
+    // 보고 있던 시트로 되돌린다 — 인쇄가 화면 상태를 바꾸면 안 된다
+    WE.model.setActiveSheet(keep);
+    WE.render.renderAll();
+    document.getElementById("printTitleName").textContent = projName;
+    document.getElementById("printTitleDate").textContent = drawnDate();
+    fillFooter();
+  }
+
   function populate() {
     // 제목 + 우측 상단 날짜
     var proj0 = WE.model.project;
     document.getElementById("printTitleName").textContent = (proj0.meta && proj0.meta.name) || "";
     document.getElementById("printTitleDate").textContent = drawnDate();
     fillFooter();
+    buildSheetPages();
 
     // BOM (자재명세서) — 화면에 보이는 그 표(열 구성·순서·너비·행 높이)를 그대로 인쇄
     var bomBox = document.getElementById("printBOM");

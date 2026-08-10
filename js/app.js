@@ -1296,9 +1296,10 @@ WE.app = (function () {
       var b = document.createElement("button");
       b.className = "view-tab sheet-tab" + (_view === "wiring" && s.id === cur ? " active" : "");
       b.dataset.sid = s.id;
-      b.title = WE.i18n.t("더블클릭 = 이름 바꾸기 · 우클릭 = 메뉴");
+      // 이름이 잘렸을 때 전체를 볼 수 있도록 툴팁 맨 앞에 이름을 넣는다
+      b.title = s.name + "\n" + WE.i18n.t("더블클릭 = 이름 바꾸기 · 우클릭 = 메뉴");
       var sp = document.createElement("span");
-      sp.textContent = "📐 " + s.name;
+      sp.textContent = s.name;
       b.appendChild(sp);
       box.appendChild(b);
     });
@@ -1319,10 +1320,11 @@ WE.app = (function () {
     switchView("wiring");
     WE.render.renderAll(); WE.render.renderOverlay();
     renderSheetTabs(); refreshProps();
+    syncProjNote();   // 비고는 시트마다 다르다 — 전환하면 그 시트 것으로 갈아 끼운다
   }
   function afterSheetChange(msg) {
     WE.render.renderAll(); WE.render.renderOverlay();
-    renderSheetTabs(); setActiveTab(_view); refreshProps();
+    renderSheetTabs(); setActiveTab(_view); refreshProps(); syncProjNote();
     if (WE.history) WE.history.commit();
     if (WE.store) WE.store.saveNow();
     if (msg) setHint(msg);
@@ -3770,7 +3772,7 @@ WE.app = (function () {
         return;
       }
       last = ta.value;
-      WE.model.project.meta.note = ta.value;
+      WE.model.setSheetNote(ta.value);   // 비고는 도면(시트)마다 따로
       markNoteOverflow();
     });
     // 작성일과 같은 규칙 — 칸을 벗어날 때 저장(그 사이는 자동저장이 받는다)
@@ -3834,7 +3836,7 @@ WE.app = (function () {
   function syncProjNote() {
     var ta = document.getElementById("projNote");
     if (!ta) return;
-    ta.value = WE.model.project.meta.note || "";
+    ta.value = WE.model.getSheetNote();
     syncNoteWidth();
   }
 
