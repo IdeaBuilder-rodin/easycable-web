@@ -793,7 +793,7 @@ WE.interactions = (function () {
       a.x += dx; a.y += dy;
     });
     applyWireFollow(follow, dx, dy);
-    applyBranchFollow(bFollow);
+    applyBranchFollow(bFollow, dx, dy);
     if (comps.length) WE.render.updateWiresFor(comps[0]);
     if (annos.length) WE.render.renderAnnotations();
     WE.render.renderOverlay();
@@ -805,24 +805,67 @@ WE.interactions = (function () {
   // 꺾임점이 없는 배선(단자 → 접점 한 줄)도 반드시 포함해야 한다 —
   // beginWireFollow는 '수동배선만' 보기 때문에 이런 배선이 통째로 빠져 있었고,
   // 사실 그런 배선이 가장 흔하다(버스에 물린 전원선 등).
-  function beginBranchFollow(cmpIds) {
+  // 어떤 배선이 '통째로' 함께 움직이는지 미리 가려낸다.
+  // 접점은 부품이 아니라 다른 배선 위에 얹혀 있어서 componentId 가 없다. 그래서 끝이 움직이는지를
+  // '움직이는 부품에 붙었는가'로만 판정하면 접점 쪽 끝은 언제나 '안 움직임'이 되고,
+  // 전체를 함께 옮길 때 배선이 평행이동하지 못한 채 접점만 옛 자리에 남아 도면 밖까지 늘어난다.
+  // '호스트 배선이 움직이면 그 위의 접점도 움직인다'를 더 바뀔 게 없을 때까지 반복 적용한다
+  // (분기에 분기가 걸린 경우까지 따라가기 위해서다).
+  function movingEnds(cmpIds) {
     var set = {}; (cmpIds || []).forEach(function (id) { set[id] = 1; });
+    var wires = WE.model.project.wires;
+    var moving = {};                       // 배선id → 양 끝이 모두 움직이는가
+    function endMoves(ref) {
+      if (!ref) return false;
+      if (ref.componentId) return !!set[ref.componentId];
+      if (ref.wireId) return !!moving[ref.wireId];
+      return false;
+    }
+    for (var pass = 0; pass <= wires.length; pass++) {
+      var changed = false;
+      wires.forEach(function (w) {
+        if (moving[w.id]) return;
+        if (endMoves(w.from) && endMoves(w.to)) { moving[w.id] = 1; changed = true; }
+      });
+      if (!changed) break;
+    }
+    return { endMoves: endMoves, moving: moving, set: set };
+  }
+
+  function beginBranchFollow(cmpIds) {
+    var mv = movingEnds(cmpIds), set = mv.set;
     var arr = [];
     WE.model.project.wires.forEach(function (w) {
       ["from", "to"].forEach(function (k) {
         var ref = w[k], other = w[k === "from" ? "to" : "from"];
         if (!ref || !ref.wireId) return;                             // 이 끝이 분기여야
-        if (!other || !other.componentId || !set[other.componentId]) return;  // 반대쪽이 움직이는 부품이어야
-        var t0 = WE.geometry.wireEndpoint(other);
-        if (!t0) return;
-        arr.push({ w: w, key: k, t0: { x: t0.x, y: t0.y }, a0: { x: ref.x, y: ref.y } });
+        var hostMoves = !!mv.moving[ref.wireId];                     // 얹혀 있는 배선도 함께 움직이나
+        var otherMoves = !!(other && other.componentId && set[other.componentId]);
+        if (!hostMoves && !otherMoves) return;
+        var t0 = otherMoves ? WE.geometry.wireEndpoint(other) : null;
+        arr.push({
+          w: w, key: k, hostMoves: hostMoves,
+          t0: t0 ? { x: t0.x, y: t0.y } : null,
+          a0: { x: ref.x, y: ref.y },
+          seg0: ref.seg ? { axis: ref.seg.axis, coord: ref.seg.coord } : null
+        });
       });
     });
     return arr;
   }
-  function applyBranchFollow(snap) {
+  function applyBranchFollow(snap, dx, dy) {
+    var shift = (typeof dx === "number" && typeof dy === "number");
     (snap || []).forEach(function (f) {
       var ref = f.w[f.key];
+      // 호스트까지 같은 양만큼 움직이는 경우엔 접점도 그대로 평행이동하면 끝이다.
+      // 이때 다시 투영하면 안 된다 — 기억해 둔 구간 좌표(seg.coord)는 '이동 전' 값이라
+      // 옮겨진 호스트에서는 엉뚱한 평행 구간이 더 가까워지고, 접점이 그쪽으로 붙어
+      // 옛 자리에 눌러앉는다(전체 이동인데 분기 배선만 제자리에 남는 증상).
+      if (f.hostMoves && shift) {
+        ref.x = f.a0.x + dx; ref.y = f.a0.y + dy;
+        if (ref.seg && f.seg0) ref.seg.coord = f.seg0.coord + (f.seg0.axis === "v" ? dx : dy);
+        return;
+      }
       var host = WE.model.getWire(ref.wireId);
       var pts = host && WE.geometry.wireRoutePoints(host);
       if (!pts) return;
@@ -843,23 +886,24 @@ WE.interactions = (function () {
       // 이때는 단자가 움직인 만큼 접점도 따라가야 수평/수직이 유지된다
       // (세로 버스에 물린 수평 배선이면 x는 버스에 고정되고 y만 따라간다).
       var other = f.w[f.key === "from" ? "to" : "from"];
-      var t1 = WE.geometry.wireEndpoint(other);
-      if (!t1) return;
-      var q = WE.geometry.placeOnHost(ref, pts, {
-        x: f.a0.x + (t1.x - f.t0.x),
-        y: f.a0.y + (t1.y - f.t0.y)
-      });
+      var t1 = f.t0 ? WE.geometry.wireEndpoint(other) : null;
+      // 반대쪽 단자가 움직이지 않는 경우(호스트만 움직임)엔 옮길 기준이 없으니 제자리에서 다시 잡는다
+      var q = t1
+        ? WE.geometry.placeOnHost(ref, pts, { x: f.a0.x + (t1.x - f.t0.x), y: f.a0.y + (t1.y - f.t0.y) })
+        : WE.geometry.placeOnHost(ref, pts, null);
       if (q) { ref.x = q.x; ref.y = q.y; }
     });
   }
 
   // 이동 시작 시 연결된 수동배선의 원본 꺾임점·단자위치를 스냅샷
   function beginWireFollow(movingIds) {
-    var set = {}; movingIds.forEach(function (id) { set[id] = 1; });
+    var mv = movingEnds(movingIds);
     var arr = [];
     WE.model.project.wires.forEach(function (w) {
       if (!w.waypoints || !w.waypoints.length) return;   // 수동배선만
-      var fromMoving = !!set[w.from.componentId], toMoving = !!set[w.to.componentId];
+      // 접점으로 물린 끝도 '호스트가 움직이면 함께 움직인다'로 본다 —
+      // 이게 없으면 분기 배선은 끝 꺾임점 하나만 따라오고 몸통은 제자리에 남는다.
+      var fromMoving = mv.endMoves(w.from), toMoving = mv.endMoves(w.to);
       if (!fromMoving && !toMoving) return;
       var A = WE.geometry.wireEndpoint(w.from), B = WE.geometry.wireEndpoint(w.to);
       arr.push({
@@ -1334,7 +1378,7 @@ WE.interactions = (function () {
         WE.render.updateComponent(mc);
       });
       applyWireFollow(drag.follow, snapVal(gdx), snapVal(gdy));
-      applyBranchFollow(drag.branchFollow);
+      applyBranchFollow(drag.branchFollow, snapVal(gdx), snapVal(gdy));
       WE.render.updateWiresFor(drag.comps[0]);   // 모든 배선 경로 일괄 갱신
       drag.annos.forEach(function (aid) {
         var a = WE.model.getAnnotation(aid); if (!a) return;
@@ -1449,7 +1493,7 @@ WE.interactions = (function () {
       cmp.y = snapVal(drag.orig.y + dy);
       applyAlignSnap(cmp);   // 다른 부품의 변/중심과 정렬되면 착 붙이고 파란 가이드선 표시
       applyWireFollow(drag.follow, cmp.x - drag.orig.x, cmp.y - drag.orig.y);
-      applyBranchFollow(drag.branchFollow);
+      applyBranchFollow(drag.branchFollow, cmp.x - drag.orig.x, cmp.y - drag.orig.y);
     } else if (drag.mode === "resize") {
       // 회전된 부품도 올바르게 리사이즈되도록 이동량을 로컬 좌표로 변환
       var rad = cmp.rotation * Math.PI / 180, cos = Math.cos(rad), sin = Math.sin(rad);

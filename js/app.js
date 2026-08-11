@@ -294,6 +294,37 @@ WE.app = (function () {
     updateLibRoleRows();
     document.getElementById("libEditModal").hidden = false;
   }
+  // 첨부 이미지를 저장용으로 줄인다 — 캡처한 데이터시트는 대부분 PNG라 원본 그대로 넣으면
+  // 라이브러리가 금방 10MB를 넘는다(실측: 부품라이브러리 13.6MB 중 데이터시트 PNG가 8.77MB).
+  // 실측 결과 WebP q85에서 용량 85% 절감 · 원본과의 평균 픽셀차 1.05로, 2154x1449 회로도의
+  // 핀 이름까지 2배 확대에서 그대로 읽혔다. 부품 사진(bgremove.js)이 쓰는 품질과 같은 값이다.
+  // PDF·SVG·움직이는 GIF는 손대지 않고, 변환이 실패하거나 오히려 커지면 원본을 그대로 쓴다.
+  var SHRINK_TYPES = { "image/png": 1, "image/jpeg": 1, "image/jpg": 1, "image/bmp": 1 };
+  function shrinkAttachment(dataUrl, type, name, done) {
+    if (!SHRINK_TYPES[type]) { done(dataUrl, type, name); return; }
+    var im = new Image();
+    im.onload = function () {
+      var w = im.naturalWidth, h = im.naturalHeight;
+      // 캔버스 한계를 넘는 큰 이미지는 건드리지 않는다(브라우저마다 상한이 다르다)
+      if (!w || !h || w > 8192 || h > 8192) { done(dataUrl, type, name); return; }
+      var out;
+      try {
+        var cv = document.createElement("canvas");
+        cv.width = w; cv.height = h;
+        var cx = cv.getContext("2d");
+        cx.imageSmoothingQuality = "high";
+        cx.drawImage(im, 0, 0);
+        out = cv.toDataURL("image/webp", 0.85);
+      } catch (err) { done(dataUrl, type, name); return; }
+      // WebP 미지원 브라우저는 PNG를 돌려준다. 줄지 않았으면 바꿀 이유가 없다.
+      if (out.indexOf("data:image/webp") !== 0 || out.length >= dataUrl.length) { done(dataUrl, type, name); return; }
+      // 내용이 WebP가 됐으니 확장자도 맞춰야 '다운로드'가 올바른 파일을 내놓는다
+      done(out, "image/webp", name.replace(/\.[^.]+$/, "") + ".webp");
+    };
+    im.onerror = function () { done(dataUrl, type, name); };
+    im.src = dataUrl;
+  }
+
   // 데이터시트 편집 목록 렌더
   function renderDsList() {
     var box = document.getElementById("libDsList");
@@ -342,8 +373,10 @@ WE.app = (function () {
         if (f.size > 20 * 1024 * 1024) { alert(WE.i18n.t("파일이 너무 큽니다(20MB 초과): ") + f.name); return; }
         var reader = new FileReader();
         reader.onload = function () {
-          _editDatasheets.push({ id: WE.model.nextId("ds"), name: f.name, type: f.type || "application/octet-stream", data: reader.result });
-          renderDsList();
+          shrinkAttachment(reader.result, f.type || "application/octet-stream", f.name, function (data, type, name) {
+            _editDatasheets.push({ id: WE.model.nextId("ds"), name: name, type: type, data: data });
+            renderDsList();
+          });
         };
         reader.readAsDataURL(f);
       });
