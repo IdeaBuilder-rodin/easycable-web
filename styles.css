@@ -741,6 +741,46 @@ body.panning #canvas, body.panning #canvas * { cursor: grabbing !important; }
 }
 .wire-label-guide { stroke: #ff3d7f; stroke-dasharray: 5 4; stroke-width: 1; pointer-events: none; }
 .align-guide { stroke: #1e88e5; stroke-width: 1; pointer-events: none; }   /* 부품 정렬 스마트 가이드 */
+/* ⚠ 미연결 확인 — 켜져 있을 때는 경고색으로. 모드 버튼(파랑)과 구분되어야
+   "지금 점검 중"이라는 게 한눈에 보인다. */
+#btnCheckTerm.active {
+  background: #fdecea; border-color: #e53935; color: #c62828; font-weight: 700;
+}
+/* 미연결 단자 표식 — 자홍색 + 맥동.
+   정적인 표시는 빨간 배선·색색의 단자 사이에서 묻힌다. 움직임은 시야 주변에서도 걸려서
+   '어디가 빠졌나' 훑을 때 가장 빨리 찾힌다. 점검 모드를 켠 동안에만 나오므로 거슬릴 일이 없다. */
+@keyframes tuPulse {
+  0%   { r: 100%; opacity: .55; }
+  70%  { opacity: 0; }
+  100% { opacity: 0; }
+}
+@keyframes tuBlink {
+  0%, 100% { stroke-opacity: 1; }
+  50%      { stroke-opacity: .25; }
+}
+.tu-pulse {
+  fill: #ff4fd8; fill-opacity: .55; stroke: none;
+  transform-box: fill-box; transform-origin: center;
+  animation: tuPulseScale 1.15s ease-out infinite;
+}
+@keyframes tuPulseScale {
+  0%   { transform: scale(1);   fill-opacity: .5; }
+  70%  { transform: scale(2.4); fill-opacity: 0; }
+  100% { transform: scale(2.4); fill-opacity: 0; }
+}
+.tu-ring { animation: tuBlink 1.15s ease-in-out infinite; }
+/* 움직임에 민감한 사용자 배려 — 다만 여기서 애니메이션을 '꺼버리면 안 된다'.
+   이건 사용자가 직접 켠 점검 도구이고, 움직임이 곧 기능이다(꺼두면 호박색 원이 켜진 채 멈춘다).
+   그래서 끄는 대신 '크게 퍼지는 움직임'만 없애고 느린 밝기 변화로 대체한다. */
+@media (prefers-reduced-motion: reduce) {
+  .tu-pulse { animation: tuSoftFade 2.2s ease-in-out infinite; }
+  .tu-ring  { animation: tuBlink 2.2s ease-in-out infinite; }
+}
+@keyframes tuSoftFade {
+  0%, 100% { fill-opacity: .5; }
+  50%      { fill-opacity: .08; }
+}
+
 /* 배선을 그릴 때 '이 단자에 높이를 맞췄다'를 보여주는 점선 (라벨 가이드와 같은 분홍 계열) */
 .wire-align-guide { stroke: #ff3d7f; stroke-dasharray: 5 4; stroke-width: 1; pointer-events: none; }
 .canvas-watermark {

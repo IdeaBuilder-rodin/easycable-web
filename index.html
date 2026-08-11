@@ -15,7 +15,7 @@
   <meta name="twitter:card" content="summary" />
   <link rel="canonical" href="https://easycable.co.kr/" />
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔌</text></svg>" />
-  <link rel="stylesheet" href="styles.css?v=86060c66" />
+  <link rel="stylesheet" href="styles.css?v=189651dd" />
   <!-- Google Analytics 4 (방문/재방문·사용 패턴 분석) -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-LN9RMMTF8M"></script>
   <script>
@@ -93,6 +93,12 @@
       <div class="tb-group">
         <label class="chk"><input type="checkbox" id="chkGrid" checked /> 그리드</label>
         <label class="chk"><input type="checkbox" id="chkSnap" checked /> 스냅</label>
+      </div>
+      <!-- 점검 도구 — 그리드·스냅(작업 환경)과 성격이 달라 구분선으로 확실히 갈라 둔다.
+           모드 버튼과 달리 배타적이지 않아서 어느 모드에서든 켤 수 있다. -->
+      <div class="tb-divider"></div>
+      <div class="tb-group">
+        <button id="btnCheckTerm" class="mode" title="어떤 배선도 붙지 않은 단자를 도면에 표시합니다 (켜 둔 채로 배선하면 이을 때마다 사라집니다)">⚠ 미연결 확인</button>
       </div>
       <div class="tb-spacer"></div>
       <span id="hint" class="hint">부품을 추가해 시작하세요.</span>
@@ -845,12 +851,12 @@
   </div>
 
   <!-- 스크립트: file:// 호환 위해 일반 script (모듈 아님), 순서 중요 -->
-  <script src="js/i18n.js?v=bfdd8a4c"></script>   <!-- 가장 먼저: DOMContentLoaded 번역이 app.js 초기화보다 앞서야 함 -->
+  <script src="js/i18n.js?v=e075c321"></script>   <!-- 가장 먼저: DOMContentLoaded 번역이 app.js 초기화보다 앞서야 함 -->
   <script src="js/awg.js?v=8af811c8"></script>
   <script src="js/model.js?v=178ec961"></script>
   <script src="js/presets.js?v=76c3b945"></script>
   <script src="js/geometry.js?v=516c1a78"></script>
-  <script src="js/render.js?v=69050ffe"></script>
+  <script src="js/render.js?v=1c5448d8"></script>
   <script src="js/bgremove.js?v=31bcadf0"></script>
   <script src="js/termeditor.js?v=74a41e8b"></script>
   <script src="js/interactions.js?v=20490ecd"></script>
@@ -860,7 +866,7 @@
   <script src="js/library.js?v=d371703b"></script>
   <script src="js/io.js?v=f73f9ca1"></script>
   <script src="js/pdf.js?v=24c35afc"></script>
-  <script src="js/app.js?v=c1306535"></script>
+  <script src="js/app.js?v=80d4eee6"></script>
   <!-- 인쇄 전용: 페이지 전체를 덮는 워터마크. 도면 칸 안에만 찍히던 것을 종이 전체로 넓혔다.
        position:fixed 라 인쇄 시 '모든 장'에 반복해서 나온다(도면 장 · BOM 장 전부). -->
   <div id="pageWatermark" aria-hidden="true"></div>

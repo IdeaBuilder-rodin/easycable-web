@@ -539,6 +539,55 @@ WE.render = (function () {
   }
 
   // 선택 표시(선택 박스 + 리사이즈 핸들 / 배선 하이라이트 + waypoint)
+  // ---- 미연결 단자 ----
+  // 배선 끝점은 '단자'({componentId,terminalId}) 아니면 '다른 배선'({wireId,x,y}) 둘 뿐이다.
+  // 그래서 모든 끝점을 모아 단자 목록과 대조하면 끝 — 추측이 전혀 안 들어간다.
+  // 현재 시트만 본다(다른 시트는 화면에 없다).
+  function unconnectedTerminals() {
+    var used = {};
+    WE.model.project.wires.forEach(function (w) {
+      [w.from, w.to].forEach(function (r) {
+        if (r && r.componentId && r.terminalId) used[r.componentId + "|" + r.terminalId] = 1;
+      });
+    });
+    var out = [];
+    WE.model.project.components.forEach(function (c) {
+      (c.terminals || []).forEach(function (t) {
+        if (!used[c.id + "|" + t.id]) out.push({ cmp: c, term: t });
+      });
+    });
+    return out;
+  }
+  // 툴바 '⚠ 미연결 확인'을 켰을 때만 그린다. 화면 전용 — 오버레이 레이어라 인쇄·PNG에는 안 나간다.
+  // 색만으로는 부족하다 — 도면이 이미 빨간 배선·색색의 단자로 가득해서 정적인 링은 묻힌다.
+  // 그래서 세 가지를 함께 쓴다: ①배선에 안 쓰는 자홍색 ②단자 점보다 큰 면적 ③맥동(움직임).
+  // 움직이는 것은 시야 주변에서도 눈에 걸리므로, '어디가 빠졌나' 찾는 데는 이게 가장 빠르다.
+  //
+  // 색은 후보를 흰 배경·빨간선·주황선·어두운 부품 네 조건에 놓고 비교해 정했다.
+  // 호박색은 밝기가 높아 흰 배경과 명도 차이가 거의 없어 묻혔고, 진한 주황은 주황 배선 위에서 사라졌다.
+  // 자홍은 네 조건 모두에서 살아남고 배선 팔레트(빨강·검정·흰색·노랑·파랑)와도 겹치지 않는다.
+  function drawUnconnected() {
+    if (!WE.model.ui.checkTerminals) return;
+    var r = 9 / _viewZoom;   // 확대·축소해도 화면에서 같은 크기로 보이게
+    unconnectedTerminals().forEach(function (o) {
+      var p = WE.geometry.terminalAbs(o.cmp, o.term);
+      var g = el("g", { "class": "term-unconn", "pointer-events": "none" });
+      // 퍼졌다 사라지는 원 — 움직임 담당
+      g.appendChild(el("circle", { cx: p.x, cy: p.y, r: r, "class": "tu-pulse" }));
+      // 어두운 부품 사진 위에서도 보이도록 흰 테두리를 한 겹 깔고
+      g.appendChild(el("circle", {
+        cx: p.x, cy: p.y, r: r, fill: "none", stroke: "#fff", "stroke-width": 5.5,
+        "vector-effect": "non-scaling-stroke"
+      }));
+      // 그 위에 호박색 링 — 깜박이며 진해졌다 옅어졌다 한다
+      g.appendChild(el("circle", {
+        cx: p.x, cy: p.y, r: r, fill: "none", stroke: "#c2008b", "stroke-width": 2.6,
+        "vector-effect": "non-scaling-stroke", "class": "tu-ring"
+      }));
+      layerOverlay.appendChild(g);
+    });
+  }
+
   function renderOverlay() {
     layerOverlay.innerHTML = "";
     if (_marquee) {
@@ -557,6 +606,7 @@ WE.render = (function () {
         stroke: "#1e88e5", "stroke-width": 2.5, "pointer-events": "none"
       }));
     }
+    drawUnconnected();      // 선택 표시보다 먼저 — 파란 선택 링이 위로 오게
     drawNetHighlight();
     drawWireLabelGuide();
     drawWireLabelHover();
@@ -930,6 +980,7 @@ WE.render = (function () {
   }
 
   return {
+    unconnectedTerminals: unconnectedTerminals,
     init: init,
     renderAll: renderAll,
     renderOverlay: renderOverlay,

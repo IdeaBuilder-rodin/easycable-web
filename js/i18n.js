@@ -212,6 +212,13 @@ WE.i18n = (function () {
     "배선 ": "wires ",
     "주석 ": "notes ",
     "  (Ctrl+V로 붙여넣기 · 다른 배선도에도 됩니다)": "  (Ctrl+V to paste — works on other sheets too)",
+    "⚠ 미연결 확인": "⚠ Check unconnected",
+    "어떤 배선도 붙지 않은 단자를 도면에 표시합니다 (켜 둔 채로 배선하면 이을 때마다 사라집니다)":
+      "Marks terminals with no wire on the diagram (leave it on and each mark clears as you connect)",
+    "미연결 단자 ": "Unconnected terminals: ",
+    "개 — 도면에 표시했습니다": " — marked on the diagram",
+    "미연결 단자 없음 — 모든 단자가 이어졌습니다": "No unconnected terminals — everything is wired",
+    "미연결 확인 끔": "Unconnected check off",
     "배선도 추가": "Add sheet",
     "배선도 추가: ": "Sheet added: ",
     "배선도 삭제: ": "Sheet deleted: ",

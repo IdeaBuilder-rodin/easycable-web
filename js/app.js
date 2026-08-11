@@ -1444,8 +1444,27 @@ WE.app = (function () {
     else if (view === "wirelist") { renderWireListView(); wrap.scrollTo({ top: wl.offsetTop - 8, behavior: "smooth" }); }
     else { wrap.scrollTo({ top: 0, behavior: "smooth" }); }   // 배선도만
   }
+  // ---- 미연결 단자 확인 ----
+  // 켜 두면 배선을 이을 때마다 빨간 표시가 하나씩 사라진다 — 고치면서 바로 확인이 된다.
+  // 화면 표시일 뿐이라 저장·인쇄에는 영향이 없다(ui는 직렬화 대상이 아니다).
+  function toggleCheckTerminals() {
+    WE.model.ui.checkTerminals = !WE.model.ui.checkTerminals;
+    var b = document.getElementById("btnCheckTerm");
+    if (b) b.classList.toggle("active", !!WE.model.ui.checkTerminals);
+    WE.render.renderOverlay();
+    syncCheckTermHint(true);
+  }
+  // force=true면 껐을 때도 알린다(버튼을 눌러 끈 순간). 평소엔 켜져 있을 때만 개수를 갱신한다.
+  function syncCheckTermHint(force) {
+    if (!WE.model.ui.checkTerminals) { if (force) setHint(WE.i18n.t("미연결 확인 끔")); return; }
+    var n = WE.render.unconnectedTerminals ? WE.render.unconnectedTerminals().length : 0;
+    setHint(n ? (WE.i18n.t("미연결 단자 ") + n + WE.i18n.t("개 — 도면에 표시했습니다"))
+              : WE.i18n.t("미연결 단자 없음 — 모든 단자가 이어졌습니다"));
+  }
+
   // 모델 변경 시 BOM/배선 리스트가 열려 있으면 갱신
   function afterModelRender() {
+    syncCheckTermHint(false);   // 배선을 이으면 개수가 바로 줄어든다
     if (_view === "bom") renderBOMView();
     else if (_view === "wirelist") renderWireListView();
     syncNoteWidth();   // 배선 색이 늘면 범례 열이 늘고 그만큼 비고 폭이 준다
@@ -2165,6 +2184,8 @@ WE.app = (function () {
 
   // ---- 모드 (선택 / 배선 / 라벨 / 텍스트) ----
   function bindModes() {
+    // ⚠ 미연결 확인 — 켜 두는 토글. 배타적 모드가 아니라 어느 모드에서든 켤 수 있다.
+    document.getElementById("btnCheckTerm").addEventListener("click", toggleCheckTerminals);
     document.getElementById("modeSelect").addEventListener("click", function () { setMode("select"); });
     document.getElementById("modeWire").addEventListener("click", function () { setMode("wire"); });
     document.getElementById("modeLabel").addEventListener("click", function () { setMode("label"); });
