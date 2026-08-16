@@ -3,12 +3,15 @@ var WE = window.WE || {};
 window.WE = WE;
 
 WE.model = (function () {
+  // 기본 배선 팔레트 — 검정·빨강·파랑·초록·노랑.
+  // label 은 인쇄물 범례에 쓰인다. 라벨이 빈 색은 범례에서 자동으로 빠지므로(app.legendItems),
+  // 전기적 의미를 함부로 정하기 어려운 색은 비워 두고 사용자가 팔레트 관리에서 붙이게 한다.
   var DEFAULT_PALETTE = [   // 색상 + 의미(범례에 사용)
-    { color: "#e53935", label: WE.i18n.t("+ (전원)") },
     { color: "#111111", label: "GND" },
-    { color: "#ffffff", label: WE.i18n.t("중성") },
-    { color: "#fbc02d", label: WE.i18n.t("신호") },
-    { color: "#0000ff", label: WE.i18n.t("통신 (I2C 등)") }
+    { color: "#e53935", label: WE.i18n.t("+ (전원)") },
+    { color: "#0000ff", label: WE.i18n.t("통신 (I2C 등)") },
+    { color: "#43a047", label: WE.i18n.t("신호") },
+    { color: "#fbc02d", label: "" }
   ];
   // 문서 고유 id — 자동저장 슬롯을 문서별로 나누는 열쇠.
   // 예전엔 슬롯이 주소(pathname)당 1개뿐이라 탭 두 개로 서로 다른 도면을 그리면 3초마다 서로 덮어썼다.
@@ -279,7 +282,9 @@ WE.model = (function () {
 
   // UI 상태 (비직렬화)
   var ui = {
-    lockAspect: false,
+    // 비율 고정은 기본으로 켜 둔다 — 부품 사진은 비율이 틀어지면 그 순간 못 쓰는 그림이 된다.
+    // 일부러 찌그러뜨릴 일은 드물어서, 필요한 사람만 끄는 편이 사고가 적다.
+    lockAspect: true,
     mode: "select",            // 'select' | 'wire'
     selectedTerminalId: null,
     wireColor: "#e53935",      // 새 배선에 적용할 색
@@ -388,6 +393,10 @@ WE.model = (function () {
       to: toRef,
       color: color || ui.wireColor,
       width: width || ui.wireWidth,
+      // 배선 모양(직각/직선)은 '그릴 때' 정해져 배선에 남는다.
+      // 예전에는 화면 설정 하나를 렌더할 때마다 읽어서, 스위치를 넘기면 이미 그려 둔 배선까지
+      // 전부 다시 계산됐다. 도면이 '보는 사람의 설정'에 따라 달라지는 문제도 같이 있었다.
+      routing: ui.wireRouting,
       // 새 배선은 '겹침 허용'이 기본. 그린 자리에 그대로 있는 편이 낫다는 판단 —
       // 자동 회피가 켜져 있으면 옆 선을 피해 멋대로 옮겨 가서, 매번 다시 잡아 줘야 했다.
       // 겹치는 건 눈에 보이니 필요할 때 속성 패널에서 끄고 정렬로 정리하면 된다.
@@ -499,7 +508,13 @@ WE.model = (function () {
       (s.components || []).forEach(function (c) {
         scan(c.id); (c.terminals || []).forEach(function (t) { scan(t.id); });
       });
-      (s.wires || []).forEach(function (w) { scan(w.id); });
+      (s.wires || []).forEach(function (w) {
+        scan(w.id);
+        // 예전 파일에는 배선 모양이 없다. 지금 화면에 보이던 모양(= 현재 기본 설정)을 그대로 찍어 둔다.
+        // 이렇게 해야 '옛 파일을 열었더니 그림이 바뀐다'는 일이 없다 — 여는 순간의 모양은 그대로고,
+        // 그 뒤로만 배선마다 자기 모양을 지킨다.
+        if (w.routing !== "ortho" && w.routing !== "straight") w.routing = ui.wireRouting;
+      });
       (s.annotations || []).forEach(function (a) { scan(a.id); });
     });
     _idCounter = maxN + 1;

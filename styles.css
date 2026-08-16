@@ -169,9 +169,31 @@ body { display: flex; flex-direction: column; }
 }
 #projName:focus { outline: 1px solid #1e88e5; }
 .tb-group { display: flex; align-items: center; gap: 6px; flex: none; }
+/* 배선 모양 고르기 — 선 그림을 그대로 보여주는 두 칸짜리 버튼.
+   현재 값이 눌린 모양으로 보이므로 글자를 읽지 않아도 지금 무엇인지 안다. */
+.seg-btns { display: flex; flex: none; }
+#toolbar .seg-btns .seg-btn {
+  padding: 3px 8px; border-radius: 0; margin: 0;
+  display: flex; align-items: center;
+}
+#toolbar .seg-btns .seg-btn:first-child { border-radius: var(--r) 0 0 var(--r); }
+#toolbar .seg-btns .seg-btn:last-child { border-radius: 0 var(--r) var(--r) 0; margin-left: -1px; }
+.seg-btns .seg-btn svg { width: 20px; height: 14px; display: block; }
+.seg-btns .seg-btn svg path { fill: none; stroke: #cfd6df; stroke-width: 2; stroke-linecap: square; }
+#toolbar .seg-btns .seg-btn.active { background: var(--primary); border-color: var(--primary-d); z-index: 1; }
+.seg-btns .seg-btn.active svg path { stroke: #fff; }
 .tb-spacer { flex: 1 1 auto; min-width: 12px; }
 .tb-divider { flex: none; width: 1px; align-self: stretch; margin: 2px 4px; background: #454b55; }
-.hint { color: #9fb4c9; font-size: 12px; }
+/* 상태 안내는 한 줄을 넘지 않는다.
+   flex-basis 를 0 으로 두는 게 핵심 — .tb-row 는 flex-wrap 이라, 안내문이 길면
+   글자가 줄바꿈되는 게 아니라 안내문 자체가 통째로 다음 줄로 접혀 툴바가 두 줄이 된다.
+   기준 폭을 0 으로 두면 언제나 같은 줄에 남고, 남는 공간만큼만 차지한 뒤 넘치면 …으로 줄인다.
+   잘린 전체 문장은 마우스를 올리면 title 로 볼 수 있다(app.js setHint). */
+.hint {
+  color: #9fb4c9; font-size: 12px;
+  flex: 1 1 0; min-width: 0; text-align: right;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
 .hint.hint-save { font-size: 10px; color: #4a8a5a; }
 #toolbar button {
   background: #3d434d; color: #eee; border: 1px solid #555;
@@ -182,6 +204,12 @@ body { display: flex; flex-direction: column; }
 #toolbar button:hover { background: #4a515c; }
 .chk { display: flex; align-items: center; gap: 4px; cursor: pointer; }
 .tb-label { color: #9fb4c9; font-size: 12px; }
+/* 한 그룹 안에서 성격이 다른 묶음을 가르는 옅은 선.
+   그룹끼리 가르는 .tb-divider 보다 약해야 '그룹 안의 구분'으로 읽힌다. */
+.tb-sep {
+  flex: none; width: 1px; align-self: stretch;
+  margin: 3px 3px 3px 7px; background: #3c424b;
+}
 .tb-group.modes button.mode { padding: 5px 12px; }
 .tb-group.modes button.mode.active {
   background: #1e88e5; border-color: #64b5f6; color: #fff; font-weight: 700;
@@ -241,18 +269,25 @@ body.note-open .canvas-corner-tools { bottom: 131px; }
 .panel-help-btn:hover { background: var(--bg3, #f2f5f8); }
 .qcp-swatches { display: flex; flex-wrap: wrap; gap: 6px; max-width: 180px; }
 .qcp-swatches .swatch { width: 28px; height: 28px; border-radius: 6px; }
-#wireWidthSel, #wireRoutingSel { background: #3d434d; color: #eee; border: 1px solid #555; border-radius: 4px; padding: 3px; }
+#wireWidthSel { background: #3d434d; color: #eee; border: 1px solid #555; border-radius: 4px; padding: 3px; }
 
 /* 다중 선택 정렬 */
 #alignCount { margin-bottom: 8px; font-weight: 600; color: #1e88e5; }
 .align-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+/* 속성창이 180px 로 좁아지면서 아이콘·여백이 글자 자리를 다 먹어 이름이 두 줄로 접혔다.
+   (실측: 버튼 76px 중 글자에 남는 폭이 26px 뿐 — '맨 아래'는 45px 이 필요하다)
+   여백·아이콘·글꼴을 조금씩 줄여 세 글자가 한 줄에 들어갈 만큼(약 44px) 자리를 만든다. */
 .align-btn {
-  display: flex; align-items: center; gap: 8px;
-  padding: 7px 9px; border: 1px solid #ccc; border-radius: 8px;
-  background: #fff; cursor: pointer; font-size: 13px; color: #333;
+  display: flex; align-items: center; gap: 4px;
+  padding: 7px 5px; border: 1px solid #ccc; border-radius: 8px;
+  background: #fff; cursor: pointer; font-size: 12px; color: #333;
 }
 .align-btn:hover { background: #eef4fb; border-color: #1e88e5; }
-.align-btn svg { width: 22px; height: 22px; flex: none; }
+.align-btn svg { width: 18px; height: 18px; flex: none; }
+/* 한글은 기본이 '글자 단위' 줄바꿈이라 네 글자 이름이 '가로 균 / 등' 처럼 낱말 가운데서 잘렸다.
+   keep-all 은 띄어쓰기에서만 줄을 바꾼다 → '가로 / 균등'. 줄바꿈 위치를 마크업에 박지 않아도 되고,
+   번역문(길이가 다른 영어 등)에도 같은 규칙이 그대로 적용된다. */
+.align-btn span { word-break: keep-all; text-align: center; }
 .align-btn svg line { stroke: #555; stroke-width: 1.6; stroke-linecap: round; }
 .align-btn svg rect { fill: #9db4d6; }
 .align-btn:hover svg rect { fill: #1e88e5; }
@@ -326,7 +361,8 @@ body.label-mode #canvas, body.label-mode #canvas * { cursor: copy !important; } 
 #leftPanel { width: 240px; display: flex; flex-direction: column; overflow: hidden; position: relative; }
 /* 이미지 파일을 라이브러리 패널로 드래그해서 놓을 때 시각 피드백 */
 #leftPanel.lib-dragover { outline: 2px dashed var(--primary); outline-offset: -2px; background: var(--primary-bg); }
-#rightPanel { width: 260px; display: flex; flex-direction: column; gap: 12px; }
+/* 속성창은 값을 읽고 고치는 곳이라 넓을 필요가 없다. 넓힌 만큼 도면 공간을 뺏는다. */
+#rightPanel { width: 180px; display: flex; flex-direction: column; gap: 12px; }
 #leftPanel h3, #rightPanel h3 { margin: 0 0 8px; font-size: var(--fs-lg); }
 
 /* 라이브러리 */
@@ -694,6 +730,64 @@ body.panning #canvas, body.panning #canvas * { cursor: grabbing !important; }
 .row2 { display: flex; gap: 8px; }
 .row2 label, .row2 button { flex: 1; }
 
+/* ---- 속성 패널의 2열 격자 (크기·회전·위치) ----
+   모든 숫자 줄을 같은 격자에 얹는다. 행마다 폭이 제각각이면 '기준이 없어' 보인다.
+   보조 조작기(비율 고정)는 섹션 머리줄로 올렸으므로 모든 줄이 순수 2열이고, 세로줄이 전부 맞는다. */
+.g-row { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp2); align-items: center; }
+/* 격자 항목의 '자동 최소 폭'은 내용 크기라서, 1fr 이어도 칸이 내용만큼 벌어져 패널 밖으로 넘친다.
+   (실측: 담는 폭 223px 인데 열이 200+198px 로 잡혀 오른쪽이 잘렸다) min-width:0 이 그걸 푼다. */
+.g-row > * { min-width: 0; }
+.g-row > button { justify-self: stretch; }
+
+/* 숫자 칸 — 라벨을 칸 '안'에 접두사로 넣어 라벨 줄을 없앴다.
+   접두사를 absolute 로 얹지 않고 flex 형제로 두는 이유: 접두사(12px)와 입력(13px)은 글꼴 크기가 달라
+   상자를 가운데 맞춰도 글자가 앉는 기준선이 어긋난다(실측 상자 오차 0px, 그래도 글자는 어긋나 보였다).
+   align-items: baseline 으로 두 글자의 기준선을 직접 맞춘다. 테두리는 칸 전체가 지고, 입력은 알맹이만 맡는다. */
+.f-num {
+  display: flex; align-items: baseline; gap: 5px;
+  padding: 4px 7px; background: var(--bg);
+  border: 1px solid var(--bd); border-radius: var(--r);
+}
+.f-num:focus-within { outline: 2px solid var(--primary); outline-offset: -1px; }
+.f-num .f-pre, .f-num .f-suf { flex: none; color: var(--tx3); font-size: var(--fs-sm); }
+.f-num .f-suf { margin-left: auto; }
+/* #propBody input 의 테두리·여백을 걷어낸다 — 이제 칸(.f-num)이 그 역할을 한다 */
+#propBody .f-num input {
+  flex: 1 1 auto; min-width: 0; width: auto;
+  border: 0; background: none; padding: 0; margin: 0; outline: none; border-radius: 0;
+}
+
+/* 켜고 끄는 글자 단추 (비율 고정 등).
+   체크박스를 그대로 두고(스크립트는 .checked 를 계속 쓴다) 옆의 span 을 단추처럼 보이게 한다.
+   :has() 를 쓰지 않는 이유는 오래된 브라우저에서도 눌린 상태가 보여야 하기 때문이다. */
+.t-btn { display: inline-block; cursor: pointer; margin: 0; line-height: 1; }
+.t-btn input { position: absolute; opacity: 0; width: 0; height: 0; }
+.t-btn span {
+  display: inline-flex; align-items: center; justify-content: center;
+  padding: 5px 8px; border: 1px solid var(--bd); border-radius: var(--r);
+  background: var(--bg); color: var(--tx2); font-size: var(--fs-sm); white-space: nowrap;
+}
+.t-btn:hover span { background: var(--bg3); }
+.t-btn input:checked + span { background: var(--primary); border-color: var(--primary-d); color: #fff; }
+.t-btn input:focus-visible + span { outline: 2px solid var(--primary); outline-offset: 1px; }
+
+/* 섹션 머리줄 — 제목(왼쪽) + 그 섹션 전체에 걸리는 설정(오른쪽) */
+.p-sec-head {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--sp3);
+  margin-bottom: var(--sp3);   /* 제목이 갖고 있던 아래 여백을 머리줄이 대신 진다 */
+}
+.p-sec-head .p-sec-title { margin: 0; }
+/* 머리줄에 들어가는 작은 토글 — 제목보다 튀면 안 된다 */
+.t-btn.t-mini span { padding: 3px 7px; gap: 4px; }
+.t-btn.t-mini svg { width: 13px; height: 13px; flex: none; }
+.t-btn.t-mini svg path, .t-btn.t-mini svg rect {
+  fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round;
+}
+/* 꺼짐 = 열린 자물쇠 / 켜짐 = 닫힌 자물쇠 */
+.t-btn .lk-closed { display: none; }
+.t-btn input:checked + span .lk-open { display: none; }
+.t-btn input:checked + span .lk-closed { display: inline; }
+
 /* ---- 패널 섹션 (그룹핑) ----
    근접성 원칙: 그룹 '안쪽' 간격보다 그룹 '사이' 간격이 커야 묶여 보인다.
    안 6~8px / 사이 16px + 옅은 선. 예전엔 전부 같은 간격이라 어디까지가 한 묶음인지
@@ -788,6 +882,25 @@ body.panning #canvas, body.panning #canvas * { cursor: grabbing !important; }
   fill: #7e8b99; opacity: .10;
   pointer-events: none; user-select: none;
 }
+/* 작업창 각인 — 화면 캡처에도 남는 표식.
+   출력물 워터마크(#layerWatermark·#pageWatermark)와 역할이 다르다:
+   저건 '결과물에 찍는 서명'이고 이건 '작업 화면에 늘 있는 로고'다.
+   그래서 작업을 방해하지 않을 만큼 옅게, 대신 캡처에서 알아볼 만큼은 진하게 둔다.
+   도면 우하단에 두되, 같은 자리를 쓰는 확대·축소 버튼과 겹치면 스크립트가 위로 비켜 준다. */
+#canvasMark {
+  position: absolute; right: 28px; bottom: 77px; z-index: 40;
+  font: 700 19px "Segoe UI", "Malgun Gothic", sans-serif;
+  letter-spacing: .10em;
+  color: #5a6675; opacity: .30;
+  pointer-events: none; user-select: none; white-space: nowrap;
+  /* 어두운 부품 사진 위에 걸쳐도 형태가 남도록 밝은 테두리를 깔아 둔다 */
+  text-shadow: 0 1px 0 rgba(255,255,255,.55), 0 -1px 0 rgba(255,255,255,.35);
+}
+/* 위 right·bottom 은 스크립트가 자리를 잡기 전의 초기값일 뿐이다 — 실제 위치는 app.js 의
+   syncCanvasMark() 가 '보이는 도면'에 맞춰 매번 다시 넣는다. */
+/* 인쇄에는 이미 페이지 워터마크가 있다 — 여기까지 나오면 같은 표시가 두 번이다 */
+@media print { #canvasMark { display: none !important; } }
+
 /* 작업 중에는 워터마크 숨김 — PDF 저장(인쇄) 시에만 나타남 (아래 @media print에서 복원) */
 #layerWatermark { display: none; }
 /* 인쇄용 페이지 워터마크 — 화면에선 항상 숨김 */

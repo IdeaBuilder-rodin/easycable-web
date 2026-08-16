@@ -499,7 +499,10 @@ WE.geometry = (function () {
     }
     // 분기 끝점은 '어느 면에서 나가는가'가 없어 orthoStub를 못 쓴다 → 단순 직각 경로
     if (A.branch || B.branch) return { pts: orthogonalize([A.pos, B.pos]), auto: false };
-    if (WE.model.ui.wireRouting === "ortho") return { pts: simplify(orthoStub(A, B, wire)), auto: true };
+    // 모양은 배선이 들고 있는 값을 쓴다. 값이 없는 건 이 세션에서 갓 만들어진 배선뿐이라
+    // (파일을 열 때 model.loadProject 가 전부 도장을 찍는다) 그때만 현재 기본값으로 본다.
+    var routing = wire.routing || WE.model.ui.wireRouting;
+    if (routing === "ortho") return { pts: simplify(orthoStub(A, B, wire)), auto: true };
     return { pts: [A.pos, B.pos], auto: false };
   }
   // 캐시를 거치지 않고 지금 계산 (분기 해석 도중에 쓰인다)

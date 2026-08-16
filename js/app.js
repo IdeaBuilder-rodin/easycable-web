@@ -47,6 +47,7 @@ WE.app = (function () {
     bindDatasheetViewer();
     bindResizers();
     bindZoom();
+    bindCanvasMark();
     bindAlign();
     bindSettings();
     bindModalBackdrops();
@@ -62,7 +63,7 @@ WE.app = (function () {
     loadSettings();
     loadWireSettings();
     document.getElementById("wireWidthSel").value = String(WE.model.ui.wireWidth);
-    document.getElementById("wireRoutingSel").value = WE.model.ui.wireRouting;
+    syncWireRoutingBtns();
     renderPalette();
     WE.render.renderAll();
     refreshProps();
@@ -123,7 +124,7 @@ WE.app = (function () {
               }
               finish();
               if (othersBusy) {
-                setHint(WE.i18n.t("다른 탭에서 편집 중인 작업이 있어 새 배선도로 시작했습니다. (☰ → 최근 작업)"));
+                setHint(WE.i18n.t("새 배선도로 시작했습니다."), WE.i18n.t("다른 탭에서 편집 중인 작업이 있어 새 배선도로 시작했습니다. (☰ → 최근 작업)"));
               }
             });
           }
@@ -185,7 +186,7 @@ WE.app = (function () {
     document.getElementById("restoreBannerNew").addEventListener("click", function () {
       hideRestoreBanner();
       startNewProject();
-      setHint(WE.i18n.t("새 배선도로 시작했습니다. 이전 작업은 ☰ 메뉴 → 최근 작업에서 이어서 열 수 있습니다."));
+      setHint(WE.i18n.t("새 배선도로 시작했습니다."), WE.i18n.t("새 배선도로 시작했습니다. 이전 작업은 ☰ 메뉴 → 최근 작업에서 이어서 열 수 있습니다."));
     });
   }
 
@@ -1476,6 +1477,7 @@ WE.app = (function () {
     if (view === "bom") { renderBOMView(); wrap.scrollTo({ top: bom.offsetTop - 8, behavior: "smooth" }); }
     else if (view === "wirelist") { renderWireListView(); wrap.scrollTo({ top: wl.offsetTop - 8, behavior: "smooth" }); }
     else { wrap.scrollTo({ top: 0, behavior: "smooth" }); }   // 배선도만
+    syncCanvasMark();   // 각인은 배선도를 볼 때만 나온다
   }
   // ---- 미연결 단자 확인 ----
   // 켜 두면 배선을 이을 때마다 빨간 표시가 하나씩 사라진다 — 고치면서 바로 확인이 된다.
@@ -2209,7 +2211,7 @@ WE.app = (function () {
     document.getElementById("btnNew").addEventListener("click", function () {
       if (!confirm(WE.i18n.t("현재 작업을 비우고 새 프로젝트를 시작할까요?\n(지금 작업은 ☰ → 최근 작업에서 다시 열 수 있습니다)"))) return;
       startNewProject();
-      setHint(WE.i18n.t("새 배선도로 시작했습니다. 이전 작업은 ☰ 메뉴 → 최근 작업에서 이어서 열 수 있습니다."));
+      setHint(WE.i18n.t("새 배선도로 시작했습니다."), WE.i18n.t("새 배선도로 시작했습니다. 이전 작업은 ☰ 메뉴 → 최근 작업에서 이어서 열 수 있습니다."));
     });
     document.getElementById("btnUndo").addEventListener("click", function () { WE.history.doUndo(); });
     document.getElementById("btnRedo").addEventListener("click", function () { WE.history.doRedo(); });
@@ -2236,11 +2238,19 @@ WE.app = (function () {
     document.body.classList.toggle("label-mode", mode === "label");
     if (WE.render.setLabelPreview) WE.render.setLabelPreview(null);   // 모드 전환 시 미리보기 정리
     if (mode !== "select") { WE.model.clearSelection(); WE.render.renderOverlay(); refreshProps(); }
-    setHint(
-      mode === "wire" ? WE.i18n.t("단자·기존 배선 어디서든 시작해 다른 단자나 배선에서 끝냅니다. 중간에 빈 곳을 클릭하면 수평·수직으로 꺾입니다. (Esc·우클릭: 취소 · Backspace: 한 점 무르기)") :
-      mode === "text" ? WE.i18n.t("캔버스를 클릭해 텍스트를 추가하세요. (더블클릭으로 편집)") :
-      mode === "label" ? WE.i18n.t("라벨을 붙일 배선을 클릭하세요. 번호는 자동으로 매겨집니다. (더블클릭: 수정)") : ""
-    );
+    // 짧은 안내를 보여주고, 원래의 자세한 설명은 툴팁으로 남긴다
+    if (mode === "wire") {
+      setHint(WE.i18n.t("단자나 배선을 클릭해 시작하세요."),
+        WE.i18n.t("단자·기존 배선 어디서든 시작해 다른 단자나 배선에서 끝냅니다. 중간에 빈 곳을 클릭하면 수평·수직으로 꺾입니다. (Esc·우클릭: 취소 · Backspace: 한 점 무르기)"));
+    } else if (mode === "text") {
+      setHint(WE.i18n.t("캔버스를 클릭해 텍스트를 추가하세요."),
+        WE.i18n.t("캔버스를 클릭해 텍스트를 추가하세요. (더블클릭으로 편집)"));
+    } else if (mode === "label") {
+      setHint(WE.i18n.t("라벨을 붙일 배선을 클릭하세요."),
+        WE.i18n.t("라벨을 붙일 배선을 클릭하세요. 번호는 자동으로 매겨집니다. (더블클릭: 수정)"));
+    } else {
+      setHint("");
+    }
   }
 
   // 다음 자동 라벨 번호: 사용자가 마지막에 쓴 접두사(W/B/C 등)를 이어감 — "B3"까지 썼으면 "B4"
@@ -2293,6 +2303,58 @@ WE.app = (function () {
     updateZoomLabel();
   }
   function zoomBy(f, x, y) { setZoom(_zoom * f, x, y); }
+
+  // 작업창 각인을 '보이는 도면의 좌하단'에 붙여 둔다.
+  // 회색 여백에 두면 창 전체를 캡처할 때만 남고 도면만 잘라내면 사라진다 — 그래서 흰 도면 위에 얹는다.
+  // 도면이 확대·스크롤로 화면 밖까지 나가면 보이는 부분 기준으로 자리를 잡아 늘 화면 안에 남는다.
+  function syncCanvasMark() {
+    var mark = document.getElementById("canvasMark");
+    var canvas = document.getElementById("canvas"), wrap = document.getElementById("canvasWrap");
+    if (!mark || !canvas || !wrap) return;
+    // BOM·배선 리스트는 같은 스크롤 영역 안에서 도면 아래에 붙는다. 도면이 화면에 조금 남아 있어도
+    // 그때는 '작업창'이 아니므로, 겹침을 재지 말고 현재 보고 있는 뷰로 판단한다.
+    if (canvas.hidden || _view !== "wiring") { mark.style.display = "none"; return; }
+    mark.style.display = "";
+    var c = canvas.getBoundingClientRect(), w = wrap.getBoundingClientRect(), p = wrap.offsetParent;
+    var base = p ? p.getBoundingClientRect() : { left: 0, bottom: window.innerHeight };
+    // 도면과 작업창이 겹치는 부분 = 지금 실제로 보이는 도면
+    var left = Math.max(c.left, w.left), right = Math.min(c.right, w.right);
+    var bottom = Math.min(c.bottom, w.bottom), top = Math.max(c.top, w.top);
+    if (right - left < 60 || bottom - top < 30) { mark.style.display = "none"; return; }
+    var PAD = 12;
+    var btm = Math.round(base.bottom - bottom + PAD);
+    mark.style.right = Math.round(base.right - right + PAD) + "px";
+    mark.style.bottom = btm + "px";
+
+    // 확대하면 도면이 작업창을 꽉 채워 각인이 확대·축소 버튼과 같은 자리에 놓인다.
+    // 그때는 버튼 위로 비켜 준다 — 도구가 각인에 가려지면 안 되니까.
+    var tools = document.querySelector(".canvas-corner-tools");
+    if (tools) {
+      var m = mark.getBoundingClientRect(), t = tools.getBoundingClientRect();
+      if (m.right > t.left - 8 && m.left < t.right + 8 && m.bottom > t.top - 4 && m.top < t.bottom + 4) {
+        mark.style.bottom = Math.round(base.bottom - t.top + 10) + "px";
+      }
+    }
+  }
+  function bindCanvasMark() {
+    var wrap = document.getElementById("canvasWrap"), canvas = document.getElementById("canvas");
+    if (!wrap || !canvas) return;
+    var queued = false;
+    function ping() {
+      if (queued) return;                       // 스크롤 중 매 프레임 계산하지 않도록 묶는다
+      queued = true;
+      requestAnimationFrame(function () { queued = false; syncCanvasMark(); });
+    }
+    wrap.addEventListener("scroll", ping);
+    window.addEventListener("resize", ping);
+    // 확대·축소는 canvas 의 width/height 를, 비고 바 펼침은 wrap 의 높이를 바꾼다.
+    // 크기 변화를 직접 보면 각 기능의 구현을 몰라도 자리를 맞출 수 있다.
+    if (window.ResizeObserver) {
+      var ro = new ResizeObserver(ping);
+      ro.observe(canvas); ro.observe(wrap);
+    }
+    syncCanvasMark();
+  }
   function fitZoom() {
     var wrap = document.getElementById("canvasWrap");
     var z = Math.min((wrap.clientWidth - 60) / 1600, (wrap.clientHeight - 60) / 900);
@@ -2321,14 +2383,23 @@ WE.app = (function () {
     ["leftPanel", "rightPanel"].forEach(function (id) { defaultPanelWidth(id); });
     setupResizer("resizerLeft", "leftPanel", 1);
     setupResizer("resizerRight", "rightPanel", -1);
-    // 저장된 너비 복원
+    // 저장된 너비 복원 — 한계 밖의 옛 값은 한계 안으로 당겨 넣는다.
+    // (한계를 좁힌 뒤에도 예전에 저장해 둔 넓은 값이 그대로 살아나면 제한이 무의미해진다)
     ["leftPanel", "rightPanel"].forEach(function (id) {
       try {
-        var w = localStorage.getItem("we_" + id + "W");
-        if (w) document.getElementById(id).style.width = w;
+        var w = parseFloat(localStorage.getItem("we_" + id + "W"));
+        if (!(w > 0)) return;
+        var lim = PANEL_LIMIT[id];
+        document.getElementById(id).style.width = Math.max(lim.min, Math.min(lim.max, w)) + "px";
       } catch (e) { /* 무시 */ }
     });
   }
+  // 패널별 너비 한계. 속성창은 값 확인·수정용이라 넓힐 이유가 없고,
+  // 라이브러리는 부품 이름이 길어 조금 더 여유를 준다.
+  var PANEL_LIMIT = {
+    leftPanel: { min: 160, max: 420 },
+    rightPanel: { min: 150, max: 300 }
+  };
   function setupResizer(resId, panelId, dir) {
     var res = document.getElementById(resId), panel = document.getElementById(panelId);
     var startX = 0, startW = 0, dragging = false, moved = false;
@@ -2341,7 +2412,8 @@ WE.app = (function () {
     window.addEventListener("pointermove", function (e) {
       if (!dragging) return;
       if (Math.abs(e.clientX - startX) > 2) moved = true;
-      var w = Math.max(140, Math.min(640, startW + (e.clientX - startX) * dir));
+      var lim = PANEL_LIMIT[panelId];
+      var w = Math.max(lim.min, Math.min(lim.max, startW + (e.clientX - startX) * dir));
       panel.style.width = w + "px";
     });
     window.addEventListener("pointerup", function (e) {
@@ -2712,17 +2784,28 @@ WE.app = (function () {
     }
   }
   // 인터랙션에서 호출: 단축키 처리(모드 전환). 처리하면 true
-  function handleShortcut(key) {
+  //
+  // 같은 모드 키를 다시 누르면 선택 모드로 돌아온다 — 배선·라벨·텍스트는 모두
+  // '잠깐 들어갔다 나오는' 모드라, 나올 때 다른 키를 찾지 않아도 되게 한 키로 왕복시킨다.
+  // 규칙은 모드 키 전체에 같이 적용한다(W만 되면 "왜 L은 안 되지"가 된다).
+  // 예외 둘:
+  //  - 선택 모드는 돌아갈 곳이 없으므로 토글하지 않는다.
+  //  - 배선을 그리는 중이면 토글하지 않는다(allowToggle=false). 다시 그리려고 누른 건데
+  //    그리던 배선이 사라지면 곤란하다. 그리던 것 취소는 Esc가 맡는다.
+  function handleShortcut(key, allowToggle) {
     key = (key || "").toLowerCase();
     if (!key) return false;
     for (var action in _shortcuts) {
-      if (_shortcuts[action] && _shortcuts[action] === key) {
-        if (action === "mode-select") { setMode("select"); closeQuickColorPicker(); }
-        else if (action === "mode-wire") { setMode("wire"); openQuickColorPicker(); }
-        else if (action === "mode-label") { setMode("label"); closeQuickColorPicker(); }
-        else if (action === "mode-text") { setMode("text"); closeQuickColorPicker(); }
-        return true;
-      }
+      if (!_shortcuts[action] || _shortcuts[action] !== key) continue;
+      if (action.indexOf("mode-") !== 0) continue;
+      var target = action.slice(5);                       // "select" | "wire" | "label" | "text"
+      if (allowToggle !== false && target !== "select" && WE.model.ui.mode === target) target = "select";
+      // 이미 그 모드면 아무것도 하지 않는다. setMode 는 안에서 resetWire() 를 부르므로
+      // 그냥 다시 설정하기만 해도 그리던 배선이 사라진다 — 배선 도중 W 를 눌렀을 때가 그 경우다.
+      if (target === WE.model.ui.mode) return true;
+      setMode(target);
+      if (target === "wire") openQuickColorPicker(); else closeQuickColorPicker();
+      return true;
     }
     return false;
   }
@@ -3067,10 +3150,35 @@ WE.app = (function () {
       WE.model.ui.wireWidth = v;
       saveWireSettings();
     });
-    document.getElementById("wireRoutingSel").addEventListener("change", function (e) {
-      WE.model.ui.wireRouting = e.target.value;
+    // 배선 모양 — 배선색과 완전히 같은 규칙으로 움직인다.
+    //   배선을 선택한 상태 → 그 배선들의 모양을 바꾼다
+    //   아무것도 선택 안 함 → 앞으로 그릴 배선의 기본값이 된다
+    // 예전처럼 이미 그려 둔 배선을 통째로 다시 계산하지 않는다.
+    document.getElementById("wireRouting").addEventListener("click", function (e) {
+      var b = e.target.closest(".seg-btn"); if (!b) return;
+      var mode = b.dataset.routing;
+      WE.model.ui.wireRouting = mode;
       saveWireSettings();
-      WE.render.renderWires(); WE.render.renderOverlay();
+
+      var ids = WE.model.getMultiWire();
+      if (!ids.length) {
+        var one = WE.model.getSelectedWire();
+        if (one) ids = [one.id];
+      }
+      if (ids.length) {
+        var manual = 0;
+        ids.forEach(function (id) {
+          var w = WE.model.getWire(id); if (!w) return;
+          w.routing = mode;
+          if (w.waypoints && w.waypoints.length) manual++;   // 꺾임점이 있으면 그 모양이 우선이라 티가 안 난다
+        });
+        if (WE.history) WE.history.commit();
+        WE.render.renderWires(); WE.render.renderOverlay();
+        // 아무 변화가 없어 보이는 경우를 말없이 넘기지 않는다
+        if (manual === ids.length) setHint(WE.i18n.t("꺾임점을 찍은 배선은 그 모양을 그대로 씁니다."));
+      }
+      syncWireRoutingBtns();
+      refreshProps();
     });
     document.getElementById("btnPaletteManage").addEventListener("click", openPaletteModal);
 
@@ -3108,6 +3216,9 @@ WE.app = (function () {
   // 배선색 팔레트를 '마지막 = 전역 기본값'으로 저장(BOM 레이아웃과 같은 패턴).
   // 프로젝트 자체는 새로고침 시 자동 복원 안 하도록 되어 있어서, 팔레트만 이렇게 별도로
   // 영구 저장해두지 않으면 사용자가 추가한 프리셋이 새로고침/새 작업마다 기본값으로 되돌아감.
+  // 이 열쇠는 '마지막으로 쓴 팔레트'다. 기본값을 바꿔도 이 열쇠는 절대 건드리지 않는다 —
+  // 이미 자기 팔레트를 맞춰 쓰던 사람의 설정을 초기화하는 셈이 되기 때문이다.
+  // 기본값 변경은 저장된 팔레트가 없는 사람(처음 쓰는 사람)에게만 적용된다.
   var PALETTE_KEY = "we_palette";
   function saveDefaultPalette() {
     try { localStorage.setItem(PALETTE_KEY, JSON.stringify(WE.model.project.palette)); } catch (e) { /* 무시 */ }
@@ -3119,6 +3230,26 @@ WE.app = (function () {
   function applyDefaultPaletteToProject() {
     var saved = loadDefaultPalette();
     if (saved && saved.length) WE.model.project.palette = saved;
+  }
+
+  // 현재 배선 모양을 버튼에 반영. 배선을 골라 뒀으면 '그 배선의 모양'을 보여 주는 게 맞다 —
+  // 그 상태에서 버튼을 누르면 바뀌는 대상이 그 배선이기 때문이다.
+  function syncWireRoutingBtns() {
+    var box = document.getElementById("wireRouting"); if (!box) return;
+    var mode = WE.model.ui.wireRouting;
+    var ids = WE.model.getMultiWire();
+    if (!ids.length) { var one = WE.model.getSelectedWire(); if (one) ids = [one.id]; }
+    if (ids.length) {
+      var first = WE.model.getWire(ids[0]);
+      var same = ids.every(function (id) {
+        var w = WE.model.getWire(id);
+        return w && (w.routing || mode) === (first.routing || mode);
+      });
+      if (same && first) mode = first.routing || mode;   // 섞여 있으면 기본값 표시를 유지
+    }
+    Array.prototype.forEach.call(box.querySelectorAll(".seg-btn"), function (b) {
+      b.classList.toggle("active", b.dataset.routing === mode);
+    });
   }
 
   function renderPalette() {
@@ -3434,7 +3565,7 @@ WE.app = (function () {
     var aPts = WE.geometry.wireRoutePoints(anchor); if (!aPts) return;
     // 기준선에서 옮길 수 있는 구간을 못 찾으면(단자에 물린 구간만 잡아 둔 경우 등) 아무것도 안 한다
     var aIdx = wireTargetSeg(anchor, aPts, null);
-    if (aIdx < 0) { setHint(WE.i18n.t("기준 배선에서 옮길 수 있는 구간을 찾지 못했습니다. 단자에 바로 붙은 구간은 옮길 수 없습니다.")); return; }
+    if (aIdx < 0) { setHint(WE.i18n.t("옮길 수 있는 구간이 없습니다."), WE.i18n.t("기준 배선에서 옮길 수 있는 구간을 찾지 못했습니다. 단자에 바로 붙은 구간은 옮길 수 없습니다.")); return; }
     var vertical = segIsVertical(aPts, aIdx);
     var C = vertical ? aPts[aIdx].x : aPts[aIdx].y;
     var gapEl = document.getElementById("wireGap");
@@ -4030,6 +4161,7 @@ WE.app = (function () {
   // 속성 패널을 현재 선택으로 갱신
   function refreshProps() {
     updateHistoryButtons();
+    syncWireRoutingBtns();   // 고른 배선이 바뀌면 모양 버튼도 그 배선 것을 가리켜야 한다
     var powerPanel = document.getElementById("powerPanel");
     powerPanel.hidden = true;   // 전력 요약은 기본(무선택) 상태에서만 표시
     var empty = document.getElementById("propEmpty");
@@ -4125,9 +4257,12 @@ WE.app = (function () {
     if (document.activeElement !== elm) elm.value = value;
   }
 
-  function setHint(text) {
+  // 상태 안내. 한 줄에 들어가는 짧은 문장만 보여주고, 자세한 설명은 full 로 받아 툴팁에 둔다.
+  // 툴바에 길게 늘어놓으면 줄이 접혀 화면이 흔들리고, 그러면 오히려 아무도 안 읽는다.
+  function setHint(text, full) {
     var h = document.getElementById("hint");
     h.textContent = text; h.classList.remove("hint-save");
+    h.title = full || text;   // 좁은 화면에서 …으로 잘렸을 때도 전체를 볼 수 있다
   }
   function pad2(n) { return (n < 10 ? "0" : "") + n; }
   // 저장 안내(날짜·시간, 작은 글씨)
@@ -4160,7 +4295,7 @@ WE.app = (function () {
     syncProjDate();
     syncProjNote();
     document.getElementById("wireWidthSel").value = String(WE.model.ui.wireWidth);
-    document.getElementById("wireRoutingSel").value = WE.model.ui.wireRouting;
+    syncWireRoutingBtns();
     relinkOrphanComponents();
     renderPalette();
     renderSheetTabs();          // 연 파일의 시트 구성으로 탭 줄을 다시 그린다

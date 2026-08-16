@@ -15,7 +15,7 @@
   <meta name="twitter:card" content="summary" />
   <link rel="canonical" href="https://easycable.co.kr/" />
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔌</text></svg>" />
-  <link rel="stylesheet" href="styles.css?v=189651dd" />
+  <link rel="stylesheet" href="styles.css?v=740bc8b0" />
   <!-- Google Analytics 4 (방문/재방문·사용 패턴 분석) -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-LN9RMMTF8M"></script>
   <script>
@@ -80,15 +80,32 @@
         <button id="modeLabel" class="mode" title="배선을 클릭해 라벨(수축튜브) 부착">▭ 라벨</button>
         <button id="modeText" class="mode" title="주석 텍스트 추가">T 텍스트</button>
       </div>
-      <div class="tb-group" id="paletteGroup" title="새 배선 색상">
+      <!-- 배선 속성 세 묶음: 색 · 두께 · 모양.
+           각 묶음은 [라벨 + 조작기]로 끝나고 사이를 옅은 선으로 가른다.
+           ⋯(팔레트 관리)는 '색'에 속하므로 반드시 색 견본 바로 뒤에 둔다 — 다른 묶음 뒤로 가면 소속이 헷갈린다. -->
+      <div class="tb-group" id="paletteGroup">
         <span class="tb-label">배선색</span>
         <div id="paletteSwatches"></div>
-        <input type="number" id="wireWidthSel" title="선 두께" min="1" max="30" step="1" value="2" style="width:44px" />
-        <select id="wireRoutingSel" title="배선 모양">
-          <option value="ortho">직각</option>
-          <option value="straight">직선</option>
-        </select>
-        <button id="btnPaletteManage" class="small" title="팔레트 관리">⋯</button>
+        <button id="btnPaletteManage" class="small" title="팔레트 관리 — 색과 의미(범례) 추가·수정">⋯</button>
+
+        <span class="tb-sep" aria-hidden="true"></span>
+        <span class="tb-label">두께</span>
+        <input type="number" id="wireWidthSel" title="선 두께 (px)" min="1" max="30" step="1" value="2" style="width:44px" />
+
+        <!-- 배선 모양 — 낱말보다 선 그림이 빠르게 읽힌다.
+             배선을 선택한 상태면 그 배선들의 모양이 바뀌고, 아니면 앞으로 그릴 기본값이 된다(배선색과 같은 규칙). -->
+        <span class="tb-sep" aria-hidden="true"></span>
+        <span class="tb-label">배선모양</span>
+        <div id="wireRouting" class="seg-btns">
+          <button type="button" class="seg-btn" data-routing="ortho"
+                  title="직각 — 가로·세로로만 꺾어 그립니다 (제어반 도면에서 읽기 쉬운 모양)">
+            <svg viewBox="0 0 20 14" aria-hidden="true"><path d="M2 12 L2 4 L18 4" /></svg>
+          </button>
+          <button type="button" class="seg-btn" data-routing="straight"
+                  title="직선 — 두 점을 곧장 잇습니다 (짧고 단순한 연결에 알맞습니다)">
+            <svg viewBox="0 0 20 14" aria-hidden="true"><path d="M2 12 L18 3" /></svg>
+          </button>
+        </div>
       </div>
       <div class="tb-group">
         <label class="chk"><input type="checkbox" id="chkGrid" checked /> 그리드</label>
@@ -223,6 +240,12 @@
       <!-- 단자 마우스오버 시 이름 표시(빠른 커스텀 툴팁) -->
       <div id="termTooltip" class="term-tooltip" hidden></div>
 
+      <!-- 작업창 각인 — 화면을 그대로 캡처해도 남는 표식. 스크롤·확대와 무관하게 좌하단 고정.
+           SVG 바깥(centerCol 기준)에 두는 이유: PNG 내보내기는 #layerWatermark,
+           인쇄는 #pageWatermark 로 각자 워터마크가 따로 있어서
+           캔버스 안에 넣으면 같은 자리에 두 번 찍힌다. -->
+      <div id="canvasMark" aria-hidden="true">EASYCABLE</div>
+
       <div class="canvas-corner-tools">
         <div class="canvas-float-controls" title="실행 취소 (Ctrl+Z) / 다시 실행 (Ctrl+Shift+Z)">
           <button id="btnUndo" title="실행 취소 (Ctrl+Z)" disabled>↶</button>
@@ -319,11 +342,11 @@
             <button class="align-btn" data-align="left" title="왼쪽 정렬">
               <svg viewBox="0 0 24 24"><line x1="5" y1="4" x2="5" y2="20"/><rect x="5" y="7" width="12" height="4"/><rect x="5" y="14" width="7" height="4"/></svg><span>왼쪽</span>
             </button>
-            <button class="align-btn" data-align="centerY" title="세로 가운데 정렬 (부품이 위아래로 움직입니다)">
-              <svg viewBox="0 0 24 24"><line x1="4" y1="12" x2="20" y2="12"/><rect x="7" y="6" width="4" height="12"/><rect x="14" y="8" width="4" height="8"/></svg><span>가운데</span>
+            <button class="align-btn" data-align="centerY" title="가로 가운데 정렬 — 부품이 위아래로 움직여 하나의 가로선에 나란히 섭니다">
+              <svg viewBox="0 0 24 24"><line x1="4" y1="12" x2="20" y2="12"/><rect x="7" y="6" width="4" height="12"/><rect x="14" y="8" width="4" height="8"/></svg><span>가로</span>
             </button>
-            <button class="align-btn" data-align="centerX" title="가로 가운데 정렬 (부품이 좌우로 움직입니다)">
-              <svg viewBox="0 0 24 24"><line x1="12" y1="4" x2="12" y2="20"/><rect x="6" y="7" width="12" height="4"/><rect x="8" y="14" width="8" height="4"/></svg><span>가운데</span>
+            <button class="align-btn" data-align="centerX" title="세로 가운데 정렬 — 부품이 좌우로 움직여 하나의 세로선에 나란히 섭니다">
+              <svg viewBox="0 0 24 24"><line x1="12" y1="4" x2="12" y2="20"/><rect x="6" y="7" width="12" height="4"/><rect x="8" y="14" width="8" height="4"/></svg><span>세로</span>
             </button>
             <button class="align-btn" data-align="bottom" title="맨 아래 정렬">
               <svg viewBox="0 0 24 24"><line x1="4" y1="19" x2="20" y2="19"/><rect x="7" y="7" width="4" height="12"/><rect x="14" y="12" width="4" height="7"/></svg><span>맨 아래</span>
@@ -434,15 +457,38 @@
             <input type="text" id="propName" />
           </label>
 
+          <!-- 크기·회전·위치는 모두 같은 2열 격자(.g-row)에 얹는다.
+               행마다 폭이 제각각이면 기준이 없어 보인다 — 세로로 줄이 맞아야 패널이 정돈돼 보인다.
+               라벨(W/H/X/Y)은 칸 '안'에 접두사로 넣어 라벨 줄을 없앴다(피그마 방식).
+               비율 고정은 W·H '사이'가 아니라 행의 오른쪽 끝이다. 사이에 두면 무엇을 묶는지도 안 보이고
+               두 칸을 갈라놓기만 한다. -->
           <div class="p-sec">
-            <div class="p-sec-title">크기</div>
-            <div class="row2">
-              <label>너비 <input type="number" id="propW" min="10" /></label>
-              <label>높이 <input type="number" id="propH" min="10" /></label>
+            <!-- 비율 고정은 W·H 두 칸 모두에 걸리는 설정이라 섹션 머리줄 오른쪽에 둔다.
+                 칸 사이에 끼우면 무엇을 묶는지도 안 보이고 두 칸을 갈라놓기만 한다.
+                 자물쇠 그림만으로는 '가로세로 비율'인지 알 수 없어서 글자를 함께 둔다. -->
+            <div class="p-sec-head">
+              <div class="p-sec-title">크기</div>
+              <label class="t-btn t-mini" title="가로·세로 비율 유지 — 켜 두면 한쪽을 바꿀 때 다른 쪽이 같은 비율로 따라옵니다">
+                <input type="checkbox" id="propLockAspect" />
+                <span>
+                  <svg viewBox="0 0 16 16" aria-hidden="true">
+                    <path class="lk-open" d="M5.6 7.4V4.9a2.4 2.4 0 0 1 4.8 0" />
+                    <path class="lk-closed" d="M5.6 7.4V4.9a2.4 2.4 0 0 1 4.8 0v2.5" />
+                    <rect class="lk-body" x="3.6" y="7.4" width="8.8" height="5.8" rx="1.2" />
+                  </svg>비율 고정</span>
+              </label>
             </div>
-            <div class="row2 p-inline">
-              <label class="chk"><input type="checkbox" id="propLockAspect" /> 비율 고정</label>
-              <label>회전° <input type="number" id="propRot" min="0" max="359" /></label>
+            <div class="g-row">
+              <div class="f-num"><span class="f-pre">W</span><input type="number" id="propW" min="10" /></div>
+              <div class="f-num"><span class="f-pre">H</span><input type="number" id="propH" min="10" /></div>
+            </div>
+          </div>
+
+          <!-- 회전은 크기가 아니다 — 예전엔 크기 섹션 안에 끼어 있어 위계가 무너져 있었다 -->
+          <div class="p-sec">
+            <div class="p-sec-title">회전</div>
+            <div class="g-row">
+              <div class="f-num"><span class="f-pre">∠</span><input type="number" id="propRot" min="0" max="359" /><span class="f-suf">°</span></div>
               <button id="propRot90" class="small" title="90° 회전">↻ 90°</button>
             </div>
           </div>
@@ -460,9 +506,9 @@
 
           <div class="p-sec">
             <div class="p-sec-title">위치</div>
-            <div class="row2">
-              <label>X <input type="number" id="propX" /></label>
-              <label>Y <input type="number" id="propY" /></label>
+            <div class="g-row">
+              <div class="f-num"><span class="f-pre">X</span><input type="number" id="propX" /></div>
+              <div class="f-num"><span class="f-pre">Y</span><input type="number" id="propY" /></div>
             </div>
           </div>
 
@@ -851,22 +897,22 @@
   </div>
 
   <!-- 스크립트: file:// 호환 위해 일반 script (모듈 아님), 순서 중요 -->
-  <script src="js/i18n.js?v=e075c321"></script>   <!-- 가장 먼저: DOMContentLoaded 번역이 app.js 초기화보다 앞서야 함 -->
+  <script src="js/i18n.js?v=4983ec49"></script>   <!-- 가장 먼저: DOMContentLoaded 번역이 app.js 초기화보다 앞서야 함 -->
   <script src="js/awg.js?v=8af811c8"></script>
-  <script src="js/model.js?v=178ec961"></script>
+  <script src="js/model.js?v=4f29d936"></script>
   <script src="js/presets.js?v=76c3b945"></script>
-  <script src="js/geometry.js?v=516c1a78"></script>
+  <script src="js/geometry.js?v=2c713466"></script>
   <script src="js/render.js?v=1c5448d8"></script>
   <script src="js/bgremove.js?v=31bcadf0"></script>
   <script src="js/termeditor.js?v=74a41e8b"></script>
-  <script src="js/interactions.js?v=6812fce7"></script>
+  <script src="js/interactions.js?v=c93ab9b2"></script>
   <script src="js/store.js?v=15a962e4"></script>
   <script src="js/assets.js?v=c14bb23d"></script>   <!-- store.js 다음: 자산 풀이 store의 IndexedDB를 쓴다 -->
   <script src="js/history.js?v=efecdc9e"></script>
   <script src="js/library.js?v=d371703b"></script>
   <script src="js/io.js?v=f73f9ca1"></script>
   <script src="js/pdf.js?v=24c35afc"></script>
-  <script src="js/app.js?v=6ec9dc3b"></script>
+  <script src="js/app.js?v=7e0be278"></script>
   <!-- 인쇄 전용: 페이지 전체를 덮는 워터마크. 도면 칸 안에만 찍히던 것을 종이 전체로 넓혔다.
        position:fixed 라 인쇄 시 '모든 장'에 반복해서 나온다(도면 장 · BOM 장 전부). -->
   <div id="pageWatermark" aria-hidden="true"></div>

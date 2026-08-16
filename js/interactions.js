@@ -1680,7 +1680,11 @@ WE.interactions = (function () {
     }
 
     // 사용자 지정 단축키(모드 전환 등, 조합키 없을 때)
-    if (!e.ctrlKey && !e.metaKey && !e.altKey && WE.app.handleShortcut && WE.app.handleShortcut(e.key)) {
+    // e.repeat 를 거르는 이유: 모드 키는 '다시 누르면 선택으로' 토글이라,
+    // 키를 꾹 누르고 있으면 자동 반복이 들어와 모드가 깜빡인다. 모드 키를 길게 누를 일은 없다.
+    // wirePending 이면 토글을 막는다 — 그리던 배선을 잃지 않게(취소는 Esc 담당).
+    if (!e.repeat && !e.ctrlKey && !e.metaKey && !e.altKey &&
+        WE.app.handleShortcut && WE.app.handleShortcut(e.key, !wirePending)) {
       e.preventDefault(); return;
     }
 
