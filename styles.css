@@ -1036,6 +1036,9 @@ body.term-mode #canvas { cursor: crosshair; }
   box-shadow: 0 10px 40px rgba(0,0,0,.3);
 }
 .modal-box h3 { margin: 0 0 6px; }
+/* 알림 본문은 
+ 으로 문단을 나눈다 — 그대로 보이게 둔다 */
+#noticeText { white-space: pre-line; }
 /* 이미지 편집 모달: 이미지 작업 공간이라 더 크게 — 화면의 ~75% 크기로 가운데 표시 */
 #bgModal .modal-box { width: min(900px, 80vw); }
 .bg-zoom-row {

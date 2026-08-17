@@ -1630,10 +1630,9 @@ WE.interactions = (function () {
       if (WE.app.copySelection && WE.app.copySelection()) e.preventDefault();
       return;
     }
-    if ((e.ctrlKey || e.metaKey) && !e.altKey && e.key.toLowerCase() === "v") {
-      if (WE.app.pasteClipboard && WE.app.pasteClipboard()) e.preventDefault();
-      return;
-    }
+    // Ctrl+V 는 여기서 다루지 않는다 — app.js 의 paste 이벤트 한 곳에서 판단한다.
+    // 클립보드 내용(이미지인지 아닌지)은 paste 이벤트에서만 볼 수 있고,
+    // 여기서 먼저 붙여넣어 버리면 이미지가 왔을 때 두 번 처리된다.
 
     // 배선을 그리는 중이면 Esc·Backspace가 먼저다 — 모드 복귀보다 '그리던 것 정리'가 우선.
     // (Esc 한 번에 배선도 버리고 모드까지 빠져나가면 실수로 눌렀을 때 되돌리기 번거롭다)

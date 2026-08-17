@@ -48,6 +48,8 @@ WE.app = (function () {
     bindResizers();
     bindZoom();
     bindCanvasMark();
+    bindPaste();
+    bindNotice();
     bindAlign();
     bindSettings();
     bindModalBackdrops();
@@ -573,9 +575,38 @@ WE.app = (function () {
   // ---- 부품 라이브러리 ----
   var _placeN = 0;
   // 이미지 파일 → 배경제거 모달 → 라이브러리 저장 → 편집 모달 오픈 (버튼 클릭/드래그앤드롭 공용)
-  function addImageFileToLibrary(file) {
+  // 부품 사진이 들어오는 모든 길(＋버튼 · 드래그 · 붙여넣기)이 여기를 지난다 — 제한도 여기 한 곳에만 둔다.
+  // 10MB 인 이유: 실제 쓰는 부품 사진이 최대 2.1MB 였고, 폰 사진까지 넉넉히 통과하는 선이다.
+  // 저장 용량 때문이 아니다(무엇이 들어와도 긴 변 800px·WebP 로 줄어 40~90KB 가 된다).
+  // 막으려는 건 디코드 순간에 잠깐 크게 잡히는 메모리다. 다만 파일 크기와 그 메모리는 비례하지 않아
+  // (3MB 사진이 183MB 를 쓰기도 한다) 이 검사는 극단만 거르는 1차 방어이고,
+  // 실제 한계는 bgremove 의 onerror 가 잡는다.
+  var MAX_IMG_BYTES = 10 * 1024 * 1024;
+
+  // 이미 있는 이름이면 뒤에 _01, _02 를 붙여 겹치지 않게 한다(배선도 시트 이름과 같은 규칙).
+  // 파일에서 온 이름이 겹치는 건 사용자가 같은 이름을 쓴 것이니 '덮어쓸까요?' 를 묻는 게 맞다.
+  // 하지만 붙여넣기처럼 **우리가 지어 준 이름**이 겹치는 건 우리 탓이다 —
+  // 캡처를 연달아 붙여넣으면 매번 확인창이 뜨고, 무심코 [확인] 을 누르면 앞서 넣은 부품이 사라진다.
+  function uniquePartName(base) {
+    if (!WE.library.findByName(base)) return base;
+    for (var n = 1; n < 1000; n++) {
+      var cand = base + "_" + (n < 10 ? "0" + n : String(n));
+      if (!WE.library.findByName(cand)) return cand;
+    }
+    return base + "_" + Date.now().toString(36);
+  }
+  function addImageFileToLibrary(file, fallbackName) {
     if (!file || file.type.indexOf("image/") !== 0) return;
-    var name = file.name.replace(/\.[^.]+$/, "");
+    if (file.size > MAX_IMG_BYTES) {
+      // 힌트바에만 띄우면 작업 중에는 눈에 안 들어와 "왜 안 되지?" 로 남는다 — 가운데서 한 번 막고 알린다.
+      // 필요한 건 '무엇을 하면 되는가' 하나뿐이다. 지금 몇 MB 인지도 결국 사용자가 할 일을 바꾸지 않는다.
+      notice(WE.i18n.t("이미지가 너무 큽니다"), WE.i18n.t("파일 용량을 줄여 주세요 (10MB 이내)."));
+      return;
+    }
+    // 클립보드에서 온 파일은 이름이 "image.png" 같은 껍데기라 부품 이름으로 쓸 게 못 된다.
+    // 그럴 땐 알아볼 수 있는 기본 이름을 주고, 바로 열리는 편집 모달에서 고치게 한다.
+    var name = String(file.name || "").replace(/\.[^.]+$/, "");
+    if (fallbackName && (!name || /^(image|clipboard|캡처|screenshot)$/i.test(name))) name = uniquePartName(fallbackName);
     var reader = new FileReader();
     reader.onload = function (ev) {
       WE.bgremove.open(ev.target.result, function (url, tf, size) {
@@ -1276,6 +1307,59 @@ WE.app = (function () {
   // 클립보드는 앱 안에서만 도는 변수다. 시스템 클립보드에 넣으면 다른 앱에서 Ctrl+V 했을 때
   // JSON 덩어리가 튀어나오고 권한 처리가 붙는다 — 필요해지면 그때 얹는다.
   var _clip = null;   // { sheetId, data:{components,wires,annotations} }
+  // ---- 클립보드 붙여넣기 (Ctrl+V) ----
+  // 화면을 캡처하면(Win+Shift+S 등) 파일로 저장하기 전에 이미 클립보드에 이미지가 들어 있다.
+  // 그래서 '캡처 → 파일 저장 → 드래그' 세 단계 중 가운데 단계는 우리가 파일을 요구해서 생긴 것이다.
+  // 붙여넣기를 받으면 그 단계가 사라진다. 들어온 이미지는 파일로 넣었을 때와 똑같은 길을 탄다
+  // (배경제거 모달 → 라이브러리 저장 → 편집 모달). WebP 변환도 그 길에서 자동으로 걸린다.
+  //
+  // keydown 이 아니라 paste 이벤트로 받는 이유: 클립보드 내용은 이 이벤트에서만 직접 볼 수 있다.
+  // 그래서 '이미지냐 부품이냐'를 한 곳에서 판단할 수 있고, 두 번 처리될 일이 없다.
+  //
+  // 둘 중 무엇이 더 최근인가 — 시각을 재서는 풀 수 없다. 시스템 클립보드에 이미지가 '언제' 들어왔는지
+  // 알 방법이 없기 때문이다. (그렇게 만들었다가, 한 번 Ctrl+C 하면 그 뒤로 이미지 붙여넣기가
+  // 영영 막히는 문제가 났다 — 이미지 분기로 못 들어가니 비교 기준이 갱신되지 않았다.)
+  //
+  // 대신 **클립보드 자신에게 묻는다.** 앱에서 복사할 때 시스템 클립보드에 표식을 하나 심어 둔다.
+  // 그 뒤 사용자가 화면을 캡처하면 클립보드가 통째로 바뀌면서 표식이 사라진다.
+  //   표식이 남아 있다  → 앱에서 복사한 것이 가장 최근이다  → 부품을 붙인다
+  //   표식이 사라졌다   → 캡처가 더 최근이다                → 이미지를 붙인다
+  // 클립보드가 이미 순서를 알고 있으니 추측할 필요가 없다.
+  var _clipToken = "";   // 이번 복사 때 시스템 클립보드에 심어 둔 표식
+
+  function clipboardImageFile(dt) {
+    if (!dt) return null;
+    var items = dt.items || [], i;
+    for (i = 0; i < items.length; i++) {
+      if (items[i].kind === "file" && /^image\//.test(items[i].type)) {
+        var f = items[i].getAsFile();
+        if (f) return f;
+      }
+    }
+    var fs = dt.files || [];   // items 없이 files 로만 주는 브라우저 대비
+    for (i = 0; i < fs.length; i++) if (/^image\//.test(fs[i].type)) return fs[i];
+    return null;
+  }
+  function bindPaste() {
+    document.addEventListener("paste", function (e) {
+      var t = e.target, tag = (t && t.tagName) || "";
+      // 입력창에서는 평소대로 글자가 붙어야 한다(프로젝트명·비고·BOM 칸)
+      if (tag === "INPUT" || tag === "TEXTAREA" || (t && t.isContentEditable)) return;
+      if (document.querySelector(".modal:not([hidden])")) return;   // 모달 위에서는 손대지 않는다
+      var dt = e.clipboardData;
+      var img = clipboardImageFile(dt);
+      var txt = dt ? String(dt.getData("text/plain") || "") : "";
+      // 표식이 그대로면 앱에서 복사한 것이 가장 최근이다. 사라졌으면 그 뒤에 캡처한 것이다.
+      var mineIsLatest = !!_clipToken && txt === _clipToken;
+      if (img && !mineIsLatest) {
+        e.preventDefault();
+        addImageFileToLibrary(img, WE.i18n.t("붙여넣은 부품"));
+        return;
+      }
+      if (pasteClipboard()) e.preventDefault();
+    });
+  }
+
   function copySelection() {
     var cmpIds = (WE.model.getMulti() || []).slice();
     var annoIds = (WE.model.getMultiAnno() || []).slice();
@@ -1289,6 +1373,17 @@ WE.app = (function () {
     if (b.components.length) parts.push(WE.i18n.t("부품 ") + b.components.length);
     if (b.wires.length) parts.push(WE.i18n.t("배선 ") + b.wires.length);
     if (b.annotations.length) parts.push(WE.i18n.t("주석 ") + b.annotations.length);
+
+    // 시스템 클립보드에 표식을 심는다. 나중에 캡처를 하면 이 표식이 지워지고,
+    // 그걸로 '캡처가 더 최근'임을 알 수 있다(bindPaste 참조).
+    // 알아볼 수 없는 문자열 대신 사람이 읽을 수 있는 문구로 둔다 — 메모장 등에 잘못 붙여넣어도 뜻이 통하게.
+    _clipToken = "[" + WE.i18n.t("이지케이블") + "] " + parts.join(" · ") + " #" +
+                 Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(_clipToken).catch(function () { /* 권한 없으면 그냥 둔다 */ });
+      }
+    } catch (e) { /* 무시 — 표식이 없으면 이미지가 있을 때 이미지를 택한다 */ }
     setHint(WE.i18n.t("복사: ") + parts.join(" · ") + WE.i18n.t("  (Ctrl+V로 붙여넣기 · 다른 배선도에도 됩니다)"));
     return true;
   }
@@ -4259,6 +4354,25 @@ WE.app = (function () {
 
   // 상태 안내. 한 줄에 들어가는 짧은 문장만 보여주고, 자세한 설명은 full 로 받아 툴팁에 둔다.
   // 툴바에 길게 늘어놓으면 줄이 접혀 화면이 흔들리고, 그러면 오히려 아무도 안 읽는다.
+  // 화면 가운데서 한 번 막고 알린다. 되돌릴 수 없는 실패에만 쓴다 —
+  // 성공·진행 상황까지 이걸로 알리면 곧 닫기 바쁜 창이 되어 정작 중요한 순간에도 안 읽힌다.
+  function notice(title, text) {
+    var m = document.getElementById("noticeModal");
+    if (!m) { alert(title + "\n\n" + (text || "")); return; }   // 마크업이 없으면 최소한 알리기는 한다
+    document.getElementById("noticeTitle").textContent = title;
+    document.getElementById("noticeText").textContent = text || "";
+    m.hidden = false;
+    var ok = document.getElementById("noticeOk");
+    if (ok) ok.focus();
+  }
+  function bindNotice() {
+    var m = document.getElementById("noticeModal"); if (!m) return;
+    function close() { m.hidden = true; }
+    document.getElementById("noticeOk").addEventListener("click", close);
+    m.addEventListener("click", function (e) { if (e.target === m) close(); });   // 바깥을 눌러도 닫힘
+    m.addEventListener("keydown", function (e) { if (e.key === "Escape") close(); });
+  }
+
   function setHint(text, full) {
     var h = document.getElementById("hint");
     h.textContent = text; h.classList.remove("hint-save");
@@ -4305,7 +4419,7 @@ WE.app = (function () {
 
   return {
     copySelection: copySelection, pasteClipboard: pasteClipboard,
-    init: init, refreshProps: refreshProps, setHint: setHint, setSavedHint: setSavedHint, reloadUI: reloadUI,
+    init: init, refreshProps: refreshProps, setHint: setHint, notice: notice, setSavedHint: setSavedHint, reloadUI: reloadUI,
     renderLibrary: renderLibrary,
     toggleAllFolders: toggleAllFolders,
     openComponentMenu: openComponentMenu,

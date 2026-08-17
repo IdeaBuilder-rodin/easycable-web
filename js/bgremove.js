@@ -157,6 +157,18 @@ WE.bgremove = (function () {
       // 첫 fit이 어긋날 수 있음 → 레이아웃이 잡힌 다음 프레임에 한 번 더 화면 맞춤
       requestAnimationFrame(fitBgZoom);
     };
+    // 디코드가 실패하면(손상된 파일, 브라우저가 감당 못 하는 해상도) onload 가 안 불린다.
+    // 예전에는 이때 아무 일도 일어나지 않아, 사용자는 기능이 고장 난 줄 알았다.
+    // '몇 화소까지 되는가'는 기기·브라우저마다 달라 우리가 미리 선을 그을 수 없다 —
+    // 대신 브라우저가 실제로 못 하겠다고 할 때 그걸 그대로 알려 준다.
+    origImg.onerror = function () {
+      onDone = null;
+      modal.hidden = true;
+      if (WE.app && WE.app.notice) {
+        WE.app.notice(WE.i18n.t("이미지를 열 수 없습니다"),
+          WE.i18n.t("파일이 손상됐거나 너무 큰 사진입니다."));
+      }
+    };
     origImg.src = dataUrl;
   }
 

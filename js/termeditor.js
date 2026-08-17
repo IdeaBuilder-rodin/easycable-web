@@ -57,11 +57,15 @@ WE.termeditor = (function () {
   function alignTerms(mode) {
     var ts = selectedTerms(); if (ts.length < 2) return;
     function avg(k) { return ts.reduce(function (s, t) { return s + t[k]; }, 0) / ts.length; }
-    function distrib(k) {
-      if (ts.length < 3) return;
+    // 균등 배치는 '지금 놓인 처음과 끝' 사이를 고르게 나눈다. 그 결과로 생긴 간격을 픽셀로 돌려준다 —
+    // 임의로 찍어 둔 단자를 균등하게 편 다음 '지금 몇 px 인가'를 알아야, 15.4 → 15 처럼 깔끔한 값으로
+    // 다시 맞출 수 있다. 그 값을 알 길이 없으면 균등 배치가 한 번 쓰고 마는 기능이 된다.
+    function distrib(k, size) {
+      if (ts.length < 3) return null;
       var s = ts.slice().sort(function (a, b) { return a[k] - b[k]; });
       var first = s[0][k], step = (s[s.length - 1][k] - first) / (s.length - 1);
       s.forEach(function (t, i) { t[k] = first + step * i; });
+      return size ? step * size : null;   // 비율 → 부품 이미지 픽셀
     }
     // 정렬 간격(px). 단자 좌표는 비율(0~1)로 저장하지만, 입력은 부품 이미지의 픽셀로 받는다 —
     // 사진을 보며 잰 실제 단자 간격을 그대로 넣을 수 있어야 쓸모가 있다.
@@ -77,10 +81,21 @@ WE.termeditor = (function () {
       var first = s[0][k];
       s.forEach(function (t, i) { t[k] = Math.max(0, Math.min(1, first + step * i)); });
     }
+    // 균등 배치로 생긴 간격을 간격 칸에 적어 준다. 이러면 그 값을 보고 다듬어
+    // 곧바로 '정렬'로 깔끔한 간격에 다시 맞출 수 있다.
+    function showGap(px) {
+      if (!(px > 0) || !gapEl) return;
+      var v = Math.round(px * 10) / 10;
+      gapEl.value = String(v);
+      if (WE.app && WE.app.setHint) {
+        WE.app.setHint(WE.i18n.t("지금 간격 ") + v + WE.i18n.t("px"),
+          WE.i18n.t("균등 배치로 만들어진 간격입니다. 값을 다듬어 '정렬'을 누르면 그 간격으로 다시 맞춥니다."));
+      }
+    }
     if (mode === "x") { var ax = avg("rx"); ts.forEach(function (t) { t.rx = ax; }); spread("ry", baseH); }
     else if (mode === "y") { var ay = avg("ry"); ts.forEach(function (t) { t.ry = ay; }); spread("rx", baseW); }
-    else if (mode === "distX") distrib("rx");
-    else if (mode === "distY") distrib("ry");
+    else if (mode === "distX") showGap(distrib("rx", baseW));
+    else if (mode === "distY") showGap(distrib("ry", baseH));
     renderTerminals(); buildList(); teCommit();
   }
 
