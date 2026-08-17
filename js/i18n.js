@@ -112,6 +112,8 @@ WE.i18n = (function () {
     "배선모양": "Shape",
     "두께": "Width",
     "붙여넣은 부품": "Pasted part",
+    "왼쪽으로 90° 회전": "Rotate 90° left",
+    "오른쪽으로 90° 회전": "Rotate 90° right",
     "이지케이블": "EasyCable",
     "지금 간격 ": "Spacing is ",
     "px": "px",

@@ -4225,8 +4225,12 @@ WE.app = (function () {
       var v = parseFloat(e.target.value); if (isNaN(v)) return;
       applyProp(function (c) { c.rotation = ((v % 360) + 360) % 360; }, true);
     });
+    // 음수가 나오지 않도록 360을 더한 뒤 나머지를 취한다 (-90 → 270)
     document.getElementById("propRot90").addEventListener("click", function () {
       applyProp(function (c) { c.rotation = (c.rotation + 90) % 360; }, false);
+    });
+    document.getElementById("propRotL").addEventListener("click", function () {
+      applyProp(function (c) { c.rotation = (c.rotation + 270) % 360; }, false);
     });
     document.getElementById("propBgRemove").addEventListener("click", function () {
       var c = WE.model.getSelectedComponent();

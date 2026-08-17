@@ -277,6 +277,8 @@ body.note-open .canvas-corner-tools { bottom: 131px; }
 /* 속성창이 180px 로 좁아지면서 아이콘·여백이 글자 자리를 다 먹어 이름이 두 줄로 접혔다.
    (실측: 버튼 76px 중 글자에 남는 폭이 26px 뿐 — '맨 아래'는 45px 이 필요하다)
    여백·아이콘·글꼴을 조금씩 줄여 세 글자가 한 줄에 들어갈 만큼(약 44px) 자리를 만든다. */
+/* 아이콘은 왼쪽에 고정(버튼끼리 세로로 줄이 맞는다), 글자는 남은 칸 안에서 가운데.
+   버튼 전체를 가운데 정렬하면 글자 길이에 따라 아이콘 위치가 제각각이 된다. */
 .align-btn {
   display: flex; align-items: center; gap: 4px;
   padding: 7px 5px; border: 1px solid #ccc; border-radius: 8px;
@@ -287,7 +289,9 @@ body.note-open .canvas-corner-tools { bottom: 131px; }
 /* 한글은 기본이 '글자 단위' 줄바꿈이라 네 글자 이름이 '가로 균 / 등' 처럼 낱말 가운데서 잘렸다.
    keep-all 은 띄어쓰기에서만 줄을 바꾼다 → '가로 / 균등'. 줄바꿈 위치를 마크업에 박지 않아도 되고,
    번역문(길이가 다른 영어 등)에도 같은 규칙이 그대로 적용된다. */
-.align-btn span { word-break: keep-all; text-align: center; }
+/* flex:1 로 남은 칸을 모두 차지해야 text-align:center 가 의미를 갖는다.
+   (폭이 글자에 딱 맞으면 가운데 정렬은 아무 효과가 없다) */
+.align-btn span { flex: 1; min-width: 0; word-break: keep-all; text-align: center; }
 .align-btn svg line { stroke: #555; stroke-width: 1.6; stroke-linecap: round; }
 .align-btn svg rect { fill: #9db4d6; }
 .align-btn:hover svg rect { fill: #1e88e5; }
@@ -757,10 +761,30 @@ body.panning #canvas, body.panning #canvas * { cursor: grabbing !important; }
   border: 0; background: none; padding: 0; margin: 0; outline: none; border-radius: 0;
 }
 
+/* 숫자 칸 옆에 붙는 작은 정사각 버튼 (회전 등).
+   높이를 칸(.f-num)과 똑같이 맞추는 게 요점 — 예전에는 버튼이 앱 기본 규칙을 따라
+   30px/모서리 4px 이라 26px/5px 인 칸과 4px 어긋나 보였다. */
+.icon-btns { display: flex; align-items: center; gap: var(--sp2); }
+#propBody .icon-btn {
+  /* margin:0 이 요점 — 앱의 일반 버튼 규칙이 margin-top:4px 를 주고 있어서
+     묶음이 30px 이 되고 그 안에서 버튼만 4px 내려가 있었다.
+     격자는 묶음의 가운데를 맞추므로, 묶음은 정렬돼 보여도 버튼은 칸과 어긋난다. */
+  flex: none; width: 26px; height: 26px; padding: 0; margin: 0;
+  display: flex; align-items: center; justify-content: center;
+  border: 1px solid var(--bd); border-radius: var(--r);
+  background: var(--bg); color: var(--tx2);
+  font-size: 15px; line-height: 1; cursor: pointer; font-family: inherit;
+}
+#propBody .icon-btn:hover { background: var(--bg3); border-color: var(--primary); color: var(--primary); }
+
 /* 켜고 끄는 글자 단추 (비율 고정 등).
    체크박스를 그대로 두고(스크립트는 .checked 를 계속 쓴다) 옆의 span 을 단추처럼 보이게 한다.
    :has() 를 쓰지 않는 이유는 오래된 브라우저에서도 눌린 상태가 보여야 하기 때문이다. */
-.t-btn { display: inline-block; cursor: pointer; margin: 0; line-height: 1; }
+/* margin:0 을 !important 없이 확실히 이기도록 #propBody 를 붙인다 —
+   패널의 label 규칙이 margin-bottom:8px 을 주고 있어서, 그만큼 단추가 위로 밀려 제목과 어긋났다.
+   (회전 버튼이 margin-top 때문에 밀렸던 것과 같은 유형) */
+.t-btn { display: inline-block; cursor: pointer; line-height: 1; }
+#propBody .t-btn { margin: 0; }
 .t-btn input { position: absolute; opacity: 0; width: 0; height: 0; }
 .t-btn span {
   display: inline-flex; align-items: center; justify-content: center;

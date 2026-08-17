@@ -15,7 +15,7 @@
   <meta name="twitter:card" content="summary" />
   <link rel="canonical" href="https://easycable.co.kr/" />
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔌</text></svg>" />
-  <link rel="stylesheet" href="styles.css?v=6d2dd407" />
+  <link rel="stylesheet" href="styles.css?v=58770ab8" />
   <!-- Google Analytics 4 (방문/재방문·사용 패턴 분석) -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-LN9RMMTF8M"></script>
   <script>
@@ -335,12 +335,14 @@
                '가운데'가 두 개지만 열로 나뉘어 있어 문맥으로 구분된다(다른 편집기들의 관례).
                정확한 뜻은 툴팁에 둔다. 균등은 성격이 달라 맨 아래 따로. -->
           <div class="p-sec-title" style="margin-top:var(--sp3)">요소 정렬</div>
+          <!-- 줄마다 짝을 이루게 둔다: 위·아래 / 가운데 둘 / 왼쪽·오른쪽.
+               반대되는 동작이 나란히 있어야 "이 둘 중 하나" 로 읽힌다. -->
           <div class="align-grid">
             <button class="align-btn" data-align="top" title="맨 위 정렬">
               <svg viewBox="0 0 24 24"><line x1="4" y1="5" x2="20" y2="5"/><rect x="7" y="5" width="4" height="12"/><rect x="14" y="5" width="4" height="7"/></svg><span>맨 위</span>
             </button>
-            <button class="align-btn" data-align="left" title="왼쪽 정렬">
-              <svg viewBox="0 0 24 24"><line x1="5" y1="4" x2="5" y2="20"/><rect x="5" y="7" width="12" height="4"/><rect x="5" y="14" width="7" height="4"/></svg><span>왼쪽</span>
+            <button class="align-btn" data-align="bottom" title="맨 아래 정렬">
+              <svg viewBox="0 0 24 24"><line x1="4" y1="19" x2="20" y2="19"/><rect x="7" y="7" width="4" height="12"/><rect x="14" y="12" width="4" height="7"/></svg><span>맨 아래</span>
             </button>
             <button class="align-btn" data-align="centerY" title="가로 가운데 정렬 — 부품이 위아래로 움직여 하나의 가로선에 나란히 섭니다">
               <svg viewBox="0 0 24 24"><line x1="4" y1="12" x2="20" y2="12"/><rect x="7" y="6" width="4" height="12"/><rect x="14" y="8" width="4" height="8"/></svg><span>가로</span>
@@ -348,8 +350,8 @@
             <button class="align-btn" data-align="centerX" title="세로 가운데 정렬 — 부품이 좌우로 움직여 하나의 세로선에 나란히 섭니다">
               <svg viewBox="0 0 24 24"><line x1="12" y1="4" x2="12" y2="20"/><rect x="6" y="7" width="12" height="4"/><rect x="8" y="14" width="8" height="4"/></svg><span>세로</span>
             </button>
-            <button class="align-btn" data-align="bottom" title="맨 아래 정렬">
-              <svg viewBox="0 0 24 24"><line x1="4" y1="19" x2="20" y2="19"/><rect x="7" y="7" width="4" height="12"/><rect x="14" y="12" width="4" height="7"/></svg><span>맨 아래</span>
+            <button class="align-btn" data-align="left" title="왼쪽 정렬">
+              <svg viewBox="0 0 24 24"><line x1="5" y1="4" x2="5" y2="20"/><rect x="5" y="7" width="12" height="4"/><rect x="5" y="14" width="7" height="4"/></svg><span>왼쪽</span>
             </button>
             <button class="align-btn" data-align="right" title="오른쪽 정렬">
               <svg viewBox="0 0 24 24"><line x1="19" y1="4" x2="19" y2="20"/><rect x="7" y="7" width="12" height="4"/><rect x="12" y="14" width="7" height="4"/></svg><span>오른쪽</span>
@@ -489,7 +491,13 @@
             <div class="p-sec-title">회전</div>
             <div class="g-row">
               <div class="f-num"><span class="f-pre">∠</span><input type="number" id="propRot" min="0" max="359" /><span class="f-suf">°</span></div>
-              <button id="propRot90" class="small" title="90° 회전">↻ 90°</button>
+              <!-- 입력칸 + 같은 높이의 작은 정사각 버튼들(피그마의 회전 줄과 같은 구조).
+                   이미지 편집 모달도 ↺/↻ 를 쌍으로 두고 있어 앱 안에서도 일관된다.
+                   예전엔 시계방향 하나뿐이라 반시계로 돌리려면 세 번 눌러야 했다. -->
+              <div class="icon-btns">
+                <button type="button" id="propRotL" class="icon-btn" title="왼쪽으로 90° 회전">↺</button>
+                <button type="button" id="propRot90" class="icon-btn" title="오른쪽으로 90° 회전">↻</button>
+              </div>
             </div>
           </div>
 
@@ -912,7 +920,7 @@
   </div>
 
   <!-- 스크립트: file:// 호환 위해 일반 script (모듈 아님), 순서 중요 -->
-  <script src="js/i18n.js?v=e59cc6af"></script>   <!-- 가장 먼저: DOMContentLoaded 번역이 app.js 초기화보다 앞서야 함 -->
+  <script src="js/i18n.js?v=7c0f741b"></script>   <!-- 가장 먼저: DOMContentLoaded 번역이 app.js 초기화보다 앞서야 함 -->
   <script src="js/awg.js?v=8af811c8"></script>
   <script src="js/model.js?v=4f29d936"></script>
   <script src="js/presets.js?v=76c3b945"></script>
@@ -927,7 +935,7 @@
   <script src="js/library.js?v=d371703b"></script>
   <script src="js/io.js?v=f73f9ca1"></script>
   <script src="js/pdf.js?v=24c35afc"></script>
-  <script src="js/app.js?v=f898651c"></script>
+  <script src="js/app.js?v=e5eed4d5"></script>
   <!-- 인쇄 전용: 페이지 전체를 덮는 워터마크. 도면 칸 안에만 찍히던 것을 종이 전체로 넓혔다.
        position:fixed 라 인쇄 시 '모든 장'에 반복해서 나온다(도면 장 · BOM 장 전부). -->
   <div id="pageWatermark" aria-hidden="true"></div>
