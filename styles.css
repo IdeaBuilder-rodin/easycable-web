@@ -1484,3 +1484,14 @@ body.note-open #noteToggle { transform: rotate(180deg); }
   border-bottom: 1px solid #7d5409;
 }
 @media print { #previewBanner { display: none !important; } }   /* 인쇄물에는 나가지 않게 */
+
+/* ── 시험용 도구 버튼 (미리보기 전용) ─────────────────────────────────
+   본 서비스에는 나오지 않는다. 실제 기능 버튼과 헷갈리지 않게
+   점선 테두리로 '임시 도구'임을 드러낸다. */
+#toolbar button.tb-devtool {
+  background: transparent; color: #d9a441;
+  border: 1px dashed #a8710e; font-size: 12px; padding: 4px 8px;
+}
+#toolbar button.tb-devtool:hover { background: #3d434d; }
+#toolbar button.tb-devtool.on { color: #5fbe87; border-color: #2a7a4c; }
+@media print { #toolbar button.tb-devtool { display: none !important; } }

@@ -20,6 +20,12 @@ WE.pro = (function () {
   var LIMIT = 30;          // 프로젝트당 무료 배선 수
   var _noticed = false;    // 안내를 이미 띄웠는가 (연속 클릭에 모달이 겹치지 않게)
 
+  /* 미리보기 전용 — Pro/무료를 눌러서 바꿔 보기 위한 강제값.
+     null 이면 서버(profiles.plan)를 따른다.
+     ⚠ 본 서비스에서는 무시된다(아래 isPro 참조). 시험 편의일 뿐 보안과 무관하다 —
+        어차피 브라우저 앱이라 콘솔로 같은 일을 할 수 있다(소프트 페이월). */
+  var _proOverride = null;
+
   /* 미리보기에서만 한도를 낮춰 시험할 수 있다.
        preview.easycable-web.pages.dev/?limit=2
      30개를 매번 그려서 시험하기는 번거롭다.
@@ -41,6 +47,8 @@ WE.pro = (function () {
   /* Pro 인가. 출시 전에는 모두 Pro 로 본다 → 제한이 아예 안 걸린다. */
   function isPro() {
     if (!WE.flags || !WE.flags.LAUNCH) return true;
+    // 강제값은 미리보기에서만 통한다. 본 서비스에서는 항상 서버 값을 본다.
+    if (WE.flags.PREVIEW && _proOverride !== null) return _proOverride;
     return !!(WE.auth && WE.auth.isPro());
   }
 
@@ -125,5 +133,47 @@ WE.pro = (function () {
     deny: deny,
     checkOpened: checkOpened,
     reset: reset,
+    // 미리보기 전용 시험 도구
+    setOverride: function (v) { _proOverride = v; _noticed = false; },
+    getOverride: function () { return _proOverride; },
   };
+})();
+
+/* ── Pro/무료 전환 버튼 (미리보기 전용 시험 도구) ─────────────────────
+   Supabase 대시보드를 오가지 않고 그 자리에서 Pro 를 켜고 끄기 위한 것.
+
+   ⚠ 미리보기(preview.*.pages.dev)에서만 보인다. 본 서비스에서는 버튼 자체가 없다.
+   ⚠ 보안과 무관하다 — 브라우저 앱이라 콘솔로도 같은 일을 할 수 있다(소프트 페이월).
+      막을 가치가 있는 것은 '정상 UI 로 한도를 넘기는 행위'뿐이라고 판단했다.
+
+   9월 1일 출시할 때 이 블록과 index.html 의 #btnProToggle 을 함께 지운다.
+   ─────────────────────────────────────────────────────────────────── */
+(function () {
+  if (!WE.flags || !WE.flags.PREVIEW) return;   // 본 서비스에서는 아무 일도 안 한다
+
+  document.addEventListener("DOMContentLoaded", function () {
+    var b = document.getElementById("btnProToggle");
+    if (!b) return;
+    b.hidden = false;
+
+    function paint() {
+      var ov = WE.pro.getOverride();
+      // null = 서버 값을 따르는 중 (로그인한 계정의 profiles.plan)
+      var 상태 = ov === null ? (WE.pro.isPro() ? "Pro(서버)" : "무료(서버)")
+                             : (ov ? "Pro(강제)" : "무료(강제)");
+      b.textContent = "시험: " + 상태;
+      b.classList.toggle("on", WE.pro.isPro());
+      if (WE.ui && WE.ui.repaintAccount) WE.ui.repaintAccount();
+    }
+
+    // 서버값 → 무료강제 → Pro강제 → 서버값 … 순으로 돈다
+    b.addEventListener("click", function () {
+      var ov = WE.pro.getOverride();
+      WE.pro.setOverride(ov === null ? false : (ov === false ? true : null));
+      paint();
+    });
+
+    WE.auth.onChange(paint);   // 로그인 상태가 바뀌면 표시도 따라간다
+    paint();
+  });
 })();

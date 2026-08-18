@@ -15,7 +15,7 @@
   <meta name="twitter:card" content="summary" />
   <link rel="canonical" href="https://easycable.co.kr/" />
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔌</text></svg>" />
-  <link rel="stylesheet" href="styles.css?v=f08380aa" />
+  <link rel="stylesheet" href="styles.css?v=676cc55e" />
   <!-- Google Analytics 4 (방문/재방문·사용 패턴 분석) -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-LN9RMMTF8M"></script>
   <script>
@@ -46,6 +46,9 @@
       <button id="btnNotify" title="정식 출시·새 기능 소식을 이메일로 받기">🔔 출시 알림</button>
       <button id="btnFeedback" class="tb-accent" title="의견·버그 제보 보내기">💬 피드백</button>
       <!-- 계정 — 출시(LAUNCH) 전에는 숨어 있다. auth.js 가 상태에 따라 보이고 문구를 바꾼다 -->
+      <!-- Pro/무료 전환 — 미리보기에서만 보인다.
+           시험할 때마다 Supabase 대시보드를 오가는 것을 대신한다. -->
+      <button id="btnProToggle" class="tb-devtool" title="시험용 — Pro/무료 전환" hidden></button>
       <button id="btnAccount" class="tb-account" title="구글 계정으로 로그인" hidden>로그인</button>
       <input type="file" id="fileOpen" accept=".ezc,.json,application/json" hidden />
     </div>
@@ -928,8 +931,8 @@
 
   <!-- 스크립트: file:// 호환 위해 일반 script (모듈 아님), 순서 중요 -->
   <script src="js/flags.js?v=54be40f6"></script>   <!-- 맨 앞: 다른 파일이 WE.flags 를 보고 동작을 정한다 -->
-  <script src="js/auth.js?v=9f51eb34"></script>    <!-- flags 다음. SDK(js/vendor/supabase.js)는 필요할 때만 스스로 불러온다 -->
-  <script src="js/pro.js?v=705e39a8"></script>     <!-- 무료/Pro 경계. LAUNCH 가 꺼져 있으면 제한이 안 걸린다 -->
+  <script src="js/auth.js?v=36a28e1f"></script>    <!-- flags 다음. SDK(js/vendor/supabase.js)는 필요할 때만 스스로 불러온다 -->
+  <script src="js/pro.js?v=fa3a4815"></script>     <!-- 무료/Pro 경계. LAUNCH 가 꺼져 있으면 제한이 안 걸린다 -->
   <script src="js/i18n.js?v=9372ba39"></script>   <!-- 가장 먼저: DOMContentLoaded 번역이 app.js 초기화보다 앞서야 함 -->
   <script src="js/awg.js?v=8af811c8"></script>
   <script src="js/model.js?v=50928709"></script>

@@ -186,6 +186,9 @@ document.addEventListener("DOMContentLoaded", function () { WE.auth.init(); });
       if (window.confirm(WE.i18n.t("로그아웃할까요?"))) WE.auth.signOut();
     });
     WE.auth.onChange(paint);   // 로그인·로그아웃·프로필 갱신 때마다 다시 그린다
+    // 미리보기의 Pro 전환 버튼이 상태를 바꾼 뒤 이걸 불러 다시 그린다
+    WE.ui = WE.ui || {};
+    WE.ui.repaintAccount = paint;
     paint();
   });
 })();
