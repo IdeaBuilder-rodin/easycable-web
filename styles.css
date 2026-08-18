@@ -1452,3 +1452,35 @@ body.note-open #noteToggle { transform: rotate(180deg); }
   color: var(--tx3); font-size: var(--fs); cursor: pointer; line-height: 1;
 }
 #restoreBannerClose:hover { color: var(--tx); }
+
+/* ── 계정 버튼 (툴바 우측) ────────────────────────────────────────────
+   출시 전에는 auth.js 가 hidden 으로 두므로 화면에 없다.
+   기본 툴바 버튼과 같은 톤을 쓰되, 로그인/Pro 상태만 구분한다.
+   피드백(.tb-accent)이 이미 파란색이라 계정까지 채우면 눈이 분산된다
+   → 평소에는 테두리만, Pro 일 때만 채운다. */
+#toolbar button.tb-account {
+  background: transparent;
+  border-color: #6b7480;
+  color: #cfd6de;
+  max-width: 140px;                  /* 이메일이 길어도 툴바를 밀지 않게 */
+  overflow: hidden; text-overflow: ellipsis;
+}
+#toolbar button.tb-account:hover { background: #3d434d; color: #fff; }
+
+/* Pro — 여기서만 색을 쓴다. 결제한 사용자에게 상태가 한눈에 보여야 한다 */
+#toolbar button.tb-account.is-pro {
+  background: #2a7a4c; border-color: #1f5c3a; color: #fff; font-weight: 600;
+}
+#toolbar button.tb-account.is-pro:hover { background: #24693f; }
+
+/* ── 미리보기 띠 ──────────────────────────────────────────────────────
+   preview 주소에서만 보인다(flags.js 가 hidden 을 푼다).
+   본판으로 착각하면 "본 서비스에도 이 기능이 있다"고 오판하게 되므로
+   무시하기 어려운 색과 위치를 쓴다 — 여기서만 예외적으로 강한 색을 허용한다. */
+#previewBanner {
+  background: #a8710e; color: #fff;
+  font-size: 13px; font-weight: 600; letter-spacing: -.01em;
+  padding: 6px 12px; text-align: center;
+  border-bottom: 1px solid #7d5409;
+}
+@media print { #previewBanner { display: none !important; } }   /* 인쇄물에는 나가지 않게 */

@@ -15,7 +15,7 @@
   <meta name="twitter:card" content="summary" />
   <link rel="canonical" href="https://easycable.co.kr/" />
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔌</text></svg>" />
-  <link rel="stylesheet" href="styles.css?v=58770ab8" />
+  <link rel="stylesheet" href="styles.css?v=f08380aa" />
   <!-- Google Analytics 4 (방문/재방문·사용 패턴 분석) -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-LN9RMMTF8M"></script>
   <script>
@@ -26,6 +26,11 @@
   </script>
 </head>
 <body>
+  <!-- 미리보기 띠 — preview.*.pages.dev 에서만 보인다.
+       본판과 착각하면 "본판에도 로그인 버튼이 있는 줄" 오판하게 되므로 확실히 표시한다. -->
+  <div id="previewBanner" hidden>
+    🔧 미리보기 — 출시 전 기능이 켜져 있습니다. 본 서비스(easycable.co.kr)에는 적용되지 않습니다.
+  </div>
   <!-- 상단 툴바 -->
   <div id="toolbar">
     <!-- 1행: 문서 레벨 — 자주 쓰는 것(저장·피드백)만 노출, 나머지는 ☰ 메뉴로 -->
@@ -40,6 +45,8 @@
       <div class="tb-divider"></div>
       <button id="btnNotify" title="정식 출시·새 기능 소식을 이메일로 받기">🔔 출시 알림</button>
       <button id="btnFeedback" class="tb-accent" title="의견·버그 제보 보내기">💬 피드백</button>
+      <!-- 계정 — 출시(LAUNCH) 전에는 숨어 있다. auth.js 가 상태에 따라 보이고 문구를 바꾼다 -->
+      <button id="btnAccount" class="tb-account" title="구글 계정으로 로그인" hidden>로그인</button>
       <input type="file" id="fileOpen" accept=".ezc,.json,application/json" hidden />
     </div>
     <!-- ☰ 앱 메뉴 드로어 (Excalidraw 스타일: 아이콘 · 라벨 · 단축키 3열) -->
@@ -920,15 +927,18 @@
   </div>
 
   <!-- 스크립트: file:// 호환 위해 일반 script (모듈 아님), 순서 중요 -->
-  <script src="js/i18n.js?v=7c0f741b"></script>   <!-- 가장 먼저: DOMContentLoaded 번역이 app.js 초기화보다 앞서야 함 -->
+  <script src="js/flags.js?v=54be40f6"></script>   <!-- 맨 앞: 다른 파일이 WE.flags 를 보고 동작을 정한다 -->
+  <script src="js/auth.js?v=9f51eb34"></script>    <!-- flags 다음. SDK(js/vendor/supabase.js)는 필요할 때만 스스로 불러온다 -->
+  <script src="js/pro.js?v=0ca73d41"></script>     <!-- 무료/Pro 경계. LAUNCH 가 꺼져 있으면 제한이 안 걸린다 -->
+  <script src="js/i18n.js?v=9372ba39"></script>   <!-- 가장 먼저: DOMContentLoaded 번역이 app.js 초기화보다 앞서야 함 -->
   <script src="js/awg.js?v=8af811c8"></script>
-  <script src="js/model.js?v=4f29d936"></script>
+  <script src="js/model.js?v=50928709"></script>
   <script src="js/presets.js?v=76c3b945"></script>
   <script src="js/geometry.js?v=2c713466"></script>
   <script src="js/render.js?v=1c5448d8"></script>
   <script src="js/bgremove.js?v=8e7d0005"></script>
   <script src="js/termeditor.js?v=be9e265f"></script>
-  <script src="js/interactions.js?v=c8433d77"></script>
+  <script src="js/interactions.js?v=fb1dba2b"></script>
   <script src="js/store.js?v=15a962e4"></script>
   <script src="js/assets.js?v=c14bb23d"></script>   <!-- store.js 다음: 자산 풀이 store의 IndexedDB를 쓴다 -->
   <script src="js/history.js?v=efecdc9e"></script>

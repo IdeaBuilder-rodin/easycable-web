@@ -203,6 +203,10 @@ WE.model = (function () {
   // 시트 복제
   function duplicateSheet(id) {
     var i = sheetIndex(id); if (i < 0) return null;
+    // 무료 한도 — 과금 단위가 '프로젝트 전체'이므로 시트를 복제해도 합산된다.
+    // 이 경로를 막지 않으면 시트를 늘려 우회할 수 있다.
+    var _n = (project.sheets[i].wires || []).length;
+    if (_n && WE.pro && !WE.pro.canAdd(_n)) { WE.pro.deny("dupSheet", _n); return null; }
     var copy = JSON.parse(JSON.stringify(project.sheets[i]));
     copy.id = makeSheet().id;
     copy.name = project.sheets[i].name + WE.i18n.t(" 복사본");
@@ -250,6 +254,11 @@ WE.model = (function () {
   // 원본은 건드리지 않는다 — 클립보드에 남겨 두고 여러 번 붙일 수 있어야 한다.
   function pasteBundle(bundle, dx, dy) {
     if (!bundle) return null;
+    // 무료 한도 — 붙여넣을 배선을 더해 넘치면 통째로 거부한다.
+    // 일부만 붙이면 배선이 끊긴 채 들어와 도면이 망가진다.
+    // (이 경로를 막지 않으면 Ctrl+V 를 반복해 무제한으로 늘릴 수 있다)
+    var _n = (bundle.wires || []).length;
+    if (_n && WE.pro && !WE.pro.canAdd(_n)) { WE.pro.deny("paste", _n); return null; }
     var b = JSON.parse(JSON.stringify(bundle));
     b.components = b.components || []; b.wires = b.wires || []; b.annotations = b.annotations || [];
     remapBundle(b);
@@ -387,6 +396,10 @@ WE.model = (function () {
   }
   // 끝점을 직접 준다. 단자는 { componentId, terminalId }, 분기는 { wireId, x, y }.
   function addWireRef(fromRef, toRef, color, width) {
+    // 무료 한도 — 프로젝트 전체 배선 수로 센다(현재 시트가 아니라).
+    // id 를 뽑기 '전에' 막는다. 뒤에서 막으면 거부할 때마다 번호가 하나씩 샌다.
+    // 출시 전에는 canAdd 가 항상 true 라 동작이 지금과 똑같다.
+    if (WE.pro && !WE.pro.canAdd(1)) { WE.pro.deny("draw"); return null; }
     var w = {
       id: nextId("w"),
       from: fromRef,

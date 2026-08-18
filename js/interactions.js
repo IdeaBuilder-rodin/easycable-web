@@ -656,7 +656,9 @@ WE.interactions = (function () {
         wirePending = null;
         WE.render.clearWirePreview();
         WE.render.renderWires();
-        WE.model.select("wire", w.id);
+        // 배선이 안 만들어졌을 수도 있다(무료 한도 초과 → addWireRef 가 null).
+        // if (w) 밖에 있어서 그대로 두면 null.id 로 터진다.
+        if (w) WE.model.select("wire", w.id);
         WE.app.refreshProps();
         e.preventDefault();
         return;

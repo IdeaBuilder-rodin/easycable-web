@@ -710,7 +710,22 @@ WE.i18n = (function () {
     "▭ 라벨 모드에서 배선을 클릭해 부착. 라벨은 드래그로 이동, 더블클릭으로 수정합니다.": "Attach in ▭ Label mode by clicking a wire. Drag to move, double-click to edit.",
     "라벨을 붙일 배선을 클릭하세요. 번호는 자동으로 매겨집니다. (더블클릭: 수정)": "Click a wire to attach a label. Numbers are assigned automatically. (Double-click: edit)",
     "라벨 문구 (비우면 라벨 삭제)": "Label text (blank = remove label)",
-    "라벨 모드": "Label mode"
+    "라벨 모드": "Label mode",
+
+    // ---- 무료/Pro 경계 (pro.js) ----
+    // 숫자는 {} 자리표시자로 두고 코드에서 채운다. 문장을 조각내면 어순이 깨진다.
+    "배선 한도 {now}/{max}": "Wire limit {now}/{max}",
+    "배선 한도에 도달했습니다": "Wire limit reached",
+    "무료 버전은 도면 하나에 배선 {max}개까지 그릴 수 있습니다.": "The free plan allows up to {max} wires per project.",
+    "이 작업에는 배선 {need}개가 필요합니다. (현재 {now}/{max})": "This action needs {need} wires. (currently {now}/{max})",
+    "배선 한도를 넘는 도면입니다": "This project exceeds the wire limit",
+    "이 도면에는 배선이 {n}개 있습니다. 열어서 보거나 지우는 것은 됩니다. 새 배선 추가만 막힙니다.": "This project has {n} wires. You can still open, view and delete. Only adding new wires is blocked.",
+
+    // ---- 계정 (auth.js) ----
+    "로그인": "Sign in",
+    "구글 계정으로 로그인": "Sign in with Google",
+    "클릭하면 로그아웃": "click to sign out",
+    "로그아웃할까요?": "Sign out?"
   };
 
   var MAPS = { en: EN };
