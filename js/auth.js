@@ -27,6 +27,10 @@ WE.auth = (function () {
   var _user = null;       // 로그인한 사용자 (없으면 null)
   var _profile = null;    // { plan, expires_at, source } (없으면 null)
   var _listeners = [];    // 상태가 바뀌면 부를 함수들
+  var _ready = false;     // 최초 세션·프로필 확인이 끝났는가.
+                          // 이걸 안 구분하면 '아직 모름'과 '무료'가 같아져
+                          // 확인 중인 Pro 사용자를 무료로 취급하게 된다.
+  var _reqSeq = 0;        // 프로필 조회 일련번호 (늦게 온 응답을 걸러내기 위해)
 
   /* 이 브라우저에서 로그인을 쓸 수 있는가.
      file:// 은 출처(origin)가 없어 OAuth 리디렉션이 성립하지 않는다. */
@@ -55,20 +59,36 @@ WE.auth = (function () {
   }
 
   /* 로그인 후 프로필 한 줄을 읽어 온다.
-     RLS 때문에 남의 행은 애초에 안 온다 — 조건을 걸 필요가 없다. */
+     RLS 때문에 남의 행은 애초에 안 온다 — 조건을 걸 필요가 없다.
+
+     ⚠ 응답이 늦게 도착하는 경우를 반드시 걸러내야 한다.
+        조회를 시작한 뒤 로그아웃하거나 계정을 바꾸면,
+        이전 사람의 응답이 나중에 도착해 _profile 을 덮어쓴다.
+        그러면 로그아웃했는데 Pro 상태가 되살아난다. */
   function loadProfile(done) {
     if (!client || !_user) { _profile = null; if (done) done(); return; }
+    var seq = ++_reqSeq;            // 이번 요청의 일련번호
+    var who = _user.id;             // 누구의 프로필을 묻는가
+
+    // 응답을 반영해도 되는 상황인가 —
+    // 더 최신 요청이 생겼거나, 로그아웃했거나, 계정이 바뀌었으면 무시한다.
+    function 유효한가() { return seq === _reqSeq && _user && _user.id === who; }
+
     client.from("profiles").select("plan, expires_at, source").single()
       .then(function (res) {
+        if (!유효한가()) { if (done) done(); return; }
         _profile = res.error ? null : res.data;
         if (done) done();
       })
-      .catch(function () { _profile = null; if (done) done(); });
+      .catch(function () {
+        if (!유효한가()) { if (done) done(); return; }
+        _profile = null; if (done) done();
+      });
   }
 
   function applySession(session, done) {
     _user = session ? session.user : null;
-    loadProfile(function () { notify(); if (done) done(); });
+    loadProfile(function () { _ready = true; notify(); if (done) done(); });
   }
 
   /* ── 공개 API ───────────────────────────────────────────────────── */
@@ -118,12 +138,19 @@ WE.auth = (function () {
      만료일이 지났으면 plan 이 'pro' 여도 무료로 본다.
      → 해지·결제실패로 웹훅이 늦어도 자동으로 무료로 떨어진다. */
   function isPro() {
+    // 로그아웃 상태면 무조건 무료다.
+    // _profile 만 보면 늦게 도착한 응답이나 정리 순서 때문에
+    // 로그아웃했는데 Pro 로 남을 수 있다.
+    if (!_user) return false;
     if (!_profile || _profile.plan !== "pro") return false;
     if (!_profile.expires_at) return true;              // 만료 없음(수동 부여 등)
     return new Date(_profile.expires_at) > new Date();
   }
 
   function profile() { return _profile; }
+
+  /* 최초 확인이 끝났는가. 끝나기 전에는 Pro 여부를 단정하면 안 된다. */
+  function ready() { return _ready; }
 
   /* 상태가 바뀔 때 화면을 갱신하려는 쪽에서 등록한다 */
   function onChange(fn) { if (typeof fn === "function") _listeners.push(fn); }
@@ -134,6 +161,7 @@ WE.auth = (function () {
     signOut: signOut,
     user: user,
     profile: profile,
+    ready: ready,
     isPro: isPro,
     onChange: onChange,
     // 검사·디버깅용 — 클라이언트가 실제로 만들어졌는지 확인한다

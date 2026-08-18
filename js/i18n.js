@@ -198,7 +198,7 @@ WE.i18n = (function () {
     "주석 삭제": "Delete annotation",
     "두께": "Width",
     "겹침 허용(회피 안 함)": "Allow overlap (no avoidance)",
-    "겹침 허용": "Allow overlap",
+    "선 겹침": "Allow overlap",
     "이 배선을 자동 겹침 회피에서 제외 — 다른 선과 겹쳐도 안 벌어짐": "Exclude this wire from auto overlap-avoidance — it won't spread apart from others",
     "스타일": "Style",
     "라벨": "Label",
@@ -217,11 +217,21 @@ WE.i18n = (function () {
     "예: 6, 12": "e.g. 6, 12",
     "합산 → 전류 적용": "Sum → apply current",
     "정렬 (다중 선택)": "Align (multi-select)",
-    "⌈ 구간 정렬": "⌈ Segment align",
+    "구간 정렬": "Segment align",   // 아이콘 없음 — 뜻이 통하는 18px 그림이 안 나와서 뺐다 (2026-08-18)
     "간격": "Spacing",
     "처음 클릭한 배선의 클릭한 구간에 맞춤(세로/가로 자동)": "Align to the clicked segment of the first-clicked wire (auto V/H)",
     "선택한 세로선들을 좌우로 균등하게 벌림": "Evenly space the selected vertical lines left-right",
     "선택한 가로선들을 위아래로 균등하게 벌림": "Evenly space the selected horizontal lines top-bottom",
+    // ---- 선 종류 (스타일) ----
+    "팔레트에서 색 고르기": "Pick from palette",
+    "접기": "Collapse",
+    "나머지 색 보기 — 색을 추가·수정하려면 툴바 배선색의 ⋯ 를 쓰세요": "Show more colors — add or edit them from the ⋯ next to Wire color in the toolbar",
+    "선 종류": "Line style",
+    "선이 많아 구분이 어려울 때 종류를 바꿔 나눈다": "Change the style to tell crowded wires apart",
+    "──── 실선": "──── Solid",
+    "─ ─ ─ 파선": "─ ─ ─ Dashed",
+    "· · · · 점선": "· · · · Dotted",
+    "─ · ─ 일점쇄선": "─ · ─ Dash-dot",
     "🔗 합치기": "🔗 Merge",
     "✂️ 풀기": "✂️ Unmerge",
     "선택한 배선을 한 선처럼 겹쳐 묶기(2개 이상)": "Overlap selected wires into one (2+)",
@@ -277,6 +287,54 @@ WE.i18n = (function () {
     "해 선택(굵게 표시). 균등은 3개↑.": "to select it (shown bold). Distribute needs 3+.",
     "배선 삭제": "Delete wire",
     "이름": "Name",
+    // ---- 자동저장 복원 · 최근 작업 (2026-08-18 보강) ----
+    // 이 영역은 사전에 아예 빠져 있어 영어 화면에서도 한국어로 나왔다.
+    // ⚠ 시각 앞머리("오늘 "/"어제 ")는 뒤에 시각이 바로 붙는다 — 끝의 공백을 지우지 말 것.
+    "오늘 ": "Today ",
+    "어제 ": "Yesterday ",
+    "지난 작업을 이어서 불러왔습니다.": "Restored your last session.",
+    "불러왔습니다: ": "Opened: ",
+    "작업을 읽을 수 없습니다.": "This project could not be read.",
+    "현재 작업을 비우고 새 프로젝트를 시작할까요?\n(지금 작업은 ☰ → 최근 작업에서 다시 열 수 있습니다)":
+      "Clear the current project and start a new one?\n(You can reopen it from ☰ → Recent projects)",
+    "이 작업은 다른 탭에서 편집 중입니다.\n그래도 여시겠습니까? (두 탭이 서로 덮어쓸 수 있습니다)":
+      "This project is open in another tab.\nOpen it anyway? (The two tabs may overwrite each other.)",
+    // 목록 꼬리표 — 앞의 공백과 가운뎃점을 그대로 둔다
+    " · 지금 편집 중": " · editing here",
+    " · 다른 탭에서 편집 중": " · open in another tab",
+    // ⚠ 아래 둘은 HTML 조각이다. 태그·따옴표를 그대로 두고 글자만 바꾼다.
+    //    구조를 건드리면 최근 작업 목록이 통째로 깨진다.
+    "<p class='muted'>아직 보관된 작업이 없습니다.</p>": "<p class='muted'>No saved projects yet.</p>",
+    "'>열기</button>": "'>Open</button>",
+    // ---- HTML 마크업에서 빠져 있던 문구 (2026-08-18 보강) ----
+    // i18n 은 DOM 을 훑어 텍스트/title/placeholder 를 바꾼다.
+    // 사전에 없으면 영어 화면에서 그 부분만 한국어로 남는다.
+    "최근 작업": "Recent projects",
+    "🗂 최근 작업": "🗂 Recent projects",
+    "새 배선도로 시작": "Start a new diagram",
+    "이 브라우저에 자동 보관된 배선도입니다. 이어서 열 수 있습니다.":
+      "Diagrams auto-saved in this browser. You can pick up where you left off.",
+    "이 브라우저에 자동 보관된 다른 배선도를 이어서 엽니다":
+      "Open another diagram auto-saved in this browser",
+    "지금 배선도를 5분 간격으로 자동 보관한 기록입니다 (최대 40개).":
+      "Snapshots of this diagram taken every 5 minutes (up to 40).",
+    "팔레트 관리 — 색과 의미(범례) 추가·수정":
+      "Manage palette — add or edit colors and their meanings (legend)",
+    "선 두께 (px)": "Line width (px)",
+    "직각 — 가로·세로로만 꺾어 그립니다 (제어반 도면에서 읽기 쉬운 모양)":
+      "Right angles — bends only horizontally and vertically (easier to read on panel drawings)",
+    "직선 — 두 점을 곧장 잇습니다 (짧고 단순한 연결에 알맞습니다)":
+      "Straight — connects two points directly (good for short, simple links)",
+    "가로 가운데 정렬 — 부품이 위아래로 움직여 하나의 가로선에 나란히 섭니다":
+      "Align horizontally — parts move up or down onto one horizontal line",
+    "세로 가운데 정렬 — 부품이 좌우로 움직여 하나의 세로선에 나란히 섭니다":
+      "Align vertically — parts move left or right onto one vertical line",
+    "이 배선을 자동 벌림에서 제외한다 — 다른 선과 같은 자리를 지나도 안 밀려난다":
+      "Exclude this wire from auto-spreading — it stays put where lines share a path",
+    "균등 배치를 누르면 지금 간격이 여기 표시됩니다. 값을 다듬어 정렬을 누르면 그 간격으로 맞춰집니다.":
+      "Distribute shows the current spacing here. Adjust the value and press align to apply it.",
+    // 미리보기 띠와 시험용 버튼은 출시 때 지우는 것이라 번역하지 않는다.
+    // "한국어" 는 언어 메뉴의 항목이라 그대로 둔다.
     "너비": "Width",
     "높이": "Height",
     "비율 고정(가로세로)": "Lock aspect ratio",

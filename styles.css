@@ -318,7 +318,10 @@ body.note-open .canvas-corner-tools { bottom: 131px; }
 #annoProps button.danger:hover { background: #fdecea; }
 
 /* 배선 속성 */
-#wireProps label { display: block; margin-bottom: var(--sp3); font-size: var(--fs-sm); color: var(--tx2); }
+/* 항목 사이 12px. 예전에는 전부 8px 이라 어디까지가 한 덩어리인지 안 보였다.
+   간격 규칙: 덩어리 안 4px / 항목 사이 12px / 섹션 사이 16px
+   (--sp2=6px 은 4px 그리드에서 벗어나므로 속성창에서는 쓰지 않는다) */
+#wireProps label { display: block; margin-bottom: var(--sp4); font-size: var(--fs-sm); color: var(--tx2); }
 #wireProps input { width: 100%; padding: 5px 6px; margin-top: 3px; border: 1px solid var(--bd); border-radius: var(--r); font-size: var(--fs); font-family: inherit; }
 #wireProps input[type=color] { height: 30px; padding: 1px; }
 #wireProps .wp-conn { margin-bottom: var(--sp3); }
@@ -332,9 +335,16 @@ body.note-open .canvas-corner-tools { bottom: 131px; }
 .wp-btn-row button:hover { background: var(--bg2); }
 .wp-row2 { display: flex; gap: var(--sp3); }
 .wp-row2 > label { flex: 1; }
-.wp-section { margin-top: var(--sp4); padding-top: var(--sp3); border-top: 1px solid var(--bd2); }
+/* 섹션 사이 16px / 구분선 위 12px — 부품 속성창(.p-sec)과 같은 값 */
+.wp-section { margin-top: var(--sp5); padding-top: var(--sp4); border-top: 1px solid var(--bd2); }
 .wp-section.wp-first { margin-top: var(--sp2); padding-top: 0; border-top: none; }   /* 헤더 바로 아래 첫 구획: 윗선 없음 */
-.wp-sec-title { font-weight: 600; font-size: var(--fs-sm); color: var(--tx); margin-bottom: var(--sp2); }
+/* 섹션 제목은 본문보다 '연하게' 둔다.
+   진하면 제목이 앞으로 튀어나와 값보다 먼저 읽힌다 — 값을 보러 온 화면인데 뒤바뀐다.
+   부품 속성창(.p-sec-title)과 같은 값이다. 두 패널이 갈라지면 안 된다. */
+.wp-sec-title {
+  font-weight: 600; font-size: var(--fs-sm); color: var(--tx3);
+  letter-spacing: .2px; margin-bottom: var(--sp4);
+}
 .wp-hint { margin: var(--sp2) 0 0; }
 #wireDelete { margin-top: var(--sp4); }
 
@@ -366,7 +376,10 @@ body.label-mode #canvas, body.label-mode #canvas * { cursor: copy !important; } 
 /* 이미지 파일을 라이브러리 패널로 드래그해서 놓을 때 시각 피드백 */
 #leftPanel.lib-dragover { outline: 2px dashed var(--primary); outline-offset: -2px; background: var(--primary-bg); }
 /* 속성창은 값을 읽고 고치는 곳이라 넓을 필요가 없다. 넓힌 만큼 도면 공간을 뺏는다. */
-#rightPanel { width: 180px; display: flex; flex-direction: column; gap: 12px; }
+/* 기본 225px — 다중 선택 시 정렬 버튼 줄이 그만큼을 요구한다.
+   180px 이던 시절에는 '가로선 정렬'·'가로선 균등'이 잘려 못 눌렀다 (2026-08-18).
+   한계값이 js/app.js 의 PANEL_LIMIT 에도 있다 — 한쪽만 고치면 어긋난다. */
+#rightPanel { width: 225px; display: flex; flex-direction: column; gap: 12px; }
 #leftPanel h3, #rightPanel h3 { margin: 0 0 8px; font-size: var(--fs-lg); }
 
 /* 라이브러리 */
@@ -1495,3 +1508,93 @@ body.note-open #noteToggle { transform: rotate(180deg); }
 #toolbar button.tb-devtool:hover { background: #3d434d; }
 #toolbar button.tb-devtool.on { color: #5fbe87; border-color: #2a7a4c; }
 @media print { #toolbar button.tb-devtool { display: none !important; } }
+
+/* 선 종류 고르는 칸 — 스타일 섹션. 색상·두께 아래 한 줄을 통째로 쓴다.
+   선택지 글자에 모양(──── / ─ ─ ─)을 같이 넣어서, 이름만 보고 고르지 않아도 되게 했다. */
+#wireProps .wp-dash { display: block; margin-top: 0; font-size: var(--fs-sm); color: var(--tx2); }
+/* 전폭으로 늘리지 않는다 — 고르는 값이 짧은데 칸만 길면 빈 공간이 생기고
+   옆 항목과의 관계도 흐려진다. 내용에 맞춘 폭으로 둔다. */
+/* 선택창을 블록으로 내려 라벨 아래 줄에 둔다.
+   inline-block 이면 margin-top 을 줘도 줄이 안 바뀌어 '선 종류 [실선]' 처럼 한 줄에 흐른다.
+   다른 항목(색상·두께)은 라벨이 위에 있는데 여기만 옆이라 형태가 달랐다. */
+#wireProps .wp-dash select { display: block; width: auto; min-width: 130px; margin-top: var(--sp1); }
+
+/* 속성창 팔레트 스와치 — 색상 칸 바로 아래.
+   툴바(.swatch)보다 조금 크게 잡는다. 툴바는 늘 보이는 자리라 작아도 되지만
+   여기는 '지금 고른 배선의 색을 바꾸는' 자리라 누르기 쉬워야 한다.
+   줄이 넘치면 다음 줄로 접힌다 — 팔레트에 색을 많이 등록해도 잘리지 않게. */
+/* 스와치는 '색상' 칸에 딸린 것이라 바짝 붙인다(덩어리 안 4px).
+   대신 아래 항목(선 종류)과는 12px 을 띄워 덩어리가 끝난 것을 보이게 한다.
+   이 둘이 같은 간격이면 무엇이 무엇에 딸렸는지 알 수 없다. */
+#wireProps .wp-swatches {
+  display: flex; gap: var(--sp1);
+  margin: var(--sp1) 0 var(--sp4);
+}
+#wireProps .wp-swatches .swatch {
+  width: 22px; height: 22px; border-radius: 4px;
+  border: 2px solid transparent;
+  box-shadow: 0 0 0 1px var(--bd);      /* 흰색·밝은 색도 테두리로 보이게 */
+}
+#wireProps .wp-swatches .swatch:hover { box-shadow: 0 0 0 1px var(--tx3); }
+/* 8개 이상일 때 마지막 칸에 오는 펼치기 버튼 — 스와치와 같은 크기라 줄이 안 흐트러진다 */
+#wireProps .wp-swatches .swatch-more {
+  width: 22px; height: 22px; border-radius: 4px; padding: 0;
+  border: 1px dashed var(--bd); background: var(--bg2);
+  color: var(--tx3); font-size: 10px; line-height: 1; cursor: pointer;
+  font-family: inherit;
+}
+#wireProps .wp-swatches .swatch-more:hover { border-color: var(--primary); color: var(--primary); }
+/* 펼치면 여러 줄이 될 수 있다 */
+#wireProps .wp-swatches { flex-wrap: wrap; row-gap: var(--sp1); }
+#wireProps .wp-swatches .swatch.active {
+  border-color: #fff; box-shadow: 0 0 0 2px var(--primary);
+}
+
+/* ── 배선 속성창의 입력칸 높이를 하나로 맞춘다 (2026-08-18) ──
+   실측했더니 라벨 글자는 넷 다 같은데 '칸'이 제각각이었다:
+     색상 30px(여백 1px) · 두께 29px · 선 종류 19px(브라우저 기본 모양)
+   나란히 놓이면 글자 크기가 다른 것처럼 보인다.
+   기준은 두께·라벨·전류가 이미 쓰는 29px 이다. */
+#wireProps input[type=color] {
+  height: 29px; padding: 2px;      /* 여백 1px 이라 혼자 1px 높았다 */
+  box-sizing: border-box;
+}
+/* 선택창은 브라우저 기본 모양이라 혼자 작았다 — 다른 칸과 같은 규칙으로 그린다 */
+#wireProps select {
+  height: 29px; box-sizing: border-box;
+  padding: 4px 6px; font-size: var(--fs);
+  border: 1px solid var(--bd); border-radius: var(--r);
+  background: var(--bg); color: var(--tx); font-family: inherit;
+}
+
+/* 라벨 이름·전류 입력칸은 짧은 값이라 전폭까지 늘릴 필요가 없다.
+   구조(라벨이 위, 칸이 아래)는 그대로 두고 폭만 줄인다.
+   #propBody input 의 width:100% 를 여기서만 덮어쓴다. */
+#wireProps #wireLabelText { width: 150px; }
+#wireProps #wireCurrent  { width: 110px; }
+#wireProps #wireCalcV    { width: 110px; }
+
+/* 전류 입력칸도 라벨 아래 줄로 — 선 종류와 같은 형태로 맞춘다.
+   inline 이면 '전류(A) [칸]' 처럼 한 줄에 흐른다. */
+#wireProps #wireCurrent, #wireProps #wireCalcV { display: block; margin-top: var(--sp1); }
+
+/* 선 겹침 체크박스.
+   실측하면 글자는 선 종류와 똑같은 12px 인데, 체크박스가 13px 로 작아
+   줄 전체가 왜소해 보였다. 위 입력칸들이 29px 인 것과 대비돼 더 그렇다.
+   글자 크기는 그대로 두고 체크박스만 키운다. */
+#wireProps .chk input[type=checkbox] {
+  width: 16px; height: 16px; flex: none;
+  accent-color: var(--primary);   /* 켰을 때 앱 주색으로 — 기본 파랑과 미묘하게 달랐다 */
+}
+
+/* 팔레트 관리(⋯) 버튼을 색 스와치와 같은 크기로.
+   앱 기본 버튼(.small) 규칙을 따르다 보니 31x29 로 스와치(20x20)보다 크고
+   세로도 4.5px 위로 떠서, 색 칸들과 한 줄로 안 보였다 (실측 2026-08-18).
+   같은 줄에 나란히 서는 것끼리는 크기·모서리·세로 기준선을 맞춘다. */
+#btnPaletteManage.small {
+  width: 20px; height: 20px; padding: 0;
+  border-radius: 4px; box-sizing: border-box;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 13px; line-height: 1;
+  vertical-align: middle;
+}

@@ -685,13 +685,23 @@ WE.interactions = (function () {
       var bp = wireDraftPath(wirePending, host.pos, "branch");
       var wb = WE.model.addWireRef(wirePending.from,
         { wireId: host.wire.id, x: host.pos.x, y: host.pos.y });
+      // ★ 꺾임점은 그리기 전에 넣어야 한다.
+      //   renderWires() 뒤에 넣으면 처음 한 번은 꺾임점 없는 모양으로 그려지고,
+      //   다음 렌더링 때 갑자기 모양이 바뀐다. 그 사이에 내보내면 틀린 경로가 나간다.
+      //   (null 크래시를 고치면서 순서를 바꿔 생겼던 문제 — 감사 재리뷰가 찾았다)
       if (wb && bp) wb.waypoints = WE.geometry.simplify(bp).slice(1, -1);
       wirePending = null;
       WE.render.clearWirePreview();
       WE.render.renderWires();
-      WE.model.select("wire", wb.id);
+      // 배선이 안 만들어졌을 수 있다(무료 한도 초과 → addWireRef 가 null).
+      // 위 단자 연결 경로와 같은 자리에서 막는다 —
+      // 한쪽만 고치면 같은 버그가 다른 경로에 남는다(실제로 그랬다).
+      if (wb) {
+        WE.model.select("wire", wb.id);
+        // 만들어지지 않았으면 통계에도 남기지 않는다
+        if (WE.app.trackOnce) WE.app.trackOnce("create_branch");
+      }
       WE.app.refreshProps();
-      if (WE.app.trackOnce) WE.app.trackOnce("create_branch");
       e.preventDefault();
       return;
     }

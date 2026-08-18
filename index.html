@@ -15,7 +15,7 @@
   <meta name="twitter:card" content="summary" />
   <link rel="canonical" href="https://easycable.co.kr/" />
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔌</text></svg>" />
-  <link rel="stylesheet" href="styles.css?v=676cc55e" />
+  <link rel="stylesheet" href="styles.css?v=16285378" />
   <!-- Google Analytics 4 (방문/재방문·사용 패턴 분석) -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-LN9RMMTF8M"></script>
   <script>
@@ -391,13 +391,13 @@
 
         <!-- 배선 속성 -->
         <div id="wireProps" hidden>
-          <div id="wireConn" class="wp-conn muted" hidden></div>
+          <!-- 선택 개수 표시는 뺐다 (2026-08-18). 정렬 구획이 나타나는 것 자체가 이미 다중 선택 신호라 중복이었다. -->
 
           <!-- 정렬(다중선택 시) — 다중선택의 주 작업이라 맨 위 -->
           <div id="wireAlign" class="wp-section wp-first" hidden>
             <div class="wp-sec-title">정렬</div>
             <div class="wire-align-row">
-              <button data-walign="align" title="처음 클릭한 배선의 클릭한 구간에 맞춤(세로/가로 자동)">⌈ 구간 정렬</button>
+              <button data-walign="align" title="처음 클릭한 배선의 클릭한 구간에 맞춤(세로/가로 자동)">구간 정렬</button>
               <label class="wgap">간격 <input id="wireGap" type="number" value="10" step="1" /> px</label>
             </div>
             <div class="wire-align-row">
@@ -416,10 +416,11 @@
                 <svg viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="2.5"/><rect x="4" y="10.75" width="16" height="2.5"/><rect x="4" y="18.5" width="16" height="2.5"/></svg><span>가로선 균등</span>
               </button>
             </div>
-            <div class="wire-align-row">
-              <button data-walign="merge" title="선택한 배선을 한 선처럼 겹쳐 묶기(2개 이상)"><span>🔗 합치기</span></button>
-              <button data-walign="unmerge" title="묶음을 풀어 다시 따로 이동 가능하게"><span>✂️ 풀기</span></button>
-            </div>
+              <!-- 합치기·풀기 버튼은 뺐다 (2026-08-18).
+                   분기 기능이 생기기 전에는 여러 선을 겹쳐 그려 다발처럼 보이게 했는데,
+                   이제 그 용도는 분기가 대신한다.
+                   겹쳐 그리는 것 자체는 [선 겹침] + [구간 정렬 간격 0] 으로 여전히 된다.
+                   이미 합쳐 둔 도면이 있을 수 있어 bundleId 처리 코드는 남겨 둔다. -->
           </div>
 
           <!-- 스타일 -->
@@ -429,13 +430,25 @@
               <label>색상 <input type="color" id="wireColor" /></label>
               <label>두께 <input type="number" id="wireWidth" min="1" max="30" /></label>
             </div>
-            <label class="chk" title="이 배선을 자동 겹침 회피에서 제외 — 다른 선과 겹쳐도 안 벌어짐"><input type="checkbox" id="wireAllowOverlap" /> 겹침 허용</label>
+            <!-- 팔레트에서 바로 고르기. 색상 칸(운영체제 색 고르개)은 팔레트에 없는 색을 쓸 때만 필요하고,
+                 실제로는 쓰던 색 몇 개를 반복해서 쓰기 때문에 한 번 눌러 끝나는 길을 위에 둔다.
+                 목록은 툴바 배선색과 같은 팔레트다 — 두 벌로 나누면 한쪽만 고치는 사고가 난다. -->
+            <div id="wirePalette" class="wp-swatches" title="팔레트에서 색 고르기"></div>
+            <label class="wp-dash" title="선이 많아 구분이 어려울 때 종류를 바꿔 나눈다">선 종류
+              <select id="wireDash">
+                <option value="">──── 실선</option>
+                <option value="dash">─ ─ ─ 파선</option>
+                <option value="dot">· · · · 점선</option>
+                <option value="dashdot">─ · ─ 일점쇄선</option>
+              </select>
+            </label>
+            <label class="chk" title="이 배선을 자동 벌림에서 제외한다 — 다른 선과 같은 자리를 지나도 안 밀려난다"><input type="checkbox" id="wireAllowOverlap" /> 선 겹침</label>
           </div>
 
           <!-- 라벨 -->
           <div class="wp-section">
             <div class="wp-sec-title">라벨</div>
-            <label><input type="text" id="wireLabelText" placeholder="예: W1, B1, C1…" /></label>
+              <label><input type="text" id="wireLabelText" placeholder="예: W1, B1, C1…" /></label>
             <div class="wp-btn-row">
               <button id="wireLabelReset" title="드래그로 옮긴 라벨 위치를 자동 배치로 되돌림">위치 초기화</button>
               <button id="wireLabelRemove" title="이 배선의 라벨 제거">라벨 제거</button>
@@ -445,7 +458,7 @@
           <!-- 규격(AWG) -->
           <div id="wireGauge" class="wp-section">
             <div class="wp-sec-title">배선 규격 (AWG)</div>
-            <label>전류(A) <input type="number" id="wireCurrent" step="any" min="0" placeholder="비우면 신호선" /></label>
+              <label>전류(A) <input type="number" id="wireCurrent" step="any" min="0" placeholder="비우면 신호선" /></label>
             <div id="wireAwgOut" class="muted"></div>
             <details id="wireLoadCalc">
               <summary>부하로 계산</summary>
@@ -931,24 +944,24 @@
 
   <!-- 스크립트: file:// 호환 위해 일반 script (모듈 아님), 순서 중요 -->
   <script src="js/flags.js?v=54be40f6"></script>   <!-- 맨 앞: 다른 파일이 WE.flags 를 보고 동작을 정한다 -->
-  <script src="js/auth.js?v=36a28e1f"></script>    <!-- flags 다음. SDK(js/vendor/supabase.js)는 필요할 때만 스스로 불러온다 -->
-  <script src="js/pro.js?v=fa3a4815"></script>     <!-- 무료/Pro 경계. LAUNCH 가 꺼져 있으면 제한이 안 걸린다 -->
-  <script src="js/i18n.js?v=9372ba39"></script>   <!-- 가장 먼저: DOMContentLoaded 번역이 app.js 초기화보다 앞서야 함 -->
+  <script src="js/auth.js?v=63950b7e"></script>    <!-- flags 다음. SDK(js/vendor/supabase.js)는 필요할 때만 스스로 불러온다 -->
+  <script src="js/pro.js?v=e03d741c"></script>     <!-- 무료/Pro 경계. LAUNCH 가 꺼져 있으면 제한이 안 걸린다 -->
+  <script src="js/i18n.js?v=ecc4fc88"></script>   <!-- 가장 먼저: DOMContentLoaded 번역이 app.js 초기화보다 앞서야 함 -->
   <script src="js/awg.js?v=8af811c8"></script>
-  <script src="js/model.js?v=50928709"></script>
+  <script src="js/model.js?v=4891a533"></script>
   <script src="js/presets.js?v=76c3b945"></script>
   <script src="js/geometry.js?v=2c713466"></script>
-  <script src="js/render.js?v=1c5448d8"></script>
+  <script src="js/render.js?v=46c2c4ad"></script>
   <script src="js/bgremove.js?v=8e7d0005"></script>
   <script src="js/termeditor.js?v=be9e265f"></script>
-  <script src="js/interactions.js?v=fb1dba2b"></script>
-  <script src="js/store.js?v=15a962e4"></script>
+  <script src="js/interactions.js?v=caf7f245"></script>
+  <script src="js/store.js?v=d89f23fb"></script>
   <script src="js/assets.js?v=c14bb23d"></script>   <!-- store.js 다음: 자산 풀이 store의 IndexedDB를 쓴다 -->
   <script src="js/history.js?v=efecdc9e"></script>
   <script src="js/library.js?v=d371703b"></script>
-  <script src="js/io.js?v=f73f9ca1"></script>
+  <script src="js/io.js?v=224d3f37"></script>
   <script src="js/pdf.js?v=24c35afc"></script>
-  <script src="js/app.js?v=e5eed4d5"></script>
+  <script src="js/app.js?v=7af9a090"></script>
   <!-- 인쇄 전용: 페이지 전체를 덮는 워터마크. 도면 칸 안에만 찍히던 것을 종이 전체로 넓혔다.
        position:fixed 라 인쇄 시 '모든 장'에 반복해서 나온다(도면 장 · BOM 장 전부). -->
   <div id="pageWatermark" aria-hidden="true"></div>

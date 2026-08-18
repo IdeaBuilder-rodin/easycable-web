@@ -40,10 +40,10 @@ WE.io = (function () {
   function markClean() { _cleanJson = JSON.stringify(WE.model.project); }
   function isDirty() {
     var p = WE.model.project;
-    var empty = !(p.components && p.components.length) &&
-                !(p.wires && p.wires.length) &&
-                !(p.annotations && p.annotations.length);
-    if (empty) return false;   // 빈 도면은 잃을 게 없음 → 조용히 닫힘
+    // ⚠ 최상위 components 는 '현재 시트'만 가리킨다. 그것만 보면
+    //    시트 2에서 작업하다 시트 1(빈 시트)로 옮겨 둔 채 닫을 때
+    //    '빈 도면'으로 판정해 경고 없이 닫힌다. 시트까지 봐야 한다.
+    if (!WE.model.hasContent(p)) return false;   // 빈 도면은 잃을 게 없음 → 조용히 닫힘
     return JSON.stringify(p) !== _cleanJson;
   }
 

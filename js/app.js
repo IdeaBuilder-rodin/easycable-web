@@ -137,10 +137,10 @@ WE.app = (function () {
 
   // 자동저장본으로 화면을 되돌린다. 되돌릴 내용이 없으면 false.
   function restoreDraft(saved) {
-    var empty = !(saved.components && saved.components.length) &&
-                !(saved.wires && saved.wires.length) &&
-                !(saved.annotations && saved.annotations.length);
-    if (empty) return false;   // 빈 도면은 복원해봐야 빈 화면 — 샘플/기본 시작에 양보
+    // 빈 도면은 복원해봐야 빈 화면 — 샘플/기본 시작에 양보.
+    // ⚠ 판정을 여기서 직접 하지 않는다. 예전에는 최상위 components 만 봐서,
+    //    시트에 들어 있는 도면을 전부 '비었다'고 판정해 복원이 통째로 안 됐다.
+    if (!WE.model.hasContent(saved)) return false;
     try {
       WE.model.loadProject(saved);
       reloadUI();
@@ -528,10 +528,13 @@ WE.app = (function () {
   // 단자 편집 후 처리 — 편집은 '이 부품(인스턴스)'에만 적용(Ctrl+Z로 복구 가능).
   // 라이브러리 반영은 실수 방지를 위해 분리: 부품 우클릭 → '라이브러리에 저장'을 눌러야 반영됨.
   function afterTerminalEdit(c) {
-    // 편집으로 사라진 단자를 참조하던 배선만 정리
-    WE.model.project.wires = WE.model.project.wires.filter(function (w) {
-      return WE.geometry.wireEndpoint(w.from) && WE.geometry.wireEndpoint(w.to);
-    });
+      // 편집으로 사라진 단자를 참조하던 배선만 정리.
+      // 현재 시트만 본다 — 배선은 자기 시트의 부품만 참조하고,
+      // 편집 대상 부품도 현재 시트에 있다. 모든 시트를 훑으면
+      // 다른 시트 배선이 "끝점 없음"으로 잘못 판정돼 통째로 지워진다.
+      WE.model.project.wires = WE.model.project.wires.filter(function (w) {
+        return WE.geometry.wireEndpoint(w.from) && WE.geometry.wireEndpoint(w.to);
+      });
   }
 
   // 배경제거 편집에서 회전/크롭했을 때 단자 좌표(rx·ry)를 이미지와 똑같이 변환
@@ -2493,7 +2496,12 @@ WE.app = (function () {
   // 라이브러리는 부품 이름이 길어 조금 더 여유를 준다.
   var PANEL_LIMIT = {
     leftPanel: { min: 160, max: 420 },
-    rightPanel: { min: 150, max: 300 }
+    // 최소 225px — 다중 선택 시 나오는 정렬 버튼 줄이 그만큼을 요구한다.
+    // 그보다 좁으면 '가로선 정렬' 같은 오른쪽 버튼이 잘려 못 누른다.
+    // (실측 2026-08-18: 220px 에서 3px 모자라고 225px 부터 안 잘린다.
+    //  내용 자체는 201px 이지만 패널 안쪽 여백 10px×2 와 테두리가 더 든다)
+    // 넓게 쓰고 싶으면 사용자가 늘리면 된다. 최대는 300px.
+    rightPanel: { min: 225, max: 300 }
   };
   function setupResizer(resId, panelId, dir) {
     var res = document.getElementById(resId), panel = document.getElementById(panelId);
@@ -3347,6 +3355,71 @@ WE.app = (function () {
     });
   }
 
+  /* 속성창의 팔레트 스와치.
+     툴바 팔레트와 같은 project.palette 를 쓴다 — 목록을 두 벌로 두면
+     한쪽에서 색을 추가했을 때 다른 쪽이 안 따라오는 사고가 난다.
+     색을 등록·수정하는 곳은 툴바 한 군데뿐이다(여기서는 고르기만).
+     선택된 배선이 있을 때만 뜻이 있으므로, 없으면 아무것도 안 그린다. */
+  var 스와치한줄 = 7;        // 패널 폭(225px)에서 한 줄에 들어가는 개수 — 실측값
+  var 스와치펼침 = false;    // 8개 이상일 때 나머지를 펼쳤는가
+
+  function renderWirePalette() {
+    var wrap = document.getElementById("wirePalette");
+    if (!wrap) return;
+    wrap.innerHTML = "";
+    // 선택된 배선 목록. 같은 이름의 함수가 아래 이벤트 연결부에도 있지만
+    // 그건 그 함수 안쪽 범위라 여기서는 안 보인다 — 같은 규칙을 여기에 둔다.
+    var 고른것 = WE.model.getMultiWire();
+    var ws = (고른것 && 고른것.length)
+      ? 고른것.map(function (id) { return WE.model.getWire(id); }).filter(Boolean)
+      : (WE.model.getSelectedWire() ? [WE.model.getSelectedWire()] : []);
+    if (!ws.length) { wrap.hidden = true; return; }
+    wrap.hidden = false;
+
+    // 고른 배선들이 서로 다른 색이면 '지금 색'이 하나로 정해지지 않는다 → 표시하지 않는다
+    var 현재 = ws[0].color;
+    var 같은색 = ws.every(function (w) { return w.color === 현재; });
+
+    var pal = WE.model.project.palette || [];
+    // 8개 이상이면 7개만 보이고 마지막 칸은 펼치기 버튼이 된다.
+    // 접혀 있어도 줄 높이가 고정돼 패널이 위아래로 출렁이지 않는다.
+    var 넘침 = pal.length > 스와치한줄;
+    var 보일것 = (넘침 && !스와치펼침) ? pal.slice(0, 스와치한줄 - 1) : pal;
+
+    보일것.forEach(function (p) {
+      var sw = document.createElement("div");
+      sw.className = "swatch" + (같은색 && p.color === 현재 ? " active" : "");
+      sw.style.background = p.color;
+      sw.title = p.label || p.color;
+      sw.addEventListener("click", function () {
+        ws.forEach(function (w) { w.color = p.color; });
+        // 앞으로 그릴 기본색도 같이 바꾼다 — 툴바 스와치와 동작을 맞춘다
+        WE.model.ui.wireColor = p.color;
+        saveWireSettings();
+        WE.render.renderWires(); WE.render.renderOverlay();
+        renderPalette();
+        refreshProps();
+        WE.history.commit();
+      });
+      wrap.appendChild(sw);
+    });
+
+    if (넘침) {
+      var more = document.createElement("button");
+      more.type = "button";
+      more.className = "swatch-more";
+      more.textContent = 스와치펼침 ? "▲" : "＋" + (pal.length - (스와치한줄 - 1));
+      more.title = 스와치펼침
+        ? WE.i18n.t("접기")
+        : WE.i18n.t("나머지 색 보기 — 색을 추가·수정하려면 툴바 배선색의 ⋯ 를 쓰세요");
+      more.addEventListener("click", function () {
+        스와치펼침 = !스와치펼침;
+        renderWirePalette();
+      });
+      wrap.appendChild(more);
+    }
+  }
+
   function renderPalette() {
     var wrap = document.getElementById("paletteSwatches");
     wrap.innerHTML = "";
@@ -3453,6 +3526,15 @@ WE.app = (function () {
       var ws = selectedWires(); if (!ws.length) return;
       ws.forEach(function (w) { w.width = Math.max(1, v); });
       WE.render.renderWires(); WE.render.renderOverlay();
+    });
+    /* 선 종류. 값이 빈 문자열이면 '실선'이고, 그때는 필드를 아예 지운다.
+       기본값을 파일에 안 남겨야 예전 파일과 새로 만든 파일이 같은 모양이 된다. */
+    document.getElementById("wireDash").addEventListener("change", function (e) {
+      var v = e.target.value;
+      var ws = selectedWires(); if (!ws.length) return;
+      ws.forEach(function (w) { if (v) w.dash = v; else delete w.dash; });
+      WE.render.renderWires(); WE.render.renderOverlay();
+      WE.history.commit();
     });
     document.getElementById("wireAllowOverlap").addEventListener("change", function (e) {
       var ws = selectedWires(); if (!ws.length) return;
@@ -4095,7 +4177,9 @@ WE.app = (function () {
   function legendItems() {
     var proj = WE.model.project;
     var used = {};
-    (proj.wires || []).forEach(function (w) {
+    // proj.wires 는 '현재 시트' 별칭이다. 그것만 보면 시트 2에만 쓴 색이
+    // 인쇄물 범례에서 빠져, 보는 사람은 그 색이 무슨 뜻인지 알 길이 없다.
+    WE.model.allWires().forEach(function (w) {
       if (w && w.color) used[String(w.color).toLowerCase()] = 1;
     });
     return (proj.palette || []).filter(function (p) {
@@ -4296,12 +4380,12 @@ WE.app = (function () {
       empty.hidden = true; body.hidden = true; wp.hidden = false;
       var mw = WE.model.getMultiWire();
       // 연결 설명 문구는 단일 선택에선 표시하지 않음(불필요) — 다중 선택 개수만 안내
-      var connEl = document.getElementById("wireConn");
-      connEl.hidden = !(mw && mw.length > 1);
-      connEl.textContent = (mw && mw.length > 1) ? (mw.length + WE.i18n.t("개 선택됨")) : "";
+      // 선택 개수 표시는 없앴다 — 정렬 구획이 나타나는 것으로 충분하다 (2026-08-18)
       document.getElementById("wireAlign").hidden = !(mw && mw.length >= 2);
       document.getElementById("wireAllowOverlap").checked = !!wire.allowOverlap;
       setIfNotFocused("wireColor", wire.color);
+      setIfNotFocused("wireDash", wire.dash || "");   // 필드가 없으면 실선
+      renderWirePalette();
       setIfNotFocused("wireWidth", wire.width);
       setIfNotFocused("wireLabelText", wire.labelText || "");
       setIfNotFocused("wireCurrent", wire.current > 0 ? wire.current : "");
@@ -4445,6 +4529,9 @@ WE.app = (function () {
     setMode: setMode,
     nextWireLabel: nextWireLabel,
     track: track, trackOnce: trackOnce,
+    // '새 배선도로 시작'. 검사가 이 이름으로 부르고 있었는데 노출이 안 돼 있어서
+    // WE.app.newProject ? ... : 1 이 조용히 지나갔다 (2026-08-18).
+    newProject: startNewProject,
     offerNotifyAfterValue: offerNotifyAfterValue
   };
 })();

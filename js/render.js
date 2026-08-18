@@ -68,6 +68,20 @@ WE.render = (function () {
     return node;
   }
 
+  /* 선 종류 -> SVG stroke-dasharray.
+     칸 길이를 선 두께에 비례시킨다. 고정값이면 굵은 선에서는 점선이 거의 안 보이고
+     가는 선에서는 끊긴 자국만 남는다.
+     dash 필드가 없으면(예전 파일·기본값) 실선이라 null 을 돌려준다. */
+  function dashPattern(wire) {
+    var w = Math.max(1, wire.width || 1);
+    switch (wire.dash) {
+      case "dash":    return (w * 3.5) + "," + (w * 2.5);
+      case "dot":     return (w * 0.9) + "," + (w * 2.0);
+      case "dashdot": return (w * 4.0) + "," + (w * 2.0) + "," + (w * 0.9) + "," + (w * 2.0);
+      default:        return null;   // 실선
+    }
+  }
+
   // 부품 하나를 <g>로 렌더
   function renderComponent(cmp) {
     var g = el("g", {
@@ -276,10 +290,17 @@ WE.render = (function () {
       style: "pointer-events:stroke;cursor:pointer"
     }));
     // 표시 선
-    g.appendChild(el("path", {
+    var 선속성 = {
       d: d, fill: "none", stroke: wire.color, "stroke-width": wire.width,
       "stroke-linecap": "round", "stroke-linejoin": "round", "pointer-events": "none"
-    }));
+    };
+    var 점선 = dashPattern(wire);
+    if (점선) {
+      선속성["stroke-dasharray"] = 점선;
+      // 둥근 끝(round)은 점선의 빈칸을 메워 거의 실선처럼 보인다 — 점선일 때만 각지게
+      선속성["stroke-linecap"] = "butt";
+    }
+    g.appendChild(el("path", 선속성));
     return g;
   }
 

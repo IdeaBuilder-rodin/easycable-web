@@ -122,8 +122,9 @@ WE.store = (function () {
               id: String(c.key).slice(DRAFT_P.length),
               t: (o && o._t) || 0,
               name: (p.meta && p.meta.name) || "",
-              comps: (p.components || []).length,
-              wires: (p.wires || []).length
+              // 시트가 여러 장이면 합산한다 — 안 그러면 목록이 전부 '0부품'으로 보인다
+              comps: WE.model.countOf(p, "components"),
+              wires: WE.model.countOf(p, "wires")
             });
           }
         } catch (e) { /* 손상된 항목은 건너뜀 */ }
@@ -316,11 +317,9 @@ WE.store = (function () {
   var SNAP_MAX = 40, SNAP_INTERVAL = 5 * 60 * 1000;   // 5분 × 40 ≈ 3시간 20분치
   var _lastSnapTs = 0;
 
-  function isEmptyProject(p) {
-    return !(p.components && p.components.length) &&
-           !(p.wires && p.wires.length) &&
-           !(p.annotations && p.annotations.length);
-  }
+  // 판정은 model.js 한 곳에만 둔다 — 여기 복사해 두었다가 시트를 못 보고
+  // 자동저장 복원이 통째로 막혔던 적이 있다 (2026-08-18).
+  function isEmptyProject(p) { return !WE.model.hasContent(p); }
   // 빈 프로젝트는 보관 가치 없어 스킵
   function pushSnapshot(cb) {
     var p = WE.model.project;

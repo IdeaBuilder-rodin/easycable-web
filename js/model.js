@@ -128,6 +128,37 @@ WE.model = (function () {
   function allWires() { return allOf("wires"); }
   function allAnnotations() { return allOf("annotations"); }
 
+
+  /* 도면에 내용이 있는가 — 저장본(JSON)에도 쓸 수 있는 판정.
+     ⚠ 살아있는 project 에는 components/wires 가 '현재 시트'를 가리키는 별칭으로 있지만,
+        JSON 으로 저장했다 읽으면 그 별칭이 사라지고 sheets 안에만 남는다.
+        그래서 최상위와 시트를 모두 봐야 한다.
+        이 판정이 app.js 와 store.js 두 곳에 복사돼 있었고 둘 다 최상위만 보는 바람에
+        자동저장 복원이 통째로 안 됐다 (2026-08-18 발견, 배포본도 같은 상태였다).
+        다시 흩어지지 않게 여기 한 곳에만 둔다. */
+  function hasContent(p) {
+    if (!p) return false;
+    function 있나(o) {
+      return !!o && !!((o.components && o.components.length) ||
+                       (o.wires && o.wires.length) ||
+                       (o.annotations && o.annotations.length));
+    }
+    if (있나(p)) return true;
+    var sh = p.sheets || [];
+    for (var i = 0; i < sh.length; i++) if (있나(sh[i])) return true;
+    return false;
+  }
+
+  /* 저장본의 부품·배선 개수 — 목록에 "무슨 도면인지" 보여주는 데 쓴다.
+     시트가 여러 장이면 합산한다. */
+  function countOf(p, 무엇) {
+    if (!p) return 0;
+    var n = (p[무엇] || []).length;
+    var sh = p.sheets || [];
+    for (var i = 0; i < sh.length; i++) n += ((sh[i] && sh[i][무엇]) || []).length;
+    return n;
+  }
+
   // ---- 시트 편집 ----
   function sheetIndex(id) {
     for (var i = 0; i < project.sheets.length; i++) if (project.sheets[i].id === id) return i;
@@ -465,6 +496,9 @@ WE.model = (function () {
     clearSelection();
     ui.selectedTerminalId = null;
     _idCounter = 1;
+    // 도면이 바뀌면 한도 안내 상태를 초기화한다 —
+    // 안 하면 이전 도면에서 한 번 본 안내가 새 도면에서 영영 안 뜬다.
+    if (WE.pro) WE.pro.projectChanged();
   }
 
   function loadProject(data) {
@@ -531,6 +565,9 @@ WE.model = (function () {
       (s.annotations || []).forEach(function (a) { scan(a.id); });
     });
     _idCounter = maxN + 1;
+    // 파일열기 · 자동저장 복원 · 최근작업 · 샘플 · 되돌리기가 모두 이 함수를 지난다.
+    // 여기 한 곳에 걸면 모든 경로가 덮인다.
+    if (WE.pro) WE.pro.projectChanged();
   }
 
   // ---- 주석(자유 텍스트) ----
@@ -627,6 +664,8 @@ WE.model = (function () {
     // 프로젝트 전체 집계용 — 시트 경계를 넘는 기능은 반드시 이걸 쓴다
     allComponents: allComponents,
     allWires: allWires,
+    hasContent: hasContent,
+    countOf: countOf,
     allAnnotations: allAnnotations,
     DEFAULT_TERMINAL_COLOR: DEFAULT_TERMINAL_COLOR,
     addTerminal: addTerminal,

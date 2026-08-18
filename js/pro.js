@@ -25,6 +25,7 @@ WE.pro = (function () {
      ⚠ 본 서비스에서는 무시된다(아래 isPro 참조). 시험 편의일 뿐 보안과 무관하다 —
         어차피 브라우저 앱이라 콘솔로 같은 일을 할 수 있다(소프트 페이월). */
   var _proOverride = null;
+  var _openNoticed = false;   // '한도 넘는 도면' 안내를 이미 띄웠는가
 
   /* 미리보기에서만 한도를 낮춰 시험할 수 있다.
        preview.easycable-web.pages.dev/?limit=2
@@ -107,9 +108,14 @@ WE.pro = (function () {
      ⚠ 열기를 막지 않는다 — 막으면 사용자가 자기 도면을 못 여는 데이터 손실이 된다.
         열되 '더 추가'만 막힌다. 삭제·내보내기는 그대로 된다. */
   function checkOpened() {
+    if (_openNoticed) return;
+    // 로그인 확인이 끝나기 전에는 판단하지 않는다.
+    // 확인 중에는 '무료'로 보이므로, Pro 사용자에게 한도 초과 안내를 잘못 띄우게 된다.
+    if (WE.flags && WE.flags.LAUNCH && WE.auth && !WE.auth.ready()) return;
     if (!limited()) return;
     var n = count();
     if (n <= limit()) return;
+    _openNoticed = true;
     if (WE.app && WE.app.notice) {
       WE.app.notice(
         WE.i18n.t("배선 한도를 넘는 도면입니다"),
@@ -120,7 +126,14 @@ WE.pro = (function () {
   }
 
   /* 도면을 새로 열거나 만들면 안내 상태를 초기화한다 */
-  function reset() { _noticed = false; }
+  function reset() { _noticed = false; _openNoticed = false; }
+
+  /* 도면이 바뀌었다 — model.loadProject / newProject 가 부른다.
+     파일열기 · 자동저장 복원 · 최근작업 · 샘플 · 되돌리기가 모두 그 두 함수를 지난다. */
+  function projectChanged() {
+    reset();
+    checkOpened();
+  }
 
   return {
     LIMIT: LIMIT,
@@ -132,9 +145,10 @@ WE.pro = (function () {
     canAdd: canAdd,
     deny: deny,
     checkOpened: checkOpened,
+    projectChanged: projectChanged,
     reset: reset,
     // 미리보기 전용 시험 도구
-    setOverride: function (v) { _proOverride = v; _noticed = false; },
+    setOverride: function (v) { _proOverride = v; _noticed = false; _openNoticed = false; },
     getOverride: function () { return _proOverride; },
   };
 })();
@@ -177,3 +191,10 @@ WE.pro = (function () {
     paint();
   });
 })();
+
+/* 로그인 확인이 도면을 연 뒤에 끝나는 경우가 있다.
+   그때 한 번 더 봐야 '한도 넘는 도면' 안내를 놓치지 않는다.
+   _openNoticed 가 있어 두 번 뜨지는 않는다. */
+if (WE.auth && WE.auth.onChange) {
+  WE.auth.onChange(function () { WE.pro.checkOpened(); });
+}
