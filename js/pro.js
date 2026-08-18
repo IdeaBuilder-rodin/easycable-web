@@ -20,6 +20,24 @@ WE.pro = (function () {
   var LIMIT = 30;          // 프로젝트당 무료 배선 수
   var _noticed = false;    // 안내를 이미 띄웠는가 (연속 클릭에 모달이 겹치지 않게)
 
+  /* 미리보기에서만 한도를 낮춰 시험할 수 있다.
+       preview.easycable-web.pages.dev/?limit=2
+     30개를 매번 그려서 시험하기는 번거롭다.
+
+     ⚠ 본 서비스에서는 무시된다 — WE.flags.PREVIEW 가 false 이기 때문.
+        코드의 LIMIT 은 30 그대로 두므로 "시험값 2를 잊고 출시하는" 사고가 날 수 없다. */
+  function _limitOverride() {
+    if (!WE.flags || !WE.flags.PREVIEW) return null;
+    try {
+      var m = /[?&]limit=(\d+)/.exec(location.search);
+      if (!m) return null;
+      var n = parseInt(m[1], 10);
+      return (n > 0 && n <= 1000) ? n : null;
+    } catch (e) { return null; }
+  }
+
+  function limit() { return _limitOverride() || LIMIT; }
+
   /* Pro 인가. 출시 전에는 모두 Pro 로 본다 → 제한이 아예 안 걸린다. */
   function isPro() {
     if (!WE.flags || !WE.flags.LAUNCH) return true;
@@ -35,12 +53,12 @@ WE.pro = (function () {
     return WE.model.allWires().length;
   }
 
-  function remaining() { return Math.max(0, LIMIT - count()); }
+  function remaining() { return Math.max(0, limit() - count()); }
 
   /* n 개를 더 넣을 수 있는가 */
   function canAdd(n) {
     if (!limited()) return true;
-    return count() + (n || 1) <= LIMIT;
+    return count() + (n || 1) <= limit();
   }
 
   /* 문구는 완전한 문장 하나로 두고 {} 를 나중에 채운다.
@@ -59,18 +77,18 @@ WE.pro = (function () {
     // 상태줄에는 항상 남긴다 — 모달을 닫아도 이유가 보여야 한다
     if (WE.app && WE.app.setHint) {
       WE.app.setHint(
-        msg("배선 한도 {now}/{max}", { now: now, max: LIMIT }),
-        msg("무료 버전은 도면 하나에 배선 {max}개까지 그릴 수 있습니다.", { max: LIMIT })
+        msg("배선 한도 {now}/{max}", { now: now, max: limit() }),
+        msg("무료 버전은 도면 하나에 배선 {max}개까지 그릴 수 있습니다.", { max: limit() })
       );
     }
 
     // 모달은 한 번만. 연달아 클릭할 때마다 뜨면 작업을 방해한다.
     if (!_noticed && WE.app && WE.app.notice) {
       _noticed = true;
-      var detail = msg("무료 버전은 도면 하나에 배선 {max}개까지 그릴 수 있습니다.", { max: LIMIT });
+      var detail = msg("무료 버전은 도면 하나에 배선 {max}개까지 그릴 수 있습니다.", { max: limit() });
       if (need && need > 1) {
         detail += "\n\n" + msg("이 작업에는 배선 {need}개가 필요합니다. (현재 {now}/{max})",
-                               { need: need, now: now, max: LIMIT });
+                               { need: need, now: now, max: limit() });
       }
       WE.app.notice(WE.i18n.t("배선 한도에 도달했습니다"), detail);
     }
@@ -83,7 +101,7 @@ WE.pro = (function () {
   function checkOpened() {
     if (!limited()) return;
     var n = count();
-    if (n <= LIMIT) return;
+    if (n <= limit()) return;
     if (WE.app && WE.app.notice) {
       WE.app.notice(
         WE.i18n.t("배선 한도를 넘는 도면입니다"),
@@ -98,6 +116,7 @@ WE.pro = (function () {
 
   return {
     LIMIT: LIMIT,
+    limit: limit,        // 실제 적용되는 한도 (미리보기 override 반영)
     isPro: isPro,
     limited: limited,
     count: count,
