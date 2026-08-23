@@ -98,7 +98,7 @@ WE.i18n = (function () {
     "선택 항목 이동 (Shift: 1px 미세)": "Move selection (Shift: 1px fine)",
     "단자 이름 위치 초기화": "Reset terminal name positions",
     "부품 더블클릭": "Double-click a part",
-    "이름 숨기기": "Hide names",
+    "이름 숨기기 (도면에서)": "Hide names (on the diagram)",
     "비율 고정": "Lock ratio",
     "크기": "Size",
     "단자": "Terminals",

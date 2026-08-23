@@ -532,31 +532,9 @@ WE.app = (function () {
       // 현재 시트만 본다 — 배선은 자기 시트의 부품만 참조하고,
       // 편집 대상 부품도 현재 시트에 있다. 모든 시트를 훑으면
       // 다른 시트 배선이 "끝점 없음"으로 잘못 판정돼 통째로 지워진다.
-      //
-      // ⚠ 끝점은 두 종류다 — { componentId, terminalId }(단자) 와 { wireId, x, y }(분기).
-      //    wireEndpoint 는 단자만 해석하므로 분기에는 늘 null 을 준다.
-      //    예전 코드는 그 null 을 "끝점 없음"으로 읽어 **분기선을 전부 지웠다**.
-      //    단자 편집기를 열었다 아무것도 안 고치고 닫기만 해도 사라졌다.
-      //    (2026-08-23 사용자 제보로 발견. 재현: _ai/직접확인목록.md E절)
-      //
-      // 그래서 '단자 끝점인데 그 단자가 없는' 배선만 고른다. 분기는 여기서 판단하지 않는다 —
-      // 호스트가 지워지면 removeWire 가 그 위 분기를 연쇄로 정리한다(분기의 분기까지).
-      //
-      // ⚠ 이 정리는 없애면 안 된다. 단자 편집기의 되돌리기(teApply)가 cmp.terminals 를
-      //    통째로 갈아끼워 removeTerminal 을 거치지 않는 단자 제거가 생길 수 있다.
-      var 죽은 = WE.model.project.wires.filter(function (w) {
-        return [w.from, w.to].some(function (r) {
-          return r && !WE.geometry.isBranchRef(r) && !WE.geometry.wireEndpoint(r);
-        });
-      }).map(function (w) { return w.id; });
-      // 미리 id 배열로 뽑아 둔다 — removeWire 가 project.wires 를 갈아끼우므로
-      // 배열을 직접 순회하면 건너뛰는 것이 생긴다.
-      죽은.forEach(function (id) { WE.model.removeWire(id); });
-
-      // 단자를 옮겼으면 배선이 나가는 방향이 달라진다 —
-      // "단자가 어디에 있든 그 단자가 향한 면 쪽으로 먼저 나간다" 규칙을 다시 세운다.
-      // 이미 규칙대로인 배선은 건드리지 않는다(상태를 안 들고 현재만 본다).
-      if (c && WE.interactions && WE.interactions.fixLeads) WE.interactions.fixLeads([c.id]);
+      WE.model.project.wires = WE.model.project.wires.filter(function (w) {
+        return WE.geometry.wireEndpoint(w.from) && WE.geometry.wireEndpoint(w.to);
+      });
   }
 
   // 배경제거 편집에서 회전/크롭했을 때 단자 좌표(rx·ry)를 이미지와 똑같이 변환
@@ -4327,18 +4305,9 @@ WE.app = (function () {
     document.getElementById("propLockAspect").addEventListener("change", function (e) {
       WE.model.ui.lockAspect = e.target.checked;
     });
-    // 회전은 0/90/180/270 만 허용한다 (2026-08-23 확정) — 회전 핸들도 같은 규칙이다.
-    // 90 단위가 아니면 단자 탈출 스텁이 대각선이 되어 직각 배선과 어긋나고,
-    // 수동배선을 부품과 함께 돌릴 때 수평·수직이 깨진다.
-    // ⚠ 입력 중에 칸의 값을 되돌리면 타이핑을 방해한다 — 반영만 스냅하고 칸은 blur 에서 맞춘다.
     document.getElementById("propRot").addEventListener("input", function (e) {
       var v = parseFloat(e.target.value); if (isNaN(v)) return;
-      var 스냅 = ((Math.round(v / 90) * 90) % 360 + 360) % 360;
-      applyProp(function (c) { c.rotation = 스냅; }, true);
-    });
-    document.getElementById("propRot").addEventListener("blur", function (e) {
-      var c = WE.model.getSelectedComponent();
-      if (c) e.target.value = c.rotation || 0;   // 칸에 남은 어중간한 숫자를 실제 값으로 되돌린다
+      applyProp(function (c) { c.rotation = ((v % 360) + 360) % 360; }, true);
     });
     // 음수가 나오지 않도록 360을 더한 뒤 나머지를 취한다 (-90 → 270)
     document.getElementById("propRot90").addEventListener("click", function () {

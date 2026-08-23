@@ -1,17 +1,8 @@
 # Cloudflare Pages 보안 헤더 (모든 경로에 적용)
 # 참고: CSP는 앱이 실제로 쓰는 출처만 허용 — XSS가 나더라도 외부로 데이터가 새는 것을 제한
-#
-# 2026-08-22 GA4 를 걷어내면서 googletagmanager/google-analytics 를 지우고
-# static.cloudflareinsights.com(비콘) · cloudflareinsights.com(수집) 을 넣었다.
-# ⚠ 이걸 안 넣으면 대시보드에서 Web Analytics 를 켜도 CSP 가 비콘을 막아 통계가 0 이다.
-#
-# ⚠ 결제(토스페이먼츠)를 붙이면 결제 페이지에만 CSP 를 따로 완화해야 한다.
-#    js.tosspayments.com 외에 카드사·간편결제 도메인이 여럿 필요하고,
-#    Permissions-Policy 의 payment=() 와 form-action 'self' 도 걸린다.
-#    전역을 풀지 말고 /pay* 경로 규칙을 따로 두는 방식으로 간다.
 /*
   X-Content-Type-Options: nosniff
   Referrer-Policy: strict-origin-when-cross-origin
   Permissions-Policy: geolocation=(), microphone=(), camera=(), payment=(), usb=()
   Cross-Origin-Opener-Policy: same-origin
-  Content-Security-Policy: default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self' 'unsafe-inline' https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' https://ukttsmkenaappsazervx.supabase.co https://api.web3forms.com https://cloudflareinsights.com; frame-src blob:
+  Content-Security-Policy: default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self' 'unsafe-inline' https://www.googletagmanager.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://www.googletagmanager.com https://*.google-analytics.com; font-src 'self' data:; connect-src 'self' https://ukttsmkenaappsazervx.supabase.co https://api.web3forms.com https://www.googletagmanager.com https://www.google-analytics.com https://*.google-analytics.com https://*.analytics.google.com; frame-src blob:

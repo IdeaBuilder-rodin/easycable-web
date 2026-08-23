@@ -204,8 +204,7 @@ WE.interactions = (function () {
       if (rc) {
         var center = WE.geometry.localToAbs(rc, rc.width / 2, rc.height / 2);
         drag = { mode: "rotate", id: rc.id, cx: center.x, cy: center.y,
-                 termFollow: beginTermFollow([rc.id]), branchFollow: beginBranchFollow([rc.id]),
-                 rotFollow: beginRotFollow([rc.id]), leadRebuild: beginLeadRebuild([rc.id]) };
+                 termFollow: beginTermFollow([rc.id]), branchFollow: beginBranchFollow([rc.id]) };
         svg.setPointerCapture(e.pointerId);
       }
       return;
@@ -944,301 +943,6 @@ WE.interactions = (function () {
   // 이동(move)과 나눠 둔 이유: 이동은 모든 단자가 같은 양만큼 움직여 dx·dy 하나면 되지만,
   // 크기·회전은 단자마다 이동량이 달라 끝점별로 각자 계산해야 한다.
   // 이게 없으면 단자만 움직이고 꺾임점은 제자리에 남아, 직각 정리가 끼어들며 선이 위로 튄다.
-  /* ── 회전 전용 추적 ────────────────────────────────────────────────
-     양 끝이 '같은 부품'에 붙은 수동배선은 회전할 때 통째로 같이 돌아야 한다.
-
-     왜 따로 두나 — applyTermFollow 는 이동·크기변경용이다.
-     followEnd 가 "가로 구간이면 y만, 세로면 x만" 옮기는데, 회전은 단자를 호를 그리며
-     크게 옮기므로 양 끝 꺾임점이 같은 자리로 뭉개진다.
-     실제로 ㄷ 모양 배선이 (223,57)(223,76) → (223,174)(223,174) 로 붕괴했다.
-     (2026-08-23 사용자 제보. 재현: _ai/직접확인목록.md)
-
-     한쪽 끝만 이 부품인 배선은 여기서 손대지 않는다 — 실측해 보니 followEnd 로도
-     대각선 0 · 겹침 0 으로 멀쩡했고, 전체를 돌리면 반대쪽 부품까지 끌고 가기 때문이다. */
-  function beginRotFollow(cmpIds) {
-    var arr = [];
-    (cmpIds || []).forEach(function (id) {
-      var c = WE.model.getComponent(id); if (!c) return;
-      var s = c.scale || 1;
-      var wires = WE.model.project.wires.filter(function (w) {
-        return w.waypoints && w.waypoints.length &&
-               w.from && w.to &&
-               w.from.componentId === id && w.to.componentId === id;
-      }).map(function (w) {
-        return { w: w, orig: w.waypoints.map(function (p) { return { x: p.x, y: p.y }; }) };
-      });
-      if (!wires.length) return;
-      arr.push({
-        id: id, rot0: c.rotation || 0,
-        cx0: c.x + c.width * s / 2, cy0: c.y + c.height * s / 2,
-        wires: wires
-      });
-    });
-    return arr;
-  }
-  /* 강체 회전을 적용하고, 처리한 배선 id 집합을 돌려준다(applyTermFollow 가 건너뛰도록).
-     ⚠ 90 배수만 처리한다. 회전은 0/90/180/270 로 제한돼 있지만(2026-08-23),
-        옛 파일에 어중간한 각도가 남아 있을 수 있어 방어한다.
-     ⚠ cos/sin 대신 정수 변환을 쓴다 — Math.cos(90°) 가 6.1e-17 이라 돌릴 때마다
-        좌표가 조금씩 흘러 수평·수직이 미세하게 깨진다. */
-  function applyRotFollow(snap) {
-    var 처리됨 = {};
-    (snap || []).forEach(function (f) {
-      var c = WE.model.getComponent(f.id); if (!c) return;
-      var d = ((((c.rotation || 0) - f.rot0) % 360) + 360) % 360;
-      if (d === 0 || d % 90 !== 0) return;
-      var s = c.scale || 1;
-      var cx = c.x + c.width * s / 2, cy = c.y + c.height * s / 2;
-      f.wires.forEach(function (r) {
-        r.w.waypoints.forEach(function (pt, i) {
-          var o = r.orig[i]; if (!o) return;
-          var vx = o.x - f.cx0, vy = o.y - f.cy0, nx, ny;
-          if (d === 90)       { nx = -vy; ny =  vx; }   // 화면 좌표(y 아래)에서 시계 90°
-          else if (d === 180) { nx = -vx; ny = -vy; }
-          else                { nx =  vy; ny = -vx; }   // 270°
-          pt.x = cx + nx; pt.y = cy + ny;
-        });
-        처리됨[r.w.id] = 1;
-      });
-    });
-    return 처리됨;
-  }
-
-  /* ── 리드 재구성 ──────────────────────────────────────────────────
-     한쪽 끝만 회전 부품에 붙은 수동배선은, 회전하면 단자가 향하는 면이 바뀌는데
-     followEnd 는 예전 리드의 축(가로/세로)만 지킨다. 그래서 왼쪽 면에서 왼쪽으로
-     나가던 선이, 단자가 위로 올라간 뒤에도 계속 왼쪽으로 나가 부품을 가로지른다.
-     (2026-08-23 제보. 실측: 부품 내부를 지나는 점 7 → 34)
-
-     게다가 한 면에 나란한 단자들은 회전하면 반드시 같은 좌표선에 모이므로,
-     방향만 고치고 레인을 안 나누면 리드끼리 포개진다 (실측 110px).
-
-     그래서 여기서 두 가지를 같이 세운다:
-       ① 단자가 향하는 방향으로 먼저 나간다 (terminalExit)
-       ② 같은 면·같은 꺾임 방향 묶음 안에서 계단식으로 벌린다 (bundleRank)
-     둘 다 자동배선이 이미 쓰는 규칙이다 — 수동배선에만 없었다.
-
-     ⚠ 렌더가 아니라 waypoints(데이터)를 고친다. manualPath 에 렌더 전용 점을 끼우면
-        '화면 점 개수 = waypoint 개수' 가 깨져 구간 드래그·cleanupWire 가 어긋난다. */
-
-  var LEAD_LANE = 10;   // geometry 의 LANE_STEP 과 같은 값
-
-  function beginLeadRebuild(cmpIds) {
-    var set = {}; (cmpIds || []).forEach(function (id) { set[id] = 1; });
-    var arr = [];
-    WE.model.project.wires.forEach(function (w) {
-      if (!w.waypoints || !w.waypoints.length) return;      // 수동배선만
-      var f = w.from, t = w.to;
-      var fromIn = !!(f && f.componentId && set[f.componentId]);
-      var toIn = !!(t && t.componentId && set[t.componentId]);
-      if (!fromIn && !toIn) return;
-      if (fromIn && toIn) return;                            // 양 끝 같은 부품 → 강체 회전이 맡는다
-      arr.push({
-        w: w, key: fromIn ? "from" : "to",
-        cmpId: fromIn ? f.componentId : t.componentId,
-        rot0: (WE.model.getComponent(fromIn ? f.componentId : t.componentId) || {}).rotation || 0,
-        orig: w.waypoints.map(function (p) { return { x: p.x, y: p.y }; })
-      });
-    });
-    return arr;
-  }
-
-  // 부품의 '확대 사각형'을 로컬 좌표로 판정하기 위한 도구
-  function 로컬변환기(c) {
-    var s = c.scale || 1, W = c.width * s, H = c.height * s;
-    var cx = c.x + W / 2, cy = c.y + H / 2;
-    var deg = ((Math.round((c.rotation || 0) / 90) * 90) % 360 + 360) % 360;
-    // 화면 → 로컬 (회전을 되돌린다). 90 단위라 정수 변환으로 정확히 푼다.
-    return function (p) {
-      var vx = p.x - cx, vy = p.y - cy, ux, uy;
-      if (deg === 0)        { ux =  vx; uy =  vy; }
-      else if (deg === 90)  { ux =  vy; uy = -vx; }
-      else if (deg === 180) { ux = -vx; uy = -vy; }
-      else                  { ux = -vy; uy =  vx; }
-      return { x: ux + W / 2, y: uy + H / 2, W: W, H: H };
-    };
-  }
-  // 회전까지 반영한 부품의 화면 기준 바깥 상자 (모서리 네 점을 화면으로 옮겨 감싼다)
-  function 화면상자(c, 여백) {
-    var s = c.scale || 1, W = c.width * s, H = c.height * s;
-    var cx = c.x + W / 2, cy = c.y + H / 2;
-    var deg = ((Math.round((c.rotation || 0) / 90) * 90) % 360 + 360) % 360;
-    var xs = [], ys = [];
-    [[0, 0], [W, 0], [0, H], [W, H]].forEach(function (p) {
-      var ux = p[0] - W / 2, uy = p[1] - H / 2, vx, vy;
-      if (deg === 0)        { vx =  ux; vy =  uy; }
-      else if (deg === 90)  { vx = -uy; vy =  ux; }
-      else if (deg === 180) { vx = -ux; vy = -uy; }
-      else                  { vx =  uy; vy = -ux; }
-      xs.push(cx + vx); ys.push(cy + vy);
-    });
-    return { x0: Math.min.apply(null, xs) - 여백, y0: Math.min.apply(null, ys) - 여백,
-             x1: Math.max.apply(null, xs) + 여백, y1: Math.max.apply(null, ys) + 여백 };
-  }
-
-  // 선분이 확대 사각형 '내부'와 양의 길이로 겹치는가 (접선·경계는 통과로 본다)
-  function 사각형관통(로컬, a, b, 여백) {
-    var A = 로컬(a), B = 로컬(b);
-    var x0 = -여백, y0 = -여백, x1 = A.W + 여백, y1 = A.H + 여백;
-    // 직각 배선만 다루므로 수평/수직 두 경우로 충분하다
-    if (Math.abs(A.x - B.x) < 0.6) {                      // 세로
-      if (A.x <= x0 + 0.6 || A.x >= x1 - 0.6) return false;
-      var lo = Math.min(A.y, B.y), hi = Math.max(A.y, B.y);
-      return Math.min(hi, y1) - Math.max(lo, y0) > 0.6;
-    }
-    if (Math.abs(A.y - B.y) < 0.6) {                      // 가로
-      if (A.y <= y0 + 0.6 || A.y >= y1 - 0.6) return false;
-      var lo2 = Math.min(A.x, B.x), hi2 = Math.max(A.x, B.x);
-      return Math.min(hi2, x1) - Math.max(lo2, x0) > 0.6;
-    }
-    return true;   // 대각선이면 안전하다고 못 본다
-  }
-
-  /* 한쪽 끝만 회전한 수동배선의 리드를 다시 만든다.
-     돌려주는 것: { 처리됨: {wireId:1}, 경로바뀐: {wireId:1}, 실패: [ "wireId:from" ] }
-       처리됨  — applyTermFollow 가 건드리면 안 되는 배선
-       경로바뀐 — 이 배선을 호스트로 삼는 분기를 다시 투영해야 한다 (실패 fallback 포함)
-     ⚠ 반드시 orig 로 되돌린 상태에서 불러야 한다. 호출자가 복원을 책임진다. */
-  /* 한 끝의 리드를 다시 만든다. 성공하면 true.
-     orig = 기준이 될 꺾임점 배열(회전 드래그면 스냅샷, 단자 편집이면 현재값).
-     ⚠ 이 함수는 호출될 때의 부품·단자 상태만 보고 결정한다. 그래야 몇 번을 불러도 같다. */
-  function 리드다시(w, key, ref, e, T, c, orig) {
-    var t = WE.model.getTerminal(c, ref.terminalId); if (!t) return false;
-    var 순번 = 0;
-    try { 순번 = WE.geometry.bundleRank(w, ref, c, t, e.dir, true).i || 0; } catch (err) { 순번 = 0; }
-    var 길이 = e.stub + 순번 * LEAD_LANE;
-    var S = { x: T.x + e.dir.x * 길이, y: T.y + e.dir.y * 길이 };
-    var 로컬 = 로컬변환기(c), 여백 = 6;
-
-    // 나간 방향의 뒤로 되돌아가면 U턴이 된다 — 그런 후보는 버린다
-    function 뒤로감(pt) {
-      return ((pt.x - S.x) * e.dir.x + (pt.y - S.y) * e.dir.y) < -0.6;
-    }
-
-    var n = orig.length, 순서 = [];
-    if (key === "from") { for (var i = 0; i < n; i++) 순서.push(i); }
-    else { for (var j = n - 1; j >= 0; j--) 순서.push(j); }
-
-    /* 두 번 훑는다.
-       1차 — 보존점이 스텁 뒤에 있으면 건너뛴다. 왼쪽으로 나갔다가 곧바로 오른쪽으로
-             되돌아오는 U턴을 막는다.
-       2차 — 1차에서 아무것도 못 찾으면 그 조건을 푼다.
-             ⚠ 위로 나가는데 목적지가 아래에 있으면 보존점은 '뒤'에 있는 게 정상이다.
-                (위로 나감 → 좌측으로 → 다시 내려감)
-                1차 조건만 쓰면 위·아래·오른쪽 면이 전부 실패한다. 실제로 그랬다. */
-    var 고른 = null;
-    for (var 차 = 0; 차 < 2 && !고른; 차++) {
-    for (var k = 0; k < 순서.length && !고른; k++) {
-      var qi = 순서[k], Q = orig[qi];
-      if (차 === 0 && 뒤로감(Q)) continue;
-      /* 모서리 하나로 되는 길 두 가지 + 부품을 '돌아가는' 두 모서리짜리 네 가지.
-         ⚠ 하나짜리만 두면 오른쪽 면 단자에서 왼쪽 목적지로 갈 때 반드시 부품을 관통해
-            모든 후보가 거부된다. 그게 오른쪽 면이 계속 안 고쳐지던 이유였다.
-            나간 뒤 부품 위/아래(또는 좌/우)로 비켜서 지나가는 길이 필요하다. */
-      var 상자 = 화면상자(c, 여백 + 8);
-      var 후보들 = [[{ x: S.x, y: Q.y }], [{ x: Q.x, y: S.y }]];
-      if (Math.abs(e.dir.x) > 0.5) {                // 가로로 나갔다 → 위/아래로 비켜 간다
-        [상자.y0, 상자.y1].forEach(function (비켜y) {
-          후보들.push([{ x: S.x, y: 비켜y }, { x: Q.x, y: 비켜y }]);
-        });
-      } else {                                      // 세로로 나갔다 → 좌/우로 비켜 간다
-        [상자.x0, 상자.x1].forEach(function (비켜x) {
-          후보들.push([{ x: 비켜x, y: S.y }, { x: 비켜x, y: Q.y }]);
-        });
-      }
-      for (var m = 0; m < 후보들.length; m++) {
-        // 스텁 바로 다음 모서리가 뒤로 가면 나간 의미가 없다 — 이건 두 차수 모두 막는다
-        if (뒤로감(후보들[m][0])) continue;
-        var 길 = [T, S].concat(후보들[m], [Q]);
-        var 나쁨 = false;
-        // 첫 구간 T→S 는 뺀다. 단자는 부품 안쪽에 있어 나가는 길은 반드시 부품을 가로지른다.
-        for (var z = 1; z < 길.length - 1 && !나쁨; z++) {
-          if (사각형관통(로컬, 길[z], 길[z + 1], 여백)) 나쁨 = true;
-        }
-        var 남 = (key === "from") ? orig.slice(qi) : orig.slice(0, qi + 1);
-        var 끝점 = WE.geometry.wireEndpoint(w[key === "from" ? "to" : "from"]);
-        var 검사열 = 남.concat(끝점 ? [끝점] : []);
-        for (var z2 = 0; z2 < 검사열.length - 1 && !나쁨; z2++) {
-          if (사각형관통(로컬, 검사열[z2], 검사열[z2 + 1], 여백)) 나쁨 = true;
-        }
-        if (나쁨) continue;
-        고른 = { qi: qi, 중간: 후보들[m] };
-        break;
-      }
-    }
-    }
-    if (!고른) return false;
-
-    var 새점 = [S].concat(고른.중간);
-    var 뒤 = (key === "from") ? orig.slice(고른.qi) : orig.slice(0, 고른.qi + 1);
-    var 결과 = (key === "from") ? 새점.concat(뒤) : 뒤.concat(새점.slice().reverse());
-    var 정리 = [];
-    결과.forEach(function (p) {
-      var 앞 = 정리[정리.length - 1];
-      if (앞 && Math.abs(앞.x - p.x) < 0.6 && Math.abs(앞.y - p.y) < 0.6) return;
-      정리.push({ x: p.x, y: p.y });
-    });
-    w.waypoints = 정리;
-    return true;
-  }
-
-  /* 회전 드래그용 — 스냅샷 기준으로 다시 만든다 */
-  function applyLeadRebuild(snap) {
-    var 처리됨 = {}, 경로바뀐 = {}, 실패 = [];
-    (snap || []).forEach(function (f) {
-      var c = WE.model.getComponent(f.cmpId); if (!c) return;
-      var d = ((((c.rotation || 0) - f.rot0) % 360) + 360) % 360;
-      if (d === 0 || d % 90 !== 0) return;
-      var ref = f.w[f.key];
-      var e = WE.geometry.terminalExit(ref); if (!e) return;
-      var T = WE.geometry.wireEndpoint(ref); if (!T) return;
-      if (리드다시(f.w, f.key, ref, e, T, c, f.orig)) { 처리됨[f.w.id] = 1; 경로바뀐[f.w.id] = 1; }
-      else 실패.push(f.w.id + ":" + f.key);
-    });
-    실패.forEach(function (k) { 경로바뀐[k.split(":")[0]] = 1; });
-    return { 처리됨: 처리됨, 경로바뀐: 경로바뀐, 실패: 실패 };
-  }
-
-  /* ── 리드 정리 (상태를 안 들고 규칙만 본다) ────────────────────────
-     "단자가 어디에 있든 그 단자가 향한 면 쪽으로 먼저 나간 뒤 꺾는다."
-     지금 첫 구간이 그 규칙을 어기고 있으면 그 끝의 리드를 다시 만든다.
-
-     스냅샷이 필요 없다 — 현재 상태만 보고 판단하므로 몇 번을 불러도 결과가 같다.
-     이미 규칙을 지키고 있으면 아무것도 안 한다.
-
-     ⚠ 회전만 보던 방식으로는 부족했다. 단자를 옮기면 방향이 틀려지는데
-        '대각선이 생겼을 때 코너를 어느 쪽으로 넣을까' 만 고쳐서는
-        첫 꺾임점이 단자와 같은 축에 이미 구워져 있는 경우를 못 잡는다.
-        (2026-08-23 제보. 실측: VCC 기대=왼 실제=아래, 꺾임점 2개) */
-  function fixLeads(cmpIds) {
-    var set = {}; (cmpIds || []).forEach(function (id) { set[id] = 1; });
-    var 경로바뀐 = {};
-    WE.model.project.wires.forEach(function (w) {
-      if (!w.waypoints || !w.waypoints.length) return;
-      if (!w.from || !w.to) return;
-      // 양 끝이 같은 부품이면 손대지 않는다 — 그건 강체 회전이 맡는 모양이다
-      if (w.from.componentId && w.from.componentId === w.to.componentId) return;
-      ["from", "to"].forEach(function (key) {
-        var ref = w[key];
-        if (!ref || !ref.componentId || !set[ref.componentId]) return;
-        var c = WE.model.getComponent(ref.componentId); if (!c) return;
-        var e = WE.geometry.terminalExit(ref); if (!e) return;
-        var T = WE.geometry.wireEndpoint(ref); if (!T) return;
-        var pts = WE.geometry.wireRoutePoints(w) || [];
-        var 앞 = (key === "from") ? pts : pts.slice().reverse();
-        if (앞.length < 2) return;
-        var vx = 앞[1].x - 앞[0].x, vy = 앞[1].y - 앞[0].y;
-        var dot = vx * e.dir.x + vy * e.dir.y;
-        var cross = Math.abs(vx * e.dir.y - vy * e.dir.x);
-        if (dot > 0.6 && cross < 0.6) return;      // 이미 규칙대로다
-        var orig = w.waypoints.map(function (p) { return { x: p.x, y: p.y }; });
-        if (리드다시(w, key, ref, e, T, c, orig)) 경로바뀐[w.id] = 1;
-      });
-    });
-    분기재투영(경로바뀐);
-    return 경로바뀐;
-  }
-
   function beginTermFollow(cmpIds) {
     var set = {}; (cmpIds || []).forEach(function (id) { set[id] = 1; });
     var arr = [];
@@ -1256,9 +960,8 @@ WE.interactions = (function () {
     });
     return arr;
   }
-  function applyTermFollow(snap, 제외) {
+  function applyTermFollow(snap) {
     (snap || []).forEach(function (f) {
-      if (제외 && 제외[f.w.id]) return;   // 회전으로 이미 통째로 돌린 배선
       var wp = f.w.waypoints, n = wp.length;
       if (!n) return;
       if (f.fromIn && f.a0) {
@@ -1272,72 +975,12 @@ WE.interactions = (function () {
     });
   }
   // 단자가 움직이는 변경을 감싸 실행한다 (크기·배율·회전 공용)
-  /* 이번 변경의 대상 배선을 스냅샷 시점 모양으로 완전히 되돌린다.
-     ⚠ 좌표만 덮으면 안 된다 — 직전 move 가 점을 넣거나 뺐을 수 있으므로
-        배열 길이와 순서까지 되돌려야 한다. (Codex 3차 검토 지적)
-     회전 드래그는 move 마다 같은 스냅샷으로 다시 적용하는데, 복원하지 않으면
-     90°에서 만든 결과 위에 0°가 "델타 0이라 건너뜀"으로 얹혀 그대로 남는다. */
-  function 스냅샷복원(snapList) {
-    (snapList || []).forEach(function (arr) {
-      (arr || []).forEach(function (f) {
-        if (!f || !f.w || !f.orig) return;
-        f.w.waypoints = f.orig.map(function (p) { return { x: p.x, y: p.y }; });
-      });
-    });
-  }
-  // beginRotFollow 는 부품마다 wires 배열을 들고 있어 모양이 다르다 — 따로 편다
-  function 회전스냅샷복원(rSnap) {
-    (rSnap || []).forEach(function (f) {
-      (f.wires || []).forEach(function (r) {
-        r.w.waypoints = r.orig.map(function (p) { return { x: p.x, y: p.y }; });
-      });
-    });
-  }
-
-  /* 회전으로 경로가 바뀐 호스트에 붙은 분기를 다시 호스트 위로 올린다.
-     ⚠ beginBranchFollow 는 '호스트의 양 끝이 함께 움직이는가'만 본다.
-        한쪽 끝만 회전해 리드가 재구성된 호스트는 그 스냅샷에 안 잡힌다.
-        그대로 두면 분기 배선에 숨은 대각선이 생긴다. (Codex 2·3차 지적) */
-  function 분기재투영(경로바뀐) {
-    if (!경로바뀐) return;
-    WE.model.project.wires.forEach(function (w) {
-      ["from", "to"].forEach(function (k) {
-        var ref = w[k];
-        if (!ref || !ref.wireId || !경로바뀐[ref.wireId]) return;
-        var host = WE.model.getWire(ref.wireId); if (!host) return;
-        var pts = WE.geometry.wireRoutePoints(host); if (!pts) return;
-        var wps = w.waypoints || [];
-        var q = WE.geometry.placeOnHost
-          ? WE.geometry.placeOnHost(ref, pts, (k === "from") ? wps[0] : wps[wps.length - 1])
-          : WE.geometry.projectOnPath(pts, ref);
-        if (q) { ref.x = q.x; ref.y = q.y; }
-      });
-    });
-  }
-
   function withTermFollow(cmpIds, mutate) {
     var snap = beginTermFollow(cmpIds);
     var bSnap = beginBranchFollow(cmpIds);
-    var rSnap = beginRotFollow(cmpIds);
-    var lSnap = beginLeadRebuild(cmpIds);
     mutate();
-    적용(snap, bSnap, rSnap, lSnap);
-  }
-
-  /* 스냅샷들을 실제로 적용한다 — 회전 드래그도 move 마다 이걸 부른다.
-     순서가 중요하다: 복원 → 강체회전 → 리드재구성 → 나머지 → 분기 */
-  function 적용(snap, bSnap, rSnap, lSnap) {
-    스냅샷복원([snap, lSnap]);
-    회전스냅샷복원(rSnap);
-    var 회전됨 = applyRotFollow(rSnap);           // 양 끝이 같은 부품 → 강체 회전
-    var 리드 = applyLeadRebuild(lSnap);            // 한쪽 끝만 → 리드 다시 만들기
-    var 제외 = {};
-    Object.keys(회전됨).forEach(function (k) { 제외[k] = 1; });
-    Object.keys(리드.처리됨).forEach(function (k) { 제외[k] = 1; });
-    applyTermFollow(snap, 제외);                   // 나머지는 예전 방식 (실패분 포함)
+    applyTermFollow(snap);
     applyBranchFollow(bSnap);
-    분기재투영(리드.경로바뀐);                      // 경로만 바뀐 호스트의 분기까지
-    return 리드;
   }
 
   function followEnd(wpPt, origPt, term0, dx, dy) {
@@ -1765,14 +1408,15 @@ WE.interactions = (function () {
       var rp = WE.geometry.clientToCanvas(svg, e.clientX, e.clientY);
       var ang = Math.atan2(rp.y - drag.cy, rp.x - drag.cx) * 180 / Math.PI + 90; // 핸들이 위를 향하도록
       var norm = (ang % 360 + 360) % 360;
-      // 회전은 0/90/180/270 만 허용한다 (2026-08-23 확정).
-      // 임의 각도를 허용하면 단자 탈출 스텁이 대각선이 되어 직각 배선 규칙과 어긋나고,
-      // 수동배선 꺾임점을 부품과 함께 돌릴 때 수평·수직이 유지되지 않는다.
-      // 저장된 도면 18개를 훑어 보니 실제로 쓰인 값도 0°와 90° 뿐이었다.
-      norm = (Math.round(norm / 90) * 90) % 360;
-      rc.rotation = norm;
-      // 매 move 마다 스냅샷으로 되돌린 뒤 처음부터 다시 계산한다 — 누적되면 안 된다
-      적용(drag.termFollow, drag.branchFollow, drag.rotFollow, drag.leadRebuild);
+      if (e.shiftKey) {
+        norm = Math.round(norm / 15) * 15;               // Shift: 15° 단위 스냅
+      } else {
+        var n90 = Math.round(norm / 90) * 90;            // 0/90/180/270 근처면 자동 정렬(마그넷)
+        if (Math.abs(norm - n90) <= 10) norm = n90;
+      }
+      rc.rotation = Math.round(norm % 360);
+      applyTermFollow(drag.termFollow);
+      applyBranchFollow(drag.branchFollow);
       WE.render.rerenderComponent(rc);   // 단자 라벨 수평 유지 위해 다시 그림
       WE.render.updateWiresFor(rc.id);
       WE.render.renderOverlay();
@@ -1888,15 +1532,6 @@ WE.interactions = (function () {
 
   function onPointerUp(e) {
     if (!drag) return;
-    /* 캔버스에서 단자를 끌어 옮긴 뒤 — 배선이 나가는 방향을 다시 세운다.
-       ⚠ 이 경로는 모달 단자 편집기(afterTerminalEdit)를 거치지 않는다.
-          rx/ry 만 바꾸고 다시 그릴 뿐이라, 여기에 안 걸면 규칙이 적용되지 않는다.
-          실제로 그래서 "단자를 옮겼는데 배선이 그대로" 라는 제보가 다시 나왔다.
-       드래그가 끝날 때 한 번만 한다 — move 마다 하면 이미 고친 경로 위에 또 쌓인다. */
-    if (drag.mode === "term" && drag.cmpId && WE.interactions && WE.interactions.fixLeads) {
-      WE.interactions.fixLeads([drag.cmpId]);
-      WE.render.renderAll();
-    }
     if (drag.mode === "pan") {
       document.body.classList.remove("panning");
       try { svg.releasePointerCapture(e.pointerId); } catch (err) {}
@@ -2153,6 +1788,5 @@ WE.interactions = (function () {
   }
 
   return { init: init, resetWire: resetWire, isBusy: isBusy, getLastPointer: getLastPointer,
-           withTermFollow: withTermFollow, resetTermLabels: resetTermLabels,
-           fixLeads: fixLeads };
+           withTermFollow: withTermFollow, resetTermLabels: resetTermLabels };
 })();

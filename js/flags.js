@@ -52,13 +52,6 @@ WE.flags._isPreviewHost = function (host) {
   return /^preview\..*\.pages\.dev$/i.test(String(host || ""));
 };
 
-// 내 컴퓨터에서 띄운 것인가.
-// 로컬은 남이 접속할 수 없으므로, 여기서만 열리는 시험용 통로를 둘 수 있다.
-// (검사가 Pro 판정 같은 상태를 직접 만들어야 할 때 쓴다)
-WE.flags._isLocalHost = function (host) {
-  return host === "localhost" || host === "127.0.0.1" || host === "[::1]";
-};
-
 try {
   if (WE.flags._isPreviewHost(location.hostname)) {
     WE.flags.LAUNCH = true;

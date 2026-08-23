@@ -246,40 +246,23 @@ WE.geometry = (function () {
     return rotSide(termSideResolved(cmp, t), cmp.rotation || 0);
   }
   // 배선 탈출 정보: 방향(캔버스 기준 단위벡터) + 스텁 길이(부품 외곽을 벗어날 때까지 + 여유)
-  //
-  // ⚠ 방향은 삼각함수로 돌리지 않는다. Math.cos(90°) 가 6.1e-17 이라
-  //    dir 이 (-6.1e-17, -1) 처럼 나와 "정확히 위" 같은 판정이 성립하지 않는다.
-  //    회전은 0/90/180/270 뿐이므로(2026-08-23 확정) 면 문자를 돌려 표에서 꺼낸다.
   function exitInfo(cmp, t) {
-    var 화면고정 = (t.labelSide === "L" || t.labelSide === "R" || t.labelSide === "T" || t.labelSide === "B");
-    var deg = ((Math.round((cmp.rotation || 0) / 90) * 90) % 360 + 360) % 360;
-    // labelSide 는 화면 기준 수동 고정이므로 로컬로 되돌려서 쓴다 (기존 동작 유지)
-    var localSide = 화면고정 ? rotSide(t.labelSide, -deg) : termSideResolved(cmp, t);
-    var screenSide = rotSide(localSide, deg);
+    var localSide;
+    if (t.labelSide === "L" || t.labelSide === "R" || t.labelSide === "T" || t.labelSide === "B") {
+      localSide = rotSide(t.labelSide, -(cmp.rotation || 0));   // 화면 기준 수동 고정 → 로컬로 환산
+    } else {
+      localSide = termSideResolved(cmp, t);
+    }
     var s = cmp.scale || 1;
     var distEdge =
       localSide === "T" ? t.ry * cmp.height * s :
       localSide === "B" ? (1 - t.ry) * cmp.height * s :
       localSide === "L" ? t.rx * cmp.width * s : (1 - t.rx) * cmp.width * s;
-    var v = SIDE_VEC[screenSide];   // 이미 -1/0/1 정수다
+    var v = SIDE_VEC[localSide], rad = (cmp.rotation || 0) * Math.PI / 180;
     return {
-      dir: { x: v.x, y: v.y },
-      stub: distEdge + STUB_BASE,
-      localSide: localSide,     // 부품 로컬 면 — 같은 면 묶음(bundleRank)은 이걸 쓴다
-      screenSide: screenSide    // 화면에서 실제로 나가는 면
+      dir: { x: v.x * Math.cos(rad) - v.y * Math.sin(rad), y: v.x * Math.sin(rad) + v.y * Math.cos(rad) },
+      stub: distEdge + STUB_BASE
     };
-  }
-
-  /* 배선이 이 끝점에서 어느 쪽으로 나가야 하는가 — 공개용.
-     단자 끝점이면 exitInfo 그대로, 분기 끝점({wireId,x,y})이면 null.
-     (분기점에는 '바깥'이 없다 — 호스트 선 위의 한 점이라 나갈 방향이 정해지지 않는다)
-     ⚠ 방향 계산을 interactions 쪽에 복제하지 않기 위해 연다.
-        복제하면 규칙이 두 곳으로 갈라져 반드시 어긋난다. */
-  function terminalExit(ref) {
-    if (!ref || ref.wireId) return null;
-    var cmp = WE.model.getComponent(ref.componentId); if (!cmp) return null;
-    var t = WE.model.getTerminal(cmp, ref.terminalId); if (!t) return null;
-    return exitInfo(cmp, t);
   }
 
   function dedupe(pts) {
@@ -303,19 +286,6 @@ WE.geometry = (function () {
     var onFrom = (w.from.componentId === ref.componentId && w.from.terminalId === ref.terminalId);
     return onFrom ? wireEndpoint(w.to) : wireEndpoint(w.from);
   }
-  /* 반대쪽 끝의 '위치' — 분기 끝점이면 그 좌표를 쓴다.
-     ⚠ farOf 는 wireEndpoint 를 쓰므로 분기 끝점({wireId,x,y})에 null 을 준다.
-        그러면 그 배선이 bundleRank 묶음에서 통째로 빠져 순번이 0 으로 뭉친다.
-        (리드 재구성에서 두 배선이 같은 길이로 나가 110px 포개진 원인)
-        자동배선은 끝이 분기면 애초에 orthoStub 를 안 타므로 기존 동작은 그대로 두고,
-        리드 재구성에서만 이 쪽을 쓴다. */
-  function farPos(w, ref) {
-    var p = farOf(w, ref);
-    if (p) return p;
-    var onFrom = (w.from.componentId === ref.componentId && w.from.terminalId === ref.terminalId);
-    var other = onFrom ? w.to : w.from;
-    return (other && other.wireId) ? { x: other.x, y: other.y } : null;
-  }
   // 한 단자에서 나가는 배선들의 탭 순번. 목적지의 "수직 거리(perp)"가 클수록 안쪽(작은 스텁),
   // 작을수록(바에 가까운 목적지) 바깥쪽(큰 스텁) → 세로 드롭이 중첩되어 교차 0.
   function tapIndex(wire, ref, pt, da) {
@@ -336,47 +306,33 @@ WE.geometry = (function () {
   // 같은 부품·같은 면에서 나가 같은 방향으로 꺾이는 배선 묶음 내 순번 (계단식 스텁용)
   // 규칙(사용자 확정): 꺾임 방향에 가까운 단자일수록 안쪽(짧은 스텁) → 교차 없이 겹겹이 감싸는 하네스 묶음
   // 반환 { i, n } — i=0이 최내측. 수동 꺾임 배선은 묶음에서 제외.
-  // 수동배선 포함 여부 — 리드 재구성에서만 true 로 부른다.
-  //   자동배선 호출부는 지금처럼 수동을 빼고 센다(기존 도면 모양이 안 바뀌게).
-  //   수동배선은 자동까지 보고 순번을 매긴다(자동 레인과 최대한 안 겹치게).
-  //   ⚠ 그래서 순번이 비대칭이다 — 자동 A · 수동 M · 자동 B 가 안쪽부터 이 순서면
-  //      자동은 A=0,B=1 / 수동은 A=0,M=1,B=2 로 보아 M 과 B 가 같은 1번을 쓴다.
-  //      그래서 이 순번은 '보장'이 아니라 '후보 생성 규칙'이다. 실제로 겹치면
-  //      리드 재구성이 실패로 처리하고 예전 방식으로 물러난다. (Codex 3차 검토)
-  function bundleRank(wire, ref, cmp, t, dir, 수동포함) {
+  function bundleRank(wire, ref, cmp, t, dir) {
     var horizExit = Math.abs(dir.x) >= Math.abs(dir.y);
-    var 먼점 = 수동포함 ? farPos : farOf;   // 리드 재구성일 때만 분기 좌표까지 본다
-    var far0 = 먼점(wire, ref);
+    var far0 = farOf(wire, ref);
     if (!far0) return { i: 0, n: 1 };
     var myPos = terminalAbs(cmp, t);
     // 꺾임 방향: 탈출 축의 수직 축에서 상대 끝점이 어느 쪽인가
     var sign = (horizExit ? (far0.y - myPos.y) : (far0.x - myPos.x)) >= 0 ? 1 : -1;
     var members = [];
     WE.model.project.wires.forEach(function (w) {
-      if (!수동포함 && w.waypoints && w.waypoints.length) return;
+      if (w.waypoints && w.waypoints.length) return;
       [w.from, w.to].forEach(function (r) {
         if (r.componentId !== cmp.id) return;
         var ot = WE.model.getTerminal(cmp, r.terminalId);
         if (!ot) return;
         var oe = exitInfo(cmp, ot);
         if (oe.dir.x * dir.x + oe.dir.y * dir.y < 0.9) return;   // 같은 면(같은 탈출 방향)만
-        var f = 먼점(w, r);
+        var f = farOf(w, r);
         if (!f) return;
         var op = terminalAbs(cmp, ot);
         var turn = horizExit ? (f.y - op.y) : (f.x - op.x);
         if ((turn >= 0 ? 1 : -1) !== sign) return;               // 같은 방향으로 꺾이는 것만
-        members.push({ tid: r.terminalId, key: horizExit ? op.y : op.x });   // 정렬 키(화면 좌표)
+        members.push({ tid: r.terminalId, key: horizExit ? op.y : op.x });
       });
     });
     if (members.length < 2) return { i: 0, n: 1 };
     // 안쪽 정렬: 아래/오른쪽으로 꺾이면(sign>0) 좌표 큰 단자가 안쪽, 위/왼쪽이면 작은 단자가 안쪽
-    // ⚠ 좌표가 같은 단자가 있을 수 있다. 그때 순서가 흔들리면 리드 길이가 실행마다
-    //    달라지므로 단자 id 로 결정적으로 가른다. (Codex 3차 검토 지적)
-    members.sort(function (a, b) {
-      var d = sign > 0 ? (b.key - a.key) : (a.key - b.key);
-      if (Math.abs(d) > 1e-6) return d;
-      return a.tid < b.tid ? -1 : (a.tid > b.tid ? 1 : 0);
-    });
+    members.sort(function (a, b) { return sign > 0 ? (b.key - a.key) : (a.key - b.key); });
     var rank = {}, order = 0;
     members.forEach(function (m) { if (!(m.tid in rank)) rank[m.tid] = order++; });
     return { i: rank[t.id] != null ? rank[t.id] : 0, n: order };
@@ -496,9 +452,7 @@ WE.geometry = (function () {
     var prev = full[k - 1], cur = full[k], next = full[k + 1];
 
     function clone(list) { return list.map(function (p) { return { x: p.x, y: p.y }; }); }
-    // ⚠ 여기서 옛 '세로 먼저' 코너를 구워 버리면 그 뒤로는 이미 직각이라
-    //    manualPath 가 방향을 고칠 기회를 잃는다. 같은 규칙을 써야 한다.
-    function bake(list) { return simplify(orthoManual([A.pos].concat(list, [B.pos]), A, B)); }
+    function bake(list) { return simplify(orthogonalize([A.pos].concat(list, [B.pos]))); }
 
     var plain = clone(wps); plain.splice(idx, 1);
     var cands = [];
@@ -532,63 +486,8 @@ WE.geometry = (function () {
   // 클릭으로 그린 배선은 애초에 수평·수직으로만 점이 찍히므로 여기서 바뀌는 게 없고
   // (orthogonalize는 대각선일 때만 모서리를 끼운다), 예전에 만든 배선도 종전 그대로다.
   // 덕분에 만든 방식과 무관하게 모든 수동배선이 똑같이 동작한다.
-  /* ── 수동배선 끝단 코너 방향 ──────────────────────────────────────
-     orthogonalize 는 대각선이 생기면 항상 '세로 먼저' 코너를 넣는다.
-     단자가 어느 면을 향하는지 모르기 때문이다.
-     그래서 단자를 위로 옮기면, 왼쪽 면 단자인데도 '아래로 갔다가 왼쪽' 이 된다.
-     (2026-08-23 제보. 실측: VCC 기대=왼쪽 실제=아래)
-
-     여기서는 코너를 '넣을지' 가 아니라 '어느 쪽으로 넣을지' 만 고른다.
-     코너 개수는 그대로라 저장 waypoints 와 렌더 점의 대응이 안 바뀐다 —
-     구간 드래그(prepWireSeg)는 cleanupWire 로 다시 구운 뒤 인덱스를 잡으므로 안전하다.
-
-     ⚠ 축만 맞추면 안 된다. '가로로 나가야 한다' 가 맞아도 왼쪽 단자가 오른쪽으로
-        나가면 틀린 것이다. 부호까지 본다. 한 코너로 못 맞추면 손대지 않는다.
-     ⚠ 분기 끝점에는 나갈 방향이 없다(호스트 선 위의 한 점) — 그대로 둔다.
-     ⚠ orthogonalize 자체는 안 건드린다. 분기 끝 자동경로도 그걸 쓰는데
-        거기엔 탈출 방향이 없어 규칙을 적용할 근거가 없다. */
-  function 끝탈출(E) {
-    if (!E || E.branch || !E.cmp || !E.t) return null;
-    return exitInfo(E.cmp, E.t).dir;
-  }
-  // P0 = 단자 쪽 점, P1 = 그 다음 점. P0 에서 dir 로 먼저 나가는 코너를 돌려준다.
-  function 끝코너(P0, P1, dir) {
-    if (!dir) return null;
-    if (Math.abs(dir.x) > 0.5) {                        // 가로로 나가야 한다
-      if ((P1.x - P0.x) * dir.x <= 0.6) return null;    // 부호가 반대 → 한 코너로는 못 맞춘다
-      return { x: P1.x, y: P0.y };                      // P0 →가로→ 코너 →세로→ P1
-    }
-    if (Math.abs(dir.y) > 0.5) {
-      if ((P1.y - P0.y) * dir.y <= 0.6) return null;
-      return { x: P0.x, y: P1.y };                      // P0 →세로→ 코너 →가로→ P1
-    }
-    return null;
-  }
-  /* orthogonalize 와 같은 일을 하되, 첫·마지막 대각선의 코너만 탈출 방향에 맞춘다.
-     점이 둘뿐이면(내부 꺾임점 없음) 코너 하나로 양 끝 요구를 동시에 못 맞추므로
-     기존 규칙 그대로 둔다. */
-  function orthoManual(pts, A, B) {
-    if (!pts || pts.length < 2) return pts;
-    var n = pts.length;
-    var 끝규칙 = n >= 3;
-    var dirA = 끝규칙 ? 끝탈출(A) : null;
-    var dirB = 끝규칙 ? 끝탈출(B) : null;
-    var out = [pts[0]];
-    for (var i = 1; i < n; i++) {
-      var p = pts[i], last = out[out.length - 1];
-      if (Math.abs(p.x - last.x) > 0.5 && Math.abs(p.y - last.y) > 0.5) {
-        var 코너 = null;
-        if (i === 1) 코너 = 끝코너(pts[0], p, dirA);        // 첫 대각선 — from 쪽
-        else if (i === n - 1) 코너 = 끝코너(p, last, dirB);  // 마지막 대각선 — to 쪽에서 본다
-        out.push(코너 || { x: last.x, y: p.y });             // 기본은 예전대로 세로 먼저
-      }
-      out.push(p);
-    }
-    return out;
-  }
-
   function manualPath(A, B, wire) {
-    return orthoManual([A.pos].concat(wire.waypoints, [B.pos]), A, B);
+    return orthogonalize([A.pos].concat(wire.waypoints, [B.pos]));
   }
 
   // 한 배선의 원시 경로 (너징 전)
@@ -989,8 +888,6 @@ WE.geometry = (function () {
     absToTerminal: absToTerminal,
     transformString: transformString,
     wireEndpoint: wireEndpoint,
-    terminalExit: terminalExit,
-    bundleRank: bundleRank,
     isBranchRef: isBranchRef,
     syncBranchAnchors: syncBranchAnchors,
     wireHasBranch: wireHasBranch,

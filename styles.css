@@ -1598,19 +1598,3 @@ body.note-open #noteToggle { transform: rotate(180deg); }
   font-size: 13px; line-height: 1;
   vertical-align: middle;
 }
-
-/* ── 숫자 칸의 위아래 화살표 제거 (2026-08-18) ──
-   화살표(spin button)는 폭을 20px 넘게 먹는데 실제로는 잘 안 누른다.
-   우리는 칸 폭을 값 길이에 맞추는 규칙이라(디자인_가이드) 화살표가 그 반대다.
-   숫자는 직접 입력한다. 조절이 필요한 회전은 ↺↻ 버튼이 따로 있다.
-   ⚠ 화살표를 없애도 위/아래 방향키로는 여전히 값을 올리고 내릴 수 있다. */
-input[type="number"]::-webkit-outer-spin-button,
-input[type="number"]::-webkit-inner-spin-button {
-  -webkit-appearance: none;
-  appearance: none;
-  margin: 0;
-}
-input[type="number"] {
-  -moz-appearance: textfield;   /* 파이어폭스 */
-  appearance: textfield;
-}
