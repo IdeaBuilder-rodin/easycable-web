@@ -204,7 +204,8 @@ WE.interactions = (function () {
       if (rc) {
         var center = WE.geometry.localToAbs(rc, rc.width / 2, rc.height / 2);
         drag = { mode: "rotate", id: rc.id, cx: center.x, cy: center.y,
-                 termFollow: beginTermFollow([rc.id]), branchFollow: beginBranchFollow([rc.id]) };
+                 termFollow: beginTermFollow([rc.id]), branchFollow: beginBranchFollow([rc.id]),
+                 rotFollow: beginRotFollow([rc.id]) };
         svg.setPointerCapture(e.pointerId);
       }
       return;
@@ -943,6 +944,66 @@ WE.interactions = (function () {
   // 이동(move)과 나눠 둔 이유: 이동은 모든 단자가 같은 양만큼 움직여 dx·dy 하나면 되지만,
   // 크기·회전은 단자마다 이동량이 달라 끝점별로 각자 계산해야 한다.
   // 이게 없으면 단자만 움직이고 꺾임점은 제자리에 남아, 직각 정리가 끼어들며 선이 위로 튄다.
+  /* ── 회전 전용 추적 ────────────────────────────────────────────────
+     양 끝이 '같은 부품'에 붙은 수동배선은 회전할 때 통째로 같이 돌아야 한다.
+
+     왜 따로 두나 — applyTermFollow 는 이동·크기변경용이다.
+     followEnd 가 "가로 구간이면 y만, 세로면 x만" 옮기는데, 회전은 단자를 호를 그리며
+     크게 옮기므로 양 끝 꺾임점이 같은 자리로 뭉개진다.
+     실제로 ㄷ 모양 배선이 (223,57)(223,76) → (223,174)(223,174) 로 붕괴했다.
+     (2026-08-23 사용자 제보. 재현: _ai/직접확인목록.md)
+
+     한쪽 끝만 이 부품인 배선은 여기서 손대지 않는다 — 실측해 보니 followEnd 로도
+     대각선 0 · 겹침 0 으로 멀쩡했고, 전체를 돌리면 반대쪽 부품까지 끌고 가기 때문이다. */
+  function beginRotFollow(cmpIds) {
+    var arr = [];
+    (cmpIds || []).forEach(function (id) {
+      var c = WE.model.getComponent(id); if (!c) return;
+      var s = c.scale || 1;
+      var wires = WE.model.project.wires.filter(function (w) {
+        return w.waypoints && w.waypoints.length &&
+               w.from && w.to &&
+               w.from.componentId === id && w.to.componentId === id;
+      }).map(function (w) {
+        return { w: w, orig: w.waypoints.map(function (p) { return { x: p.x, y: p.y }; }) };
+      });
+      if (!wires.length) return;
+      arr.push({
+        id: id, rot0: c.rotation || 0,
+        cx0: c.x + c.width * s / 2, cy0: c.y + c.height * s / 2,
+        wires: wires
+      });
+    });
+    return arr;
+  }
+  /* 강체 회전을 적용하고, 처리한 배선 id 집합을 돌려준다(applyTermFollow 가 건너뛰도록).
+     ⚠ 90 배수만 처리한다. 회전은 0/90/180/270 로 제한돼 있지만(2026-08-23),
+        옛 파일에 어중간한 각도가 남아 있을 수 있어 방어한다.
+     ⚠ cos/sin 대신 정수 변환을 쓴다 — Math.cos(90°) 가 6.1e-17 이라 돌릴 때마다
+        좌표가 조금씩 흘러 수평·수직이 미세하게 깨진다. */
+  function applyRotFollow(snap) {
+    var 처리됨 = {};
+    (snap || []).forEach(function (f) {
+      var c = WE.model.getComponent(f.id); if (!c) return;
+      var d = ((((c.rotation || 0) - f.rot0) % 360) + 360) % 360;
+      if (d === 0 || d % 90 !== 0) return;
+      var s = c.scale || 1;
+      var cx = c.x + c.width * s / 2, cy = c.y + c.height * s / 2;
+      f.wires.forEach(function (r) {
+        r.w.waypoints.forEach(function (pt, i) {
+          var o = r.orig[i]; if (!o) return;
+          var vx = o.x - f.cx0, vy = o.y - f.cy0, nx, ny;
+          if (d === 90)       { nx = -vy; ny =  vx; }   // 화면 좌표(y 아래)에서 시계 90°
+          else if (d === 180) { nx = -vx; ny = -vy; }
+          else                { nx =  vy; ny = -vx; }   // 270°
+          pt.x = cx + nx; pt.y = cy + ny;
+        });
+        처리됨[r.w.id] = 1;
+      });
+    });
+    return 처리됨;
+  }
+
   function beginTermFollow(cmpIds) {
     var set = {}; (cmpIds || []).forEach(function (id) { set[id] = 1; });
     var arr = [];
@@ -960,8 +1021,9 @@ WE.interactions = (function () {
     });
     return arr;
   }
-  function applyTermFollow(snap) {
+  function applyTermFollow(snap, 제외) {
     (snap || []).forEach(function (f) {
+      if (제외 && 제외[f.w.id]) return;   // 회전으로 이미 통째로 돌린 배선
       var wp = f.w.waypoints, n = wp.length;
       if (!n) return;
       if (f.fromIn && f.a0) {
@@ -978,8 +1040,11 @@ WE.interactions = (function () {
   function withTermFollow(cmpIds, mutate) {
     var snap = beginTermFollow(cmpIds);
     var bSnap = beginBranchFollow(cmpIds);
+    var rSnap = beginRotFollow(cmpIds);
     mutate();
-    applyTermFollow(snap);
+    // 회전을 먼저 본다 — 여기서 통째로 돌린 배선은 applyTermFollow 가 다시 건드리면 안 된다
+    var 회전됨 = applyRotFollow(rSnap);
+    applyTermFollow(snap, 회전됨);
     applyBranchFollow(bSnap);
   }
 
@@ -1408,14 +1473,13 @@ WE.interactions = (function () {
       var rp = WE.geometry.clientToCanvas(svg, e.clientX, e.clientY);
       var ang = Math.atan2(rp.y - drag.cy, rp.x - drag.cx) * 180 / Math.PI + 90; // 핸들이 위를 향하도록
       var norm = (ang % 360 + 360) % 360;
-      if (e.shiftKey) {
-        norm = Math.round(norm / 15) * 15;               // Shift: 15° 단위 스냅
-      } else {
-        var n90 = Math.round(norm / 90) * 90;            // 0/90/180/270 근처면 자동 정렬(마그넷)
-        if (Math.abs(norm - n90) <= 10) norm = n90;
-      }
-      rc.rotation = Math.round(norm % 360);
-      applyTermFollow(drag.termFollow);
+      // 회전은 0/90/180/270 만 허용한다 (2026-08-23 확정).
+      // 임의 각도를 허용하면 단자 탈출 스텁이 대각선이 되어 직각 배선 규칙과 어긋나고,
+      // 수동배선 꺾임점을 부품과 함께 돌릴 때 수평·수직이 유지되지 않는다.
+      // 저장된 도면 18개를 훑어 보니 실제로 쓰인 값도 0°와 90° 뿐이었다.
+      norm = (Math.round(norm / 90) * 90) % 360;
+      rc.rotation = norm;
+      applyTermFollow(drag.termFollow, applyRotFollow(drag.rotFollow));
       applyBranchFollow(drag.branchFollow);
       WE.render.rerenderComponent(rc);   // 단자 라벨 수평 유지 위해 다시 그림
       WE.render.updateWiresFor(rc.id);

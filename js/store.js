@@ -11,6 +11,7 @@ WE.store = (function () {
   var DRAFT_P = "draft::", SNAP_P = "snap::";
   var LEGACY_DRAFT = "current::" + (location.pathname || "");
   var LEGACY_SNAP = "history::" + (location.pathname || "");
+
   var db = null;
   var lastJson = "";
   var timer = null;
@@ -121,6 +122,7 @@ WE.store = (function () {
             out.push({
               id: String(c.key).slice(DRAFT_P.length),
               t: (o && o._t) || 0,
+              mig: !!(o && o._mig),   // 옛 슬롯에서 옮겨온 것 — 정리에서 지킨다
               name: (p.meta && p.meta.name) || "",
               // 시트가 여러 장이면 합산한다 — 안 그러면 목록이 전부 '0부품'으로 보인다
               comps: WE.model.countOf(p, "components"),
@@ -140,7 +142,7 @@ WE.store = (function () {
     listDrafts(function (list) {
       var here = docId();
       var dead = list.slice(max).filter(function (d) {
-        return d.id !== here && !claimedByOther(d.id);
+        return d.id !== here && !claimedByOther(d.id) && !d.mig;
       });
       if (!dead.length) { cb && cb(0); return; }
       var i = 0;
@@ -182,8 +184,20 @@ WE.store = (function () {
             if (body && body.meta) body.meta.id = id;
           } catch (e) { body = null; }
         }
-        var newDraft = body ? '{"_v":2,"_t":' + t + ',"p":' + JSON.stringify(body) + '}' : null;
-        if (newDraft) putRaw(DRAFT_P + id, newDraft);
+        // _mig: 옛 슬롯에서 옮겨온 것이라는 표시.
+        //   이관본은 '옛 작업 시각'을 그대로 물려받으므로(t = o._t) 최신순 목록에서 뒤로 밀리고,
+        //   바로 뒤에 도는 pruneDrafts(20) 이 21번째부터 지운다. 옛 원본은 이미 지운 뒤라 복구가 안 된다.
+        //   '방금 나타난 것'을 '가장 오래된 것'으로 오해하는 것이 문제이므로, 표시를 보고 정리에서 뺀다.
+        //   이관본은 많아야 후보 경로 수(3개)라 20칸 한도에는 사실상 영향이 없다.
+        var newDraft = body ? '{"_v":2,"_mig":1,"_t":' + t + ',"p":' + JSON.stringify(body) + '}' : null;
+        // 도면 본체 없이 스냅샷만 남은 옛 슬롯 — 옮기면 안 된다.
+        // 목록(listDrafts)은 draft:: 만 훑으므로 snap:: 만 있는 문서는 화면에 안 나타나고,
+        // 옛 자리는 지워지므로 열 방법이 아예 사라진다. 그냥 옛 자리에 둔다.
+        if (!newDraft) {
+          console.warn("[store] 옛 슬롯에 도면 본체가 없어 옮기지 않고 그대로 둡니다.");
+          cb(); return;
+        }
+        putRaw(DRAFT_P + id, newDraft);
         if (h) putRaw(SNAP_P + id, h);
         // 확인 후 삭제
         getRaw(DRAFT_P + id, function (chk) {
