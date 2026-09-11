@@ -5,6 +5,17 @@
 # static.cloudflareinsights.com(비콘) · cloudflareinsights.com(수집) 을 넣었다.
 # ⚠ 이걸 안 넣으면 대시보드에서 Web Analytics 를 켜도 CSP 가 비콘을 막아 통계가 0 이다.
 #
+# 2026-09-11 img-src 에 Supabase Storage 를 넣었다.
+#    공용 부품 목록의 썸네일이 라이브에서 **19개 전부 깨져** 있었다(CSP 위반 37건).
+#    그림은 처음부터 서버(Supabase Storage)에 있었다 — 로컬에 있던 적이 없다.
+#    connect-src 에는 이 출처가 있어서 fetch() 는 통했고, 그래서 '배치하면 그림이 생긴다'
+#    는 증상이 됐다. <img> 만 막혀 있었던 것이다.
+#    ⚠ 공용 부품 창은 이번 배포로 처음 공개됐다. 즉 예전부터 있던 결함이 이제 드러난 것이지
+#       9/11 이름 교체 때문이 아니다.
+#    ⚠ 이 파일은 **로컬에서 검증할 수 없다.** devserver.mjs 는 _headers 를 읽지 않는다.
+#       _redirects 로 라이브를 한 번 망가뜨린 것과 같은 종류다 — 배포 뒤 실제 주소에서
+#       CSP 위반 0건·썸네일 19/19 를 눈으로 확인해야 끝난 것이다.
+#
 # 2026-08-24 결제(토스페이먼츠)를 붙이면서 /checkout.html 규칙을 아래에 따로 두었다.
 #    전역은 그대로 조여 두고 결제 페이지 한 장만 푼다 —
 #    전역을 풀면 에디터까지 외부 스크립트를 받을 수 있게 된다.
@@ -13,7 +24,7 @@
   Referrer-Policy: strict-origin-when-cross-origin
   Permissions-Policy: geolocation=(), microphone=(), camera=(), payment=(), usb=()
   Cross-Origin-Opener-Policy: same-origin
-  Content-Security-Policy: default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self' 'unsafe-inline' https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' https://ukttsmkenaappsazervx.supabase.co https://api.web3forms.com https://cloudflareinsights.com; frame-src blob:
+  Content-Security-Policy: default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self' 'unsafe-inline' https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://ukttsmkenaappsazervx.supabase.co; font-src 'self' data:; connect-src 'self' https://ukttsmkenaappsazervx.supabase.co https://api.web3forms.com https://cloudflareinsights.com; frame-src blob:
 
 # ─────────────────────────────────────────────────────────────────────
 #  결제 페이지만 완화 (2026-08-24)
