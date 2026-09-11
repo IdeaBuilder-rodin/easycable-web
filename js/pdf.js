@@ -144,7 +144,7 @@ WE.pdf = (function () {
   //
   // 복제본은 id를 그대로 갖고 있다(CSS가 id 선택자로 잡혀 있어 지우면 스타일이 통째로 빠진다).
   // 같은 id가 여럿이어도 CSS는 전부에 적용되고, getElementById는 문서 순서상 '먼저 나오는' 원본을
-  // 돌려준다 — 그래서 #printSheets 는 반드시 원본들보다 뒤에 둔다(index.html 참고).
+  // 돌려준다 — 그래서 #printSheets 는 반드시 원본들보다 뒤에 둔다(app.html 참고).
   function buildSheetPages() {
     var box = document.getElementById("printSheets");
     if (!box) return;

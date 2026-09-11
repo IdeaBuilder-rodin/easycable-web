@@ -18,8 +18,14 @@ WE.store = (function () {
   function legacyPaths() {
     var p = location.pathname || "";
     var list = [p, "/", "/index.html"];
-    // file:// 로 쓰던 사람 — 같은 폴더에 있던 옛 파일명
-    if (/app.html$/i.test(p)) list.push(p.replace(/app.html$/i, "index.html"));
+    /* 주소가 app.html 이면 index.html 밑도 같이 뒤진다 — 옛 자동저장본을 놓치지 않으려고.
+       ⚠ 이 줄 자체는 **전부터 있었다.** file:// 로 옛 app.html 을 쓰던 사람들 때문이었다.
+          2026-09-11 에 에디터가 index.html → app.html 로 바뀌면서(랜딩이 루트가 됐다)
+          **대상이 지금 에디터 사용자 전체로 넓어졌다** — 그들의 옛 슬롯 키에 /index.html 이 들어 있다.
+          여기서 되짚지 않으면 7/29 이전 자동저장본을 영영 못 찾는다.
+       (7/29 이후 슬롯은 문서 id 로 잡히므로 주소와 무관하다 — 이 처리는 그 이전 것만 위한 것이다)
+       ⚠ 점을 이스케이프한다: /app.html$/ 는 'appXhtml' 같은 것도 맞힌다. */
+    if (/app\.html$/i.test(p)) list.push(p.replace(/app\.html$/i, "index.html"));
     var out = [], seen = {};
     for (var i = 0; i < list.length; i++) {
       if (list[i] && !seen[list[i]]) { seen[list[i]] = 1; out.push(list[i]); }

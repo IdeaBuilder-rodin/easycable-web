@@ -1,7 +1,7 @@
 /* auth.css — 로그인·회원가입·동의 모달의 겉모습.
 
    왜 파일을 갈랐나 (2026-09-02):
-     랜딩(welcome.html)에서도 같은 로그인 창을 띄우기로 했다. 그런데 styles.css 를 통째로
+     랜딩(index.html)에서도 같은 로그인 창을 띄우기로 했다. 그런데 styles.css 를 통째로
      싣자 랜딩 버튼이 44px → 36px 로 줄어드는 등 **7곳이 달라졌다** — 에디터 규칙이 새어 든다.
      그렇다고 규칙을 복사하면 두 벌이 되어, 한쪽만 고치는 날 화면마다 달라진다.
      그래서 **옮겼다.** 복사본은 없다 — 에디터와 랜딩이 이 한 파일을 같이 읽는다.
@@ -464,7 +464,7 @@
 
    ⚠ 자리표시자는 CSS 로만 그린다. #acctWrap 은 authmodal.js 가 body 끝에서
       만들기 때문에 첫 페인트 시점에는 **아직 없다.**
-   ⚠ 이 표시를 거는 곳과 거두는 곳은 pricing.html · welcome.html 의 인라인이다. */
+   ⚠ 이 표시를 거는 곳과 거두는 곳은 pricing.html · index.html 의 인라인이다. */
 html[data-auth="pending"] .top-auth a.nav-auth { display: none; }
 html[data-auth="pending"] .top-auth #acctWrap { display: none; }
 html[data-auth="pending"] #acctSlot {

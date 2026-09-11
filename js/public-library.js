@@ -137,7 +137,7 @@ WE.publicLibrary = (function () {
       if (seq !== requestSeq) return;
       if (!rows.some(function (p) { return p.id === selectedId; })) selectedId = rows.length ? rows[0].id : null;
       render();
-      /* 제휴 고지는 index.html 의 공용 부품 창 footer 에 상시로 박혀 있다.
+      /* 제휴 고지는 app.html 의 공용 부품 창 footer 에 상시로 박혀 있다.
          (BOM 하단과 **같은 마크업** — 법정 고지가 두 벌로 갈라지면 한쪽만 고쳐진다)
          여기 상태줄은 샘플 모드 경고 전용으로만 남긴다. 운영 중에는 비운다 —
          예전의 「검색 결과는 30개씩…」 안내는 없앴다(고원빈 확정 2026-09-03). */

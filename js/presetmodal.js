@@ -8,7 +8,7 @@
 //
 // 쓰는 법: WE.presetModal.open() — 처음 부를 때 알아서 이벤트를 묶는다(지연 초기화).
 // 기대는 것: WE.presets · WE.presetSets · WE.colorPicker · WE.termeditor · WE.i18n
-//            그리고 마크업 #presetModal (index.html / admin.html 양쪽에 같은 것이 있다).
+//            그리고 마크업 #presetModal (app.html / admin.html 양쪽에 같은 것이 있다).
 var WE = window.WE || {};
 window.WE = WE;
 

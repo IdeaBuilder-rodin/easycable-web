@@ -1269,10 +1269,10 @@
   function 나가기(e) {
     if (e) e.preventDefault();
     window.close();
-    setTimeout(function () { location.href = "index.html"; }, 200);
+    setTimeout(function () { location.href = "app.html"; }, 200);
   }
   function 나가기연결() {
-    var 링크 = document.querySelectorAll('a[href="index.html"]');
+    var 링크 = document.querySelectorAll('a[href="app.html"]');
     for (var i = 0; i < 링크.length; i++) 링크[i].addEventListener("click", 나가기);
   }
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", 나가기연결);

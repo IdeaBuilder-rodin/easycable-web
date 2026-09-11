@@ -1,0 +1,1381 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>이지케이블 — 쉬운 배선도 에디터 (EasyCable)</title>
+  <meta name="description" content="이미지로 부품을 올리고 단자를 이어 배선도를 그리는 웹 에디터. BOM·배선 리스트·PDF 자동 생성." />
+  <!-- 링크 공유 미리보기 (Open Graph / Twitter) -->
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="EasyCable" />
+  <meta property="og:title" content="이지케이블 — 쉬운 배선도 에디터 (EasyCable)" />
+  <meta property="og:description" content="이미지로 부품을 올리고 단자를 이어 배선도를 그리는 웹 에디터. BOM·배선 리스트·PDF 자동 생성." />
+  <meta property="og:url" content="https://easycable.co.kr/" />
+  <meta property="og:locale" content="ko_KR" />
+  <meta name="twitter:card" content="summary" />
+  <link rel="canonical" href="https://easycable.co.kr/" />
+  <!-- 파비콘·앱 아이콘. 원본은 _로고/icon.svg 이고 assets/ 의 것은 거기서 뽑았다.
+       예전에는 🔌 이모지를 그려 넣었는데, 이모지는 OS 마다 그림이 달라
+       브라우저 탭에서 브랜드가 일정하지 않았다. (2026-08-24 교체)
+       경로는 상대경로다 — file:// 로 열어도 동작해야 한다. -->
+  <link rel="icon" href="assets/favicon.svg" type="image/svg+xml" />
+  <link rel="apple-touch-icon" href="assets/icon-180.png" />
+  <!-- 로그인·회원가입 모달의 겉모습. 랜딩(index.html)도 같은 파일을 읽는다 — 한 벌만 두려고 갈라냈다.
+
+       ⚠ **styles.css 보다 먼저** 읽어야 한다. 이 안의 `.modal-box` 는 원래 styles.css 의
+          중간쯤에 있던 공용 규칙인데, 뒤로 보내면 뒤에 오는 같은 굵기(0,0,1,0)의 규칙들을
+          이겨 버린다. 실제로 그렇게 뒀다가 공용 부품 창이 1180 → 560px 로 줄었고,
+          데이터시트(1400) · 공용부품 게시(680) · 환영(500) 창도 같이 560px 이 됐다.
+          (2026-09-02 고원빈 보고 — "공용 부품 창이 갑자기 작아져서 내용이 안 보인다") -->
+  <link rel="stylesheet" href="auth.css?v=0880ba8a" />
+  <link rel="stylesheet" href="styles.css?v=23e34ba3" />
+  <!-- 방문 통계는 Cloudflare Web Analytics 를 쓴다 (Pages 대시보드에서 켜면 비콘이 자동 주입된다).
+       GA4 를 걷어낸 이유: 동의 화면보다 먼저 실행돼 브라우저 식별자가 미국으로 나갔다
+       (개인정보보호법 제28조의8 국외이전). CF 는 쿠키를 안 써서 동의가 필요 없다. -->
+</head>
+<body>
+  <!-- 미리보기 띠는 2026-09-01 출시 준비로 없앴다.
+       띠의 목적이 "본판에는 없는 기능이 여기서만 켜져 있다" 를 알리는 것이었는데,
+       LAUNCH 를 켜면서 본판과 미리보기가 같아져 알릴 내용 자체가 사라졌다.
+       ⚠ WE.flags.PREVIEW 는 남겨 둔다 — js/pro.js 의 ?limit=N (한도를 낮춰 시험하기)이 쓴다. -->
+  <!-- 상단 툴바 -->
+  <div id="toolbar">
+    <!-- 1행: 문서 레벨 — 자주 쓰는 것(저장·피드백)만 노출, 나머지는 ☰ 메뉴로 -->
+    <div class="tb-row">
+      <!-- 도구막대는 어두우므로(#2b2f36) logo-dark 를 쓴다.
+           밝은 화면용 logo.svg 를 쓰면 피복이 대비 1.59:1 이라 안 보인다. -->
+      <!-- 로고를 누르면 홈(랜딩)으로 간다. draw.io 를 비롯해 대부분의 편집기가
+           좌상단 로고를 그렇게 쓰기 때문에, 사용자가 여기를 눌러 본다.
+           예전에는 <span> 이라 눌러도 아무 일이 없었다. (2026-08-31)
+
+           ⚠ 작업이 사라지지 않는가 — 이미 장치가 둘 있어서 그대로 두면 된다.
+              · store.js 가 beforeunload/pagehide 에서 자동저장한다 → 돌아오면 복구된다
+              · io.js 가 '파일로 저장 안 한 변경' 이 있으면 브라우저 확인창을 띄운다
+           ⚠ allowLeave() 를 부르지 않는다. 실수로 눌렀을 때는 물어봐 주는 것이 맞다. -->
+      <!-- 새 창으로 연다. 이 화면에는 저장 안 한 도면이 떠 있으므로, 같은 창에서 나가면
+           작업하던 것을 두고 떠나는 셈이 된다. rel=noopener 는 새 창이 이 창을 건드리지 못하게. -->
+      <a class="brand" href="index.html" target="_blank" rel="noopener"
+         title="이지케이블 홈으로 (새 창)"><img class="brand-mark" src="assets/logo-dark.svg" alt="" />이지케이블</a>
+      <!-- 문서 제목처럼 — 평소엔 상자가 없고 마우스를 올리거나 고르면 나타난다(styles.css).
+           폭은 글자 길이에 맞춰 늘어난다 (js/app.js 의 제목폭맞추기).
+           150px 고정이라 "퍼미어스 미니 V1(배선도)" 같은 흔한 이름이 잘렸다 (2026-09-09 고원빈). -->
+      <input type="text" id="projName" placeholder="프로젝트 이름"
+             title="프로젝트 이름 — 눌러서 고칩니다 (저장 파일명·PDF 제목)" />
+      <div class="tb-spacer"></div>
+      <div class="tb-group">
+        <button id="btnSave" title="프로젝트를 파일로 저장 (Ctrl+S)">저장</button>
+      </div>
+      <div class="tb-divider"></div>
+      <button id="btnNotify" title="정식 출시·새 기능 소식을 이메일로 받기">🔔 출시 알림</button>
+      <button id="btnFeedback" class="tb-accent" title="의견·버그 제보 보내기">💬 피드백</button>
+      <!-- 계정 — 출시(LAUNCH) 전에는 숨어 있다. auth.js 가 상태에 따라 보이고 문구를 바꾼다 -->
+      <!-- Pro/무료 전환 — 미리보기에서만 보인다.
+           시험할 때마다 Supabase 대시보드를 오가는 것을 대신한다. -->
+      <!-- 계정 버튼·메뉴가 들어올 자리. 마크업은 js/authmodal.js 에 있다 — 랜딩과 한 벌을 같이 쓴다. -->
+      <span id="acctSlot"></span>
+      <input type="file" id="fileOpen" accept=".ezc,.json,application/json" hidden />
+    </div>
+    <!-- ☰ 앱 메뉴 드로어 (Excalidraw 스타일: 아이콘 · 라벨 · 단축키 3열) -->
+    <div id="appMenu" class="app-menu" hidden>
+      <button id="btnNew" class="menu-item" title="새 프로젝트 (현재 작업 비움)"><span><i>📄</i>새 작업</span></button>
+      <button id="btnOpen" class="menu-item" title="프로젝트 파일 열기"><span><i>📂</i>열기</span><kbd>Ctrl+O</kbd></button>
+      <!-- [저장]은 툴바에 상시 노출되어 있어 여기선 뺐다(같은 화면에 같은 버튼이 둘일 필요가 없다).
+           메뉴에는 툴바에 없는 '다른 이름으로 저장'만 둔다. -->
+      <button id="btnSaveAsMenu" class="menu-item" title="위치와 이름을 새로 지정해 저장합니다 (이후 Ctrl+S는 새 파일로 저장됩니다)"><span><i>💾</i>다른 이름으로 저장…</span><kbd>Ctrl+Shift+S</kbd></button>
+      <div class="menu-flyout">
+        <button id="btnExport" class="menu-item" title="PDF 또는 이미지로 내보내기"><span><i>📤</i>내보내기</span><kbd>▸</kbd></button>
+        <div id="exportSub" class="menu-sub">
+          <button id="btnPdf" class="menu-item" title="PDF로 인쇄">PDF 문서</button>
+          <button id="btnPng" class="menu-item" title="배선도를 PNG 이미지로 저장 (카페·블로그·메신저 공유용)">이미지 (PNG)</button>
+        </div>
+      </div>
+      <button id="btnSample" class="menu-item" title="예제 배선도를 열어봅니다"><span><i>💡</i>샘플 프로젝트</span></button>
+      <button id="btnRecent" class="menu-item" title="이 브라우저에 자동 보관된 다른 배선도를 이어서 엽니다"><span><i>🗂</i>최근 작업</span></button>
+      <button id="btnHistory" class="menu-item" title="자동 보관된 이전 스냅샷으로 되돌립니다"><span><i>🕘</i>이전 버전 복구</span></button>
+      <div class="menu-divider"></div>
+      <div class="menu-flyout">
+        <button id="btnLang" class="menu-item" title="Language"><span><i>🌐</i>Language</span><kbd>▸</kbd></button>
+        <div id="langSub" class="menu-sub">
+          <button class="menu-item" data-setlang="ko">한국어</button>
+          <button class="menu-item" data-setlang="en">English</button>
+        </div>
+      </div>
+      <button id="btnSettings" class="menu-item"><span><i>⚙</i>설정</span></button>
+      <button id="btnHelpMenu" class="menu-item"><span><i>?</i>단축키 도움말</span><kbd>?</kbd></button>
+      <div class="menu-divider"></div>
+      <a class="menu-item menu-link" href="privacy.html" target="_blank" rel="noopener">개인정보처리방침</a>
+    </div>
+    <!-- 2행: 편집 레벨 (그리기 도구) -->
+    <div class="tb-row">
+      <!-- ☰ 앱 메뉴 — 2026-08-24 에 로고 왼쪽에서 여기로 내렸다 (고원빈 지시).
+           로고가 화면 맨 왼쪽 원점이 되도록 한다 (미리캔버스·Excalidraw 방식).
+           들어갈 자리는 아래 tb-spacer 를 없애서 만들었다 — 그 설명은 거기 적어 뒀다. -->
+      <button id="btnAppMenu" class="ib" data-tip="메뉴">
+        <svg class="ico" viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 4.5 H13.5"/><path d="M2.5 8 H13.5"/><path d="M2.5 11.5 H13.5"/></svg>
+      </button>
+      <!-- 모드 — 2026-09-09 에 글자 기호(▣ ╱ ▭ T)를 SVG 로 바꾸고 낱말을 뺐다.
+           ⚠ title 을 지우지 않는다. data-tip 은 우리 툴팁이고, title 은 그게 못 뜨는
+              경우(스크린리더·고대비 모드)의 뒷받침이다. 둘의 문구를 같게 유지한다. -->
+      <div class="tb-group modes">
+        <button id="modeSelect" class="mode ib active" data-tip="선택 · 이동" aria-label="선택 · 이동">
+          <svg class="ico" viewBox="0 0 16 16" aria-hidden="true"><path class="fill" d="M3.2 2 L3.2 13.2 L6.4 10.1 L8.4 14.1 L10.2 13.2 L8.3 9.5 L12.6 9.3 Z"/></svg>
+        </button>
+        <button id="modeWire" class="mode ib" data-tip="배선 — 단자끼리 잇기" aria-label="배선">
+          <svg class="ico" viewBox="0 0 16 16" aria-hidden="true"><path d="M3.6 12.4 V6.2 H12.4 V3.6"/><circle cx="3.6" cy="12.4" r="1.6"/><circle cx="12.4" cy="3.6" r="1.6"/></svg>
+        </button>
+        <button id="modeLabel" class="mode ib" data-tip="라벨 — 배선에 수축튜브 부착" aria-label="라벨">
+          <svg class="ico" viewBox="0 0 16 16" aria-hidden="true"><path d="M1.5 8 H4"/><path d="M12 8 H14.5"/><rect x="4" y="4.8" width="8" height="6.4" rx="1.4"/></svg>
+        </button>
+        <button id="modeText" class="mode ib" data-tip="텍스트 — 주석 추가" aria-label="텍스트">
+          <svg class="ico" viewBox="0 0 16 16" aria-hidden="true"><path d="M3.2 3.6 H12.8"/><path d="M8 3.6 V12.4"/><path d="M5.8 12.4 H10.2"/></svg>
+        </button>
+      </div>
+      <!-- 모드(무엇을 하는가) 와 배선 속성(어떻게 그리는가) 의 경계 -->
+      <div class="tb-divider"></div>
+      <!-- 배선 속성 세 묶음: 색 · 두께 · 모양.
+           각 묶음은 [라벨 + 조작기]로 끝나고 사이를 옅은 선으로 가른다.
+           ⋯(팔레트 관리)는 '색'에 속하므로 반드시 색 견본 바로 뒤에 둔다 — 다른 묶음 뒤로 가면 소속이 헷갈린다. -->
+      <div class="tb-group" id="paletteGroup">
+        <!-- 「배선색」 글자를 뺐다 (2026-09-09) — 색 견본이 곧 뜻이라 글자가 자리만 먹었다 -->
+        <div id="paletteSwatches" data-tip="배선 색"></div>
+        <button id="btnPaletteManage" class="small ib" data-tip="팔레트 관리" aria-label="팔레트 관리">
+          <svg class="ico" viewBox="0 0 16 16" aria-hidden="true"><circle cx="3.4" cy="8" r="1.1" class="fill"/><circle cx="8" cy="8" r="1.1" class="fill"/><circle cx="12.6" cy="8" r="1.1" class="fill"/></svg>
+        </button>
+
+        <span class="tb-sep" aria-hidden="true"></span>
+        <!-- 「두께」 글자 대신 아이콘. 굵기가 다른 세 줄 — Figma·Illustrator 와 같은 그림이다.
+             ⚠ 굵기는 class(w1·w2·w3)로 준다. stroke-width 속성으로 주면 .ico path 규칙에 져서
+                세 줄이 같은 굵기로 그려지고 ☰ 메뉴와 구분이 안 된다. -->
+        <span id="wireWidthIcon" class="ib" data-tip="선 두께" style="color:#cfd6df">
+          <svg class="ico" viewBox="0 0 16 16" aria-hidden="true">
+            <path class="w1" d="M2.5 3.5 H13.5"/><path class="w2" d="M2.5 8 H13.5"/><path class="w3" d="M2.5 13 H13.5"/>
+          </svg>
+        </span>
+        <!-- 상한을 30 → 15 로 낮췄다 (2026-09-09 고원빈) — 그 이상은 도면에서 쓸 일이 없다 -->
+        <input type="number" id="wireWidthSel" data-tip="선 두께 (1~15px)"
+               min="1" max="15" step="1" value="2" style="width:44px" />
+
+        <!-- 배선 모양 — 낱말보다 선 그림이 빠르게 읽힌다.
+             배선을 선택한 상태면 그 배선들의 모양이 바뀌고, 아니면 앞으로 그릴 기본값이 된다(배선색과 같은 규칙). -->
+        <span class="tb-sep" aria-hidden="true"></span>
+        <!-- 「배선모양」 글자를 뺐다. 끝점에 동그라미(=단자)를 넣어 '선' 이 아니라
+             '배선' 으로 읽히게 했다 (2026-09-09) -->
+        <div id="wireRouting" class="seg-btns">
+          <button type="button" class="seg-btn" data-routing="ortho" aria-label="꺾임"
+                  data-tip="꺾임 — 가로·세로로만">
+            <svg viewBox="0 0 20 14" aria-hidden="true"><path d="M3.4 11 V5 H16.6"/><circle cx="3.4" cy="11" r="1.9"/><circle cx="16.6" cy="5" r="1.9"/></svg>
+          </button>
+          <button type="button" class="seg-btn" data-routing="straight" aria-label="직선"
+                  data-tip="직선 — 두 점을 곧장">
+            <svg viewBox="0 0 20 14" aria-hidden="true"><path d="M3.4 11 L16.6 3.6"/><circle cx="3.4" cy="11" r="1.9"/><circle cx="16.6" cy="3.6" r="1.9"/></svg>
+          </button>
+        </div>
+      </div>
+      <!-- 점검 도구 — 그리드·스냅(작업 환경)과 성격이 달라 구분선으로 확실히 갈라 둔다.
+           모드 버튼과 달리 배타적이지 않아서 어느 모드에서든 켤 수 있다. -->
+      <div class="tb-divider"></div>
+      <div class="tb-group">
+        <button id="btnCheckTerm" class="mode ib" aria-pressed="false" aria-label="미연결 확인"
+                data-tip="미연결 확인 — 배선 안 붙은 단자 표시">
+          <svg class="ico" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="5.4"/><circle cx="8" cy="8" r="1.9" class="warn"/></svg>
+        </button>
+        <!-- 점검 다음 단계 — 확인이 끝났으면 안 쓰는 단자를 치워 도면을 읽기 쉽게 만든다.
+             ⚠ 위 버튼과 성격이 다르다: 저건 보기 토글이고 이건 **도면을 실제로 바꾼다.**
+                되돌리기는 Ctrl+Z(히스토리가 프로젝트 전체를 스냅샷한다). -->
+        <button id="btnHideUnused" class="mode ib" aria-pressed="false" aria-label="숨기기"
+                data-tip="숨기기 — 안 쓰는 단자 감추기">
+          <svg class="ico" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="5.6"/><path d="M4 12 L12 4"/></svg>
+        </button>
+      </div>
+      <!-- 여기 있던 tb-spacer 를 없앴다 (2026-08-24).
+           .hint 가 이미 flex:1 1 0 + text-align:right 라 남는 공간을 다 먹고
+           오른쪽 정렬한다. spacer 는 같은 일을 두 번 하는 것이었다.
+           ⚠ 그런데 spacer 의 min-width:12px 는 줄어들지 않는 폭이라,
+              gap 12px 과 합쳐 24px 을 잡아먹고 있었다. 그것 때문에 ☰ 를 이 줄에
+              넣으면 1100px 창에서 툴바가 두 줄로 접혔다(verify_hint 가 잡음).
+              빼고 나니 ☰ 34px + gap 12px 이 들어가고도 남는다. -->
+      <span id="hint" class="hint">부품을 추가해 시작하세요.</span>
+    </div>
+  </div>
+
+  <!-- 지난 작업을 되살렸을 때 알리는 띠. 복원은 기본 동작이고, 새로 시작하려면 여기서 한 번 누르면 된다 -->
+  <div id="restoreBanner" hidden>
+    <span class="rb-icon">⟳</span>
+    <span id="restoreBannerText"></span>
+    <button type="button" id="restoreBannerNew">새 배선도로 시작</button>
+    <button type="button" id="restoreBannerClose" title="닫기" aria-label="닫기">✕</button>
+  </div>
+
+  <div id="main">
+    <!-- 좌측 라이브러리 패널 (Phase 5에서 채움) -->
+    <aside id="leftPanel">
+      <div class="lib-head">
+        <h3>부품 라이브러리</h3>
+      </div>
+      <!-- 아이콘은 SVG 다. (2026-09-10)
+           예전에는 ＋(전각) · ⌕ · ⇱ · ⤓ · ⤒ 같은 **글자표 기호**와 📁·🔗 이모지를 썼는데,
+           그림을 OS·글꼴이 그리는 탓에 컴퓨터마다 굵기·크기가 달랐고 ⌕ 는 한글 글꼴에
+           없으면 두부(□)로 나왔다. 파비콘에서 이모지를 걷어낸 것과 같은 이유다(8/24).
+           ⚠ 굵기는 .ico24 가 2.4 로 준다 — 기존 .ico(16격자·1.6)와 화면상 1.50px 로 같다.
+              styles.css 의 .ico24 주석에 계산을 적어 뒀다. -->
+      <div class="lib-source-actions" aria-label="부품 추가 방법">
+        <button id="btnLibAdd" class="lib-add-btn">
+          <svg class="ico24" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/><path d="M12 5v14"/></svg>부품 추가</button>
+        <button id="btnPublicLibrary" class="lib-add-btn">
+          <svg class="ico24" viewBox="0 0 24 24" aria-hidden="true"><path d="m21 21-4.34-4.34"/><circle cx="11" cy="11" r="8"/></svg>공용 부품</button>
+      </div>
+      <input type="file" id="fileLibAdd" accept="image/*" hidden />
+      <input type="file" id="fileLibImport" accept=".ezclib,.json,application/json" hidden />
+      <div class="lib-search-row">
+        <input type="search" id="libSearch" placeholder="내 부품 검색" autocomplete="off" />
+        <!-- ⚠ 「접기」에 ⌃⌄ 모양(chevrons-down-up)을 쓰면 안 된다 — 15px 로 줄이면
+             ✕ 처럼 보여 '닫기·삭제' 로 읽힌다. 시안에서 실제로 그렇게 보여 물렸다. -->
+        <button id="btnFolderCollapse" class="lib-folder-add" title="폴더 전체 접기 / 펼치기 (Shift+C)">
+          <svg class="ico24" viewBox="0 0 24 24" aria-hidden="true"><path d="M10 5h11"/><path d="M10 12h11"/><path d="M10 19h11"/><path d="m3 10 3-3-3-3"/><path d="m3 20 3-3-3-3"/></svg></button>
+        <button id="btnFolderAdd" class="lib-folder-add" title="새 폴더 만들기 (부품 분류용)">
+          <svg class="ico24" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 10v6"/><path d="M9 13h6"/><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></svg></button>
+      </div>
+      <div id="libList" class="lib-list"></div>
+      <div class="lib-footer">
+        <button id="btnLibExport" class="lib-io-btn" title="부품 라이브러리 전체를 .ezclib 파일로 내보냅니다 (다른 PC·브라우저로 옮기거나 백업할 때)">
+          <svg class="ico24" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15V3"/><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/></svg>내보내기</button>
+        <button id="btnLibImport" class="lib-io-btn" title=".ezclib 라이브러리 파일을 불러와 내 라이브러리에 추가합니다">
+          <svg class="ico24" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12"/><path d="m17 8-5-5-5 5"/><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/></svg>불러오기</button>
+      </div>
+    </aside>
+    <div class="resizer" id="resizerLeft" title="드래그로 너비 조절 · 더블클릭하면 기본 너비로"></div>
+
+    <!-- 인쇄용 제목 (화면에선 숨김) -->
+    <div id="printTitle" class="print-only pr-orig">
+      <span id="printTitleName"></span>
+      <span id="printTitleDate"></span>
+    </div>
+
+    <!-- 중앙 영역: 캔버스(스크롤) + 하단 탭 바 -->
+    <div id="centerCol">
+    <!-- 중앙 캔버스 -->
+    <section id="canvasWrap" class="pr-orig">
+      <!-- 작성일 — 2026-09-09 에 캔버스 **위로 띄웠다** (고원빈).
+           예전에는 캔버스 위에 줄 하나를 차지해서, 그만큼 도면 볼 자리가 줄었다.
+           ⚠ 「작성일」 글자를 뺐다. 날짜 모양(2026.09.08)이 곧 뜻이라 글자가 자리만 먹었다.
+           ⚠ 인쇄에는 안 나온다(#canvasHeader 는 @media print 에서 숨긴다).
+              종이에 찍히는 날짜는 #printTitleDate 가 따로 그린다.
+           ⚠ 왼쪽 손잡이로만 끈다 — 입력칸을 끌게 하면 글자 선택이 안 된다. -->
+      <div id="canvasHeader" class="float-date">
+        <span class="fd-grip" data-tip="끌어서 옮기기" aria-hidden="true">
+          <svg class="ico" viewBox="0 0 16 16"><circle cx="6" cy="4" r="1.1" class="fill"/><circle cx="10" cy="4" r="1.1" class="fill"/><circle cx="6" cy="8" r="1.1" class="fill"/><circle cx="10" cy="8" r="1.1" class="fill"/><circle cx="6" cy="12" r="1.1" class="fill"/><circle cx="10" cy="12" r="1.1" class="fill"/></svg>
+        </span>
+        <input type="text" id="projDate" inputmode="numeric" maxlength="10"
+               autocomplete="off" spellcheck="false" aria-label="작성일"
+               data-tip="작성일 — 비우면 최종 수정일이 들어갑니다" />
+      </div>
+
+      <svg id="canvas" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 900">
+        <defs>
+          <pattern id="gridPattern" width="10" height="10" patternUnits="userSpaceOnUse">
+            <path d="M 10 0 L 0 0 0 10" fill="none" stroke="#e6e6e6" stroke-width="1" />
+          </pattern>
+        </defs>
+        <rect id="gridBg" x="0" y="0" width="100%" height="100%" fill="url(#gridPattern)" />
+        <g id="layerWatermark"></g>
+        <g id="layerComponents"></g>
+        <g id="layerLabels"></g>
+        <g id="layerWires"></g>
+        <!-- 배선보다 **위**에 오는 부품 (2026-09-08).
+             겹침 순서 「앞으로 가져오기」를 계속 누르면 배선을 넘어 이 층으로 올라온다.
+             배선 라벨(layerWireLabels)보다는 아래에 둔다 — 라벨은 늘 읽혀야 한다. -->
+        <g id="layerComponentsTop"></g>
+        <g id="layerLabelsTop"></g>
+        <g id="layerWireLabels"></g>
+        <g id="layerTermLabels"></g>
+        <g id="layerAnnotations"></g>
+        <g id="layerOverlay"></g>
+        <!-- 인쇄 전용 로고 각인 — 종이 여백이 아니라 '도면 칸 자체'의 우하단에 찍는다.
+             종이 우하단(#pageMark, 종이 전체를 덮는 position:fixed)으로 했더니 도면과
+             배선 범례가 종이 끝까지 채워 각인이 범례 칸과 겹쳐 버렸다(2026-09-03).
+             viewBox 가 늘 "0 0 1600 900" 으로 고정이라 이 좌표는 확대·스크롤과 무관하게
+             항상 도면 프레임의 우하단 구석이다. 화면·PNG 는 다른 각인(#canvasMark ·
+             exportPng 의 SVG 텍스트)을 쓰므로 이건 인쇄에서만 켠다. -->
+        <text id="canvasMarkPrint" x="1586" y="886" text-anchor="end" aria-hidden="true"
+          style="font:700 40px 'Segoe UI','Malgun Gothic',sans-serif;letter-spacing:.1em;
+                 fill:#5a6675;opacity:.4;">EASYCABLE</text>
+      </svg>
+
+      <!-- BOM(자재명세서) 표 뷰 — BOM 탭 누르면 배선도 아래에 추가 표시 -->
+      <div id="bomView" hidden>
+        <div class="bom-tools">
+          <span class="bom-layout">
+            <select id="bomLayoutSel" title="저장된 레이아웃 불러오기"><option value="">레이아웃…</option></select>
+            <button id="bomLayoutSave" class="btn-sm2">저장</button>
+            <button id="bomLayoutDel" class="btn-sm2" title="선택한 레이아웃 삭제">삭제</button>
+          </span>
+          <button id="bomExportCsv" class="btn-sm">⤓ CSV</button>
+          <button id="bomExportXlsx" class="btn-sm" title="엑셀 파일(.xlsx)로 내보내기">⤓ Excel</button>
+          <button id="bomExportWires" class="btn-sm" title="배선 리스트(번호·색·AWG·출발→도착) CSV">⤓ 배선 리스트</button>
+          <details class="bom-colcfg" id="bomColCfg">
+            <summary title="표에 어떤 열을 보이게 할지 선택합니다">표시할 열 선택</summary>
+            <div class="bom-colcfg-body">
+              <label><input type="checkbox" data-col="spec" /> 스펙</label>
+              <label><input type="checkbox" data-col="price" /> 단가</label>
+              <label><input type="checkbox" data-col="sum" /> 합계</label>
+              <label><input type="checkbox" data-col="link" /> 구매링크</label>
+              <label><input type="checkbox" data-col="ds" /> 데이터시트</label>
+            </div>
+          </details>
+        </div>
+        <div class="bom-head">
+          <h2>부품 목록 (BOM)</h2>
+        </div>
+        <div class="bom-table-wrap">
+          <div class="bom-grid">
+            <table id="bomTable"></table>
+            <div class="add-col-zone" id="bomAddColZone" title="열 추가">＋</div>
+            <div class="add-row-zone" id="bomAddRowZone" title="행 추가">＋</div>
+          </div>
+        </div>
+        <!-- 제휴 고지 — 구매링크 열이 실제로 눌리는 자리다(공정위 표시·광고 심사지침).
+             ⚠ 인쇄·PDF 에는 나가지 않는다. 이 표는 사용자가 고객에게 납품하는 문서라
+                우리 수익 구조를 거기 박아 보낼 수 없다. styles.css 의 @media print 참고. -->
+        <p class="affiliate-note">※ 이지케이블은 제휴 링크를 사용하며, 구매 시 일정액의 수수료를 받습니다.<span class="affiliate-more">자세히<span class="affiliate-tip"><span>이지케이블은 알리, 쿠팡 제휴 마케팅 프로그램에 참여하고 있습니다.</span><span>부품 목록과 공용 부품의 구매 링크로 상품을 구매하시면 일정액의 수수료를 제공받으며, 서버 운영 등 서비스 유지에 사용됩니다.</span><b>구매자에게 추가 비용은 발생하지 않습니다.</b></span></span></p>
+      </div>
+
+      <!-- 배선 리스트 표 뷰 — 배선 리스트 탭 누르면 표시 -->
+      <div id="wireListView" hidden>
+        <div class="bom-tools">
+          <button id="wlExportCsv" class="btn-sm" title="번호·색·AWG·출발→도착 CSV로 내보내기">⤓ CSV</button>
+          <button id="wlExportXlsx" class="btn-sm" title="결선표를 엑셀 파일(.xlsx)로 내보내기">⤓ Excel</button>
+        </div>
+        <div class="bom-head">
+          <h2>결선표</h2>
+        </div>
+        <div class="bom-table-wrap">
+          <table id="wireListTable"></table>
+        </div>
+      </div>
+
+    </section>
+
+      <!-- 우하단 플로팅 컨트롤: 실행취소/다시실행 + 확대/축소 (Excalidraw 참고)
+           centerCol 기준 배치라 창 크기와 무관하게 캔버스 우하단에 고정. 배율 숫자 클릭 = 화면 맞춤. -->
+      <!-- 단자 마우스오버 시 이름 표시(빠른 커스텀 툴팁) -->
+      <div id="termTooltip" class="term-tooltip" hidden></div>
+
+      <!-- 작업창 각인 — 화면을 그대로 캡처해도 남는 표식. 스크롤·확대와 무관하게 좌하단 고정.
+           SVG 바깥(centerCol 기준)에 두는 이유: PNG 내보내기는 #layerWatermark,
+           인쇄는 #pageWatermark 로 각자 워터마크가 따로 있어서
+           캔버스 안에 넣으면 같은 자리에 두 번 찍힌다. -->
+      <div id="canvasMark" aria-hidden="true">EASYCABLE</div>
+
+      <div class="canvas-corner-tools">
+        <div class="canvas-float-controls" title="실행 취소 (Ctrl+Z) / 다시 실행 (Ctrl+Shift+Z)">
+          <button id="btnUndo" title="실행 취소 (Ctrl+Z)" disabled>↶</button>
+          <button id="btnRedo" title="다시 실행 (Ctrl+Shift+Z)" disabled>↷</button>
+        </div>
+        <!-- 그리드·스냅 — 2026-09-09 에 툴바에서 여기로 내렸다 (고원빈).
+             단축키조차 없는 값인데 툴바 한가운데를 차지하고 있었다. 확대·용지와 성격이 같다
+             ("지금 이 화면을 어떻게 볼 것인가"). 설정 모달로 안 보낸 이유는
+             **스냅은 작업 중에 껐다 켜는 일이 있어서** — 모달을 열면 흐름이 끊긴다.
+             ⚠ 안의 checkbox 를 그대로 둔다. js/app.js 가 .checked 와 change 를 쓴다. -->
+        <div class="canvas-float-controls">
+          <label class="chk chk-ico tip-up" data-tip="격자 보이기">
+            <input type="checkbox" id="chkGrid" checked />
+            <svg class="ico" viewBox="0 0 16 16" aria-hidden="true"><path d="M2 2 H14 V14 H2 Z"/><path d="M6 2 V14"/><path d="M10 2 V14"/><path d="M2 6 H14"/><path d="M2 10 H14"/></svg>
+          </label>
+          <label class="chk chk-ico tip-up" data-tip="격자에 맞춰 붙이기">
+            <input type="checkbox" id="chkSnap" checked />
+            <svg class="ico" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1.6 V5"/><path d="M8 11 V14.4"/><path d="M1.6 8 H5"/><path d="M11 8 H14.4"/><rect x="5.4" y="5.4" width="5.2" height="5.2" rx="1"/></svg>
+          </label>
+        </div>
+        <!-- 용지 크기 — **페이지마다** 다르게 고를 수 있다 (2026-09-08).
+             확대 옆에 둔 이유: 둘 다 "지금 보고 있는 화면을 어떻게 볼 것인가" 라서
+             손이 같은 자리에서 움직인다. 도구 모음에 두면 그리기 도구와 섞인다. -->
+        <div class="canvas-float-controls canvas-size-pick">
+          <button id="btnPageSize" title="이 페이지의 용지 크기 — 페이지마다 다르게 둘 수 있습니다"
+                  aria-haspopup="true" aria-expanded="false">▭ 가로</button>
+          <div id="pageSizeMenu" hidden></div>
+        </div>
+        <div class="canvas-float-controls" title="Ctrl+휠로 확대/축소 · 스페이스/휠클릭 드래그로 이동">
+          <button id="btnZoomOut" title="축소">－</button>
+          <button id="btnZoomLevel" title="화면에 맞춤">100%</button>
+          <button id="btnZoomIn" title="확대">＋</button>
+        </div>
+      </div>
+
+      <!-- 도면 꼬리줄: 비고. 머리줄(작성일)의 짝으로 캔버스 '아래'에 둔다.
+           인쇄물 하단 좌측에 같은 내용이 그대로 나가고, 폭도 인쇄와 같은 비율로 맞춰
+           몇 줄까지 들어가는지 화면에서 바로 보이게 한다. -->
+      <div id="canvasFooter">
+        <label for="projNote">📝 비고</label>
+        <div id="noteWrap">
+          <textarea id="projNote" rows="1" spellcheck="false" autocomplete="off"
+                    placeholder="주의사항·코멘트 (최대 4줄) — 인쇄물 하단 좌측에 나갑니다"
+                    title="인쇄물 하단 좌측 비고 칸에 그대로 나갑니다 · 최대 4줄"></textarea>
+        </div>
+        <button type="button" id="noteToggle" title="비고 칸 펼치기 / 접기" aria-expanded="false">⌃</button>
+      </div>
+
+      <!-- 하단 뷰 탭 (캔버스 영역 밖, 항상 하단 고정) -->
+      <div id="viewTabs">
+        <!-- 배선도 시트 탭들 + ＋ 버튼 (JS가 채운다). 우클릭 = 이름 바꾸기·복제·삭제·순서 -->
+        <div id="sheetTabs"></div>
+        <span class="vt-divider" aria-hidden="true"></span>
+        <button class="view-tab" data-view="bom">BOM</button>
+        <button class="view-tab" data-view="wirelist">결선표</button>
+      </div>
+
+      <!-- 시트 탭 우클릭 메뉴 -->
+      <div id="sheetMenu" hidden>
+        <button data-sm="rename">✎ 이름 바꾸기</button>
+        <button data-sm="add">＋ 새 배선도</button>
+        <button data-sm="dup">⧉ 복제</button>
+        <div class="sm-sep"></div>
+        <button data-sm="left">← 왼쪽으로</button>
+        <button data-sm="right">오른쪽으로 →</button>
+        <div class="sm-sep"></div>
+        <button data-sm="del" class="danger">🗑 삭제</button>
+      </div>
+    </div><!-- /centerCol -->
+
+    <!-- 인쇄용 범례 (화면에선 숨김) -->
+    <!-- 인쇄용 BOM (화면에선 숨김) -->
+    <!-- PDF 하단 밴드: 비고(좌) + 배선 범례(우). 16:9 도면을 A4 가로에 넣으면 아래가 남는데 그 자리를 쓴다.
+         좌우로 나눈 이유 — 위아래로 쌓으면 높이가 '더해지지만' 좌우로 두면 '공유'되어,
+         비고 4줄 + 범례 4색을 도면(158mm)을 1mm도 줄이지 않고 넣을 수 있다.
+         높이는 4줄로 묶어 두어 내용이 늘어도 다음 장으로 밀리지 않는다.
+         범례 색이 5개 이상이면 아래로 넘기지 않고 왼쪽으로 열을 늘린다(그만큼 비고 폭이 준다). -->
+    <div id="printFooter" class="print-only pr-orig">
+      <div id="printNote">
+        <span class="pf-head">비고</span>
+        <span id="printNoteBody"></span>
+      </div>
+      <div id="printLegend">
+        <span class="pf-head">배선 범례</span>
+        <span id="printLegendItems"></span>
+      </div>
+    </div>
+
+    <!-- 배선도가 여러 장일 때만 쓰는 인쇄 블록. 시트마다 [제목 + 도면 + 하단 밴드] 한 세트를
+         담고, 장마다 페이지를 나눈다. 그 뒤에 BOM이 붙는다(1번 → 2번 → … → BOM).
+         내용은 위의 #printTitle · #canvas · #printFooter 를 시트별로 그려서 통째로 복제한 것이라,
+         한 장짜리 인쇄물과 모양이 정확히 같다.
+         ※ 반드시 원본들보다 '뒤'에 있어야 한다 — 복제본이 id를 그대로 갖고 있어서
+            getElementById가 원본을 먼저 찾아야 하기 때문(CSS는 같은 id 전부에 적용된다). -->
+    <div id="printSheets" class="print-only"></div>
+
+    <div id="printBOM" class="print-only"></div>
+
+    <div class="resizer" id="resizerRight" title="드래그로 너비 조절 · 더블클릭하면 기본 너비로"></div>
+    <!-- 우측 속성 패널 -->
+    <aside id="rightPanel">
+      <div id="propPanel">
+        <h3>속성</h3>
+
+        <!-- 라벨 모드일 때만 — 다음에 붙일 라벨 (2026-09-09 고원빈).
+             ⚠ 부품 속성의 크기·회전·위치와 **같은 구조**를 쓴다
+                (.p-sec > .p-sec-title + .g-row > .f-num). 여기만 다른 모양을 쓰면
+                같은 패널 안에서 톤이 깨진다.
+             ⚠ 설명 문구는 두지 않는다. 다른 구획도 「단자」「회전」처럼 이름만 있고,
+                무엇을 하는지는 해 보면 안다. -->
+        <div id="labelModeProps" hidden>
+          <div class="p-sec p-first">
+            <div class="p-sec-title">라벨</div>
+            <div class="g-row">
+              <div class="f-num">
+                <input type="text" id="labelNext" maxlength="20" autocomplete="off"
+                       spellcheck="false" aria-label="다음에 붙일 라벨"
+                       data-tip="배선을 클릭하면 이 글자가 양 끝에 붙습니다" />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div id="propEmpty" class="muted">선택된 대상이 없습니다.</div>
+
+        <!-- 다중 선택 정렬 -->
+        <div id="alignProps" hidden>
+          <div id="alignCount" class="muted"></div>
+          <!-- 배치 규칙: 왼쪽 열 = 세로 정렬(위·가운데·아래), 오른쪽 열 = 가로 정렬(왼쪽·가운데·오른쪽).
+               '가운데'가 두 개지만 열로 나뉘어 있어 문맥으로 구분된다(다른 편집기들의 관례).
+               정확한 뜻은 툴팁에 둔다. 균등은 성격이 달라 맨 아래 따로. -->
+          <div class="p-sec-title" style="margin-top:var(--sp3)">요소 정렬</div>
+          <!-- 줄마다 짝을 이루게 둔다: 위·아래 / 가운데 둘 / 왼쪽·오른쪽.
+               반대되는 동작이 나란히 있어야 "이 둘 중 하나" 로 읽힌다. -->
+          <div class="align-grid">
+            <button class="align-btn" data-align="top" title="맨 위 정렬">
+              <svg viewBox="0 0 24 24"><line x1="4" y1="5" x2="20" y2="5"/><rect x="7" y="5" width="4" height="12"/><rect x="14" y="5" width="4" height="7"/></svg><span>맨 위</span>
+            </button>
+            <button class="align-btn" data-align="bottom" title="맨 아래 정렬">
+              <svg viewBox="0 0 24 24"><line x1="4" y1="19" x2="20" y2="19"/><rect x="7" y="7" width="4" height="12"/><rect x="14" y="12" width="4" height="7"/></svg><span>맨 아래</span>
+            </button>
+            <button class="align-btn" data-align="centerY" title="가로 가운데 정렬 — 부품이 위아래로 움직여 하나의 가로선에 나란히 섭니다">
+              <svg viewBox="0 0 24 24"><line x1="4" y1="12" x2="20" y2="12"/><rect x="7" y="6" width="4" height="12"/><rect x="14" y="8" width="4" height="8"/></svg><span>가로</span>
+            </button>
+            <button class="align-btn" data-align="centerX" title="세로 가운데 정렬 — 부품이 좌우로 움직여 하나의 세로선에 나란히 섭니다">
+              <svg viewBox="0 0 24 24"><line x1="12" y1="4" x2="12" y2="20"/><rect x="6" y="7" width="12" height="4"/><rect x="8" y="14" width="8" height="4"/></svg><span>세로</span>
+            </button>
+            <button class="align-btn" data-align="left" title="왼쪽 정렬">
+              <svg viewBox="0 0 24 24"><line x1="5" y1="4" x2="5" y2="20"/><rect x="5" y="7" width="12" height="4"/><rect x="5" y="14" width="7" height="4"/></svg><span>왼쪽</span>
+            </button>
+            <button class="align-btn" data-align="right" title="오른쪽 정렬">
+              <svg viewBox="0 0 24 24"><line x1="19" y1="4" x2="19" y2="20"/><rect x="7" y="7" width="12" height="4"/><rect x="12" y="14" width="7" height="4"/></svg><span>오른쪽</span>
+            </button>
+            <button class="align-btn" data-align="distH" title="가로 균등 간격">
+              <svg viewBox="0 0 24 24"><rect x="3" y="6" width="3" height="12"/><rect x="10.5" y="6" width="3" height="12"/><rect x="18" y="6" width="3" height="12"/></svg><span>가로 균등</span>
+            </button>
+            <button class="align-btn" data-align="distV" title="세로 균등 간격">
+              <svg viewBox="0 0 24 24"><rect x="6" y="3" width="12" height="3"/><rect x="6" y="10.5" width="12" height="3"/><rect x="6" y="18" width="12" height="3"/></svg><span>세로 균등</span>
+            </button>
+          </div>
+          <p class="muted" style="margin-top:8px">Ctrl+클릭으로 부품 추가 선택. 빈 곳 클릭으로 해제.</p>
+        </div>
+
+        <!-- 주석 속성 -->
+        <div id="annoProps" hidden>
+          <label>텍스트
+            <textarea id="annoText" rows="3"></textarea>
+          </label>
+          <div class="row2">
+            <label>색상 <input type="color" id="annoColor" /></label>
+            <label>크기 <input type="number" id="annoSize" min="8" max="120" /></label>
+          </div>
+          <label class="chk"><input type="checkbox" id="annoBold" /> 굵게</label>
+          <button id="annoDelete" class="danger" style="width:100%">주석 삭제</button>
+        </div>
+
+        <!-- 배선 속성 -->
+        <div id="wireProps" hidden>
+          <!-- 선택 개수 표시는 뺐다 (2026-08-18). 정렬 구획이 나타나는 것 자체가 이미 다중 선택 신호라 중복이었다. -->
+
+          <!-- 정렬(다중선택 시) — 다중선택의 주 작업이라 맨 위 -->
+          <div id="wireAlign" class="wp-section wp-first" hidden>
+            <div class="wp-sec-title">정렬</div>
+            <div class="wire-align-row">
+              <button data-walign="align" title="처음 클릭한 배선의 클릭한 구간에 맞춤(세로/가로 자동)">구간 정렬</button>
+              <label class="wgap">간격 <input id="wireGap" type="number" value="15" step="1" /> px</label>
+            </div>
+            <div class="wire-align-row">
+              <button data-walign="alignVert" title="선택한 세로선들의 x를 처음 선택한 선에 맞춰 한 줄로">
+                <svg viewBox="0 0 24 24"><rect x="10.75" y="3" width="2.5" height="18"/><path d="M2 8l4 4-4 4z"/><path d="M22 8l-4 4 4 4z"/></svg><span>세로선 정렬</span>
+              </button>
+              <button data-walign="alignHoriz" title="선택한 가로선들의 y를 처음 선택한 선에 맞춰 한 줄로">
+                <svg viewBox="0 0 24 24"><rect x="3" y="10.75" width="18" height="2.5"/><path d="M8 2l4 4 4-4z"/><path d="M8 22l4-4 4 4z"/></svg><span>가로선 정렬</span>
+              </button>
+            </div>
+            <div class="wire-align-row">
+              <button data-walign="distVert" title="선택한 세로선들을 좌우로 균등하게 벌림">
+                <svg viewBox="0 0 24 24"><rect x="3" y="4" width="2.5" height="16"/><rect x="10.75" y="4" width="2.5" height="16"/><rect x="18.5" y="4" width="2.5" height="16"/></svg><span>세로선 균등</span>
+              </button>
+              <button data-walign="distHoriz" title="선택한 가로선들을 위아래로 균등하게 벌림">
+                <svg viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="2.5"/><rect x="4" y="10.75" width="16" height="2.5"/><rect x="4" y="18.5" width="16" height="2.5"/></svg><span>가로선 균등</span>
+              </button>
+            </div>
+              <!-- 합치기·풀기 버튼은 뺐다 (2026-08-18).
+                   분기 기능이 생기기 전에는 여러 선을 겹쳐 그려 다발처럼 보이게 했는데,
+                   이제 그 용도는 분기가 대신한다.
+                   겹쳐 그리는 것 자체는 [선 겹침] + [구간 정렬 간격 0] 으로 여전히 된다.
+                   이미 합쳐 둔 도면이 있을 수 있어 bundleId 처리 코드는 남겨 둔다. -->
+          </div>
+
+          <!-- 스타일 -->
+          <div class="wp-section">
+            <div class="wp-sec-title">스타일</div>
+            <div class="wp-row2">
+              <label>색상 <input type="color" id="wireColor" /></label>
+              <label>두께 <input type="number" id="wireWidth" min="1" max="15" /></label>
+            </div>
+            <!-- 팔레트에서 바로 고르기. 색상 칸(운영체제 색 고르개)은 팔레트에 없는 색을 쓸 때만 필요하고,
+                 실제로는 쓰던 색 몇 개를 반복해서 쓰기 때문에 한 번 눌러 끝나는 길을 위에 둔다.
+                 목록은 툴바 배선색과 같은 팔레트다 — 두 벌로 나누면 한쪽만 고치는 사고가 난다. -->
+            <div id="wirePalette" class="wp-swatches" title="팔레트에서 색 고르기"></div>
+            <label class="wp-dash" title="선이 많아 구분이 어려울 때 종류를 바꿔 나눈다">선 종류
+              <select id="wireDash">
+                <option value="">──── 실선</option>
+                <option value="dash">─ ─ ─ 파선</option>
+                <option value="dot">· · · · 점선</option>
+                <option value="dashdot">─ · ─ 일점쇄선</option>
+              </select>
+            </label>
+            <label class="chk" title="이 배선을 자동 벌림에서 제외한다 — 다른 선과 같은 자리를 지나도 안 밀려난다"><input type="checkbox" id="wireAllowOverlap" /> 선 겹침</label>
+          </div>
+
+          <!-- 라벨 -->
+          <div class="wp-section">
+            <div class="wp-sec-title">라벨</div>
+              <label><input type="text" id="wireLabelText" placeholder="예: W1, B1, C1…" /></label>
+            <div class="wp-btn-row">
+              <!-- 라벨 모드로 바꾸지 않고도 번호를 붙일 수 있는 길 (2026-09-09 고원빈).
+                   한 가닥만 붙일 때 모드를 갔다 오는 게 번거롭다는 지적. -->
+              <button id="wireLabelAuto" title="다음 번호를 자동으로 붙인다 (양 끝에 같은 번호)">번호 붙이기</button>
+              <button id="wireLabelReset" title="끌어서 옮긴 자리와 지운 한쪽 끝을 자동 배치로 되돌림">위치 초기화</button>
+              <button id="wireLabelRemove" title="이 배선의 라벨 제거">라벨 제거</button>
+            </div>
+          </div>
+
+          <!-- 규격(AWG) -->
+          <div id="wireGauge" class="wp-section">
+            <div class="wp-sec-title">배선 규격 (AWG)</div>
+              <label>전류(A) <input type="number" id="wireCurrent" step="any" min="0" placeholder="비우면 신호선" /></label>
+            <div id="wireAwgOut" class="muted"></div>
+            <details id="wireLoadCalc">
+              <summary>부하로 계산</summary>
+              <div class="wg-calc">
+                <label>구간 전압 V <input type="number" id="wireCalcV" step="any" min="0" placeholder="예: 6, 12" /></label>
+                <div id="wireLoadList" class="wg-loads"></div>
+                <div id="wireCalcOut" class="muted"></div>
+                <button id="wireCalcApply" class="btn btn-block">합산 → 전류 적용</button>
+              </div>
+            </details>
+          </div>
+
+          <button id="wireDelete" class="btn btn-danger btn-block">배선 삭제</button>
+        </div>
+
+        <div id="propBody" hidden>
+          <!-- 배치 규칙: 자주 바꾸는 것부터 위에서 아래로.
+               위치(X/Y)는 드래그·방향키로 하는 게 보통이라 아래로 내렸다.
+               섹션 사이는 .p-sec 로 벌리고 옅은 선을 둔다 — 그룹 안 간격보다 커야 묶여 보인다. -->
+          <label>이름
+            <input type="text" id="propName" />
+          </label>
+
+          <!-- 크기·회전·위치는 모두 같은 2열 격자(.g-row)에 얹는다.
+               행마다 폭이 제각각이면 기준이 없어 보인다 — 세로로 줄이 맞아야 패널이 정돈돼 보인다.
+               라벨(W/H/X/Y)은 칸 '안'에 접두사로 넣어 라벨 줄을 없앴다(피그마 방식).
+               비율 고정은 W·H '사이'가 아니라 행의 오른쪽 끝이다. 사이에 두면 무엇을 묶는지도 안 보이고
+               두 칸을 갈라놓기만 한다. -->
+          <div class="p-sec">
+            <!-- 비율 고정은 W·H 두 칸 모두에 걸리는 설정이라 섹션 머리줄 오른쪽에 둔다.
+                 칸 사이에 끼우면 무엇을 묶는지도 안 보이고 두 칸을 갈라놓기만 한다.
+                 자물쇠 그림만으로는 '가로세로 비율'인지 알 수 없어서 글자를 함께 둔다. -->
+            <div class="p-sec-head">
+              <div class="p-sec-title">크기</div>
+              <label class="t-btn t-mini" title="가로·세로 비율 유지 — 켜 두면 한쪽을 바꿀 때 다른 쪽이 같은 비율로 따라옵니다">
+                <input type="checkbox" id="propLockAspect" />
+                <span>
+                  <svg viewBox="0 0 16 16" aria-hidden="true">
+                    <path class="lk-open" d="M5.6 7.4V4.9a2.4 2.4 0 0 1 4.8 0" />
+                    <path class="lk-closed" d="M5.6 7.4V4.9a2.4 2.4 0 0 1 4.8 0v2.5" />
+                    <rect class="lk-body" x="3.6" y="7.4" width="8.8" height="5.8" rx="1.2" />
+                  </svg>비율 고정</span>
+              </label>
+            </div>
+            <div class="g-row">
+              <div class="f-num"><span class="f-pre">W</span><input type="number" id="propW" min="10" /></div>
+              <div class="f-num"><span class="f-pre">H</span><input type="number" id="propH" min="10" /></div>
+            </div>
+          </div>
+
+          <!-- 회전은 크기가 아니다 — 예전엔 크기 섹션 안에 끼어 있어 위계가 무너져 있었다 -->
+          <div class="p-sec">
+            <div class="p-sec-title">회전</div>
+            <div class="g-row">
+              <div class="f-num"><span class="f-pre">∠</span><input type="number" id="propRot" min="0" max="359" /><span class="f-suf">°</span></div>
+              <!-- 입력칸 + 같은 높이의 작은 정사각 버튼들(피그마의 회전 줄과 같은 구조).
+                   이미지 편집 모달도 ↺/↻ 를 쌍으로 두고 있어 앱 안에서도 일관된다.
+                   예전엔 시계방향 하나뿐이라 반시계로 돌리려면 세 번 눌러야 했다. -->
+              <div class="icon-btns">
+                <button type="button" id="propRotL" class="icon-btn" title="왼쪽으로 90° 회전">↺</button>
+                <button type="button" id="propRot90" class="icon-btn" title="오른쪽으로 90° 회전">↻</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="p-sec">
+            <div class="p-sec-title">단자</div>
+            <button id="btnTermEdit" class="p-main">🔍 단자 배치 편집…</button>
+            <!-- 이 칸이 이미 '단자' 라서 "이름 숨기기" 라고 하면 무엇의 이름인지 헷갈린다.
+                 (부품 이름표를 감추는 것은 우클릭 메뉴의 「이름 숨기기」다) -->
+            <label class="chk"><input type="checkbox" id="propHideTermLabels" /> 숨기기</label>
+          </div>
+
+          <div class="p-sec">
+            <div class="p-sec-title">이미지</div>
+            <button id="propBgRemove" class="p-main">이미지 편집…</button>
+          </div>
+
+          <div class="p-sec">
+            <div class="p-sec-title">위치</div>
+            <div class="g-row">
+              <div class="f-num"><span class="f-pre">X</span><input type="number" id="propX" /></div>
+              <div class="f-num"><span class="f-pre">Y</span><input type="number" id="propY" /></div>
+            </div>
+          </div>
+
+          <!-- 전기 정보(라이브러리 값, 읽기전용) -->
+          <div id="compElec" class="wp-section" hidden>
+            <div class="wp-sec-title">전기 정보 <span class="muted" style="font-weight:400">· 라이브러리</span></div>
+            <div id="compElecBody" class="ce-body"></div>
+          </div>
+        </div>
+      </div>
+      <div id="powerPanel">
+        <h3>전력 / 배터리 요약</h3>
+        <div id="powerSummary"></div>
+      </div>
+      <button id="btnHelp" class="panel-help-btn" title="단축키 도움말">단축키</button>
+    </aside>
+  </div>
+
+  <!-- 부품 옵션 컨텍스트 메뉴 -->
+  <!-- 부품 우클릭 메뉴 — Canva 류를 참고해 "지금 이 부품으로 할 만한 일"만 남겼다.
+       (2026-09-03) 복제·삭제는 목록에서 뺐다 — 둘 다 키보드(Ctrl+D · Delete)로 하지
+       마우스로 여는 경우가 거의 없어서, 목록만 길어지고 있었다.
+       기능 자체는 그대로다 — 단축키는 interactions.js 에 살아 있다.
+       (2026-09-08) "라이브러리에 저장"은 되살렸다. 뺐던 이유가 틀렸다 —
+       "부품 정보"는 **연결이 없는** 부품만 저장해 준다. 이미 연결된 부품은 정보창만 열려서,
+       단자 배치나 이미지를 고쳐도 라이브러리에 반영할 길이 아예 없었다. -->
+  <div id="cmpMenu" hidden>
+    <button data-act="bg">이미지 편집…</button>
+    <button data-act="info">부품 정보…</button>
+    <button data-act="terminals">단자 배치 편집…</button>
+    <!-- 고친 내용(단자 배치·이미지)을 라이브러리 원본에 반영한다.
+         ⚠ 자동으로 안 한다 — 도면에서 한 부품만 손봤을 뿐인데 라이브러리까지 바뀌면
+            다음에 꺼내 쓸 때 엉뚱한 게 나온다. 반영은 여기를 눌러야 일어난다. -->
+    <button data-act="tolib">라이브러리에 저장…</button>
+    <hr id="cmpMenuDivider2" />
+    <button data-act="front">맨 앞으로 가져오기</button>
+    <button data-act="forward">앞으로 가져오기</button>
+    <button data-act="backward">뒤로 보내기</button>
+    <button data-act="back">맨 뒤로 보내기</button>
+    <hr />
+    <!-- 부품 이름표를 감춘다. 도면이 빽빽할 때 이름이 오히려 방해가 되는 경우가 있다. -->
+    <button data-act="hidename">이름 숨기기</button>
+  </div>
+
+  <!-- 첫 부품 등록 후: 저장 위치 안내 + 파일 백업 유도 모달 -->
+  <!-- 알림 모달 — '왜 안 됐는지'를 알려야 하는 딱딱한 실패용.
+       힌트바는 우측 상단에 조용히 뜨는 자리라 작업 중에는 눈에 안 들어온다.
+       되돌릴 수 없는 실패(용량 초과·파일 손상)는 화면 가운데서 한 번 막고 알려 준다. -->
+  <!-- 로그인 모달.
+       왜 모달인가: 배선 한도에 걸린 '작업 중'에 로그인이 필요해진다.
+       별도 페이지로 보내면 "내 도면 날아가는 거 아냐?" 하는 불안이 생긴다.
+       (미리캔버스·망고보드도 모달, Excalidraw만 별도 페이지였다)
+
+       화면이 둘이다 — 로그인(기본) / 회원가입. 같은 상자 안에서 갈아 끼운다.
+       모달을 둘로 나누면 "뒤로"가 어색해지고 열고 닫는 코드가 두 벌이 된다. -->
+  <!-- 로그인·회원가입 창의 마크업은 js/authmodal.js 에 있다. **랜딩과 한 벌을 같이 쓴다.**
+       여기에 두면 index.html 에 복사본이 생기고, 문구를 고칠 때 한쪽을 빠뜨리게 된다.
+       (겉모습은 auth.css — 그것도 양쪽이 같이 읽는다) -->
+
+  <!-- 동의 모달 — 소셜 로그인으로 처음 들어온 사람에게 뜬다.
+       이메일 가입은 폼 안에서 이미 받으므로 여기까지 오지 않는다.
+       닫기(×)가 없다: 동의하지 않으면 서비스를 쓸 수 없어서,
+       그냥 닫으면 "로그인은 됐는데 아무것도 안 되는" 상태가 된다.
+       대신 '동의하지 않고 로그아웃'으로 빠져나갈 길을 둔다. -->
+      <!-- consentModal 은 js/authmodal.js 로 옮겼다 — 랜딩도 같이 쓴다 -->
+
+  <!-- ── 인증 성공 ────────────────────────────────
+       메일의 링크를 눌러 돌아왔을 때 한 번 보여준다.
+       이게 없으면 링크를 눌러도 그냥 에디터만 떠서 뭐가 된 건지 알 수 없다. -->
+      <!-- verifiedModal 은 js/authmodal.js 로 옮겼다 — 랜딩도 같이 쓴다 -->
+
+  <div id="noticeModal" class="modal" hidden>
+    <div class="modal-box" style="width:min(420px,92vw)">
+      <h3 id="noticeTitle"></h3>
+      <p id="noticeText" style="line-height:1.6"></p>
+      <div class="modal-actions">
+        <button id="noticeOk" type="button" class="primary">확인</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="backupNoticeModal" class="modal" hidden>
+    <div class="modal-box" style="width:min(400px,92vw)">
+      <h3>⚠️ 부품은 이 브라우저에만 저장됩니다</h3>
+      <p style="line-height:1.6">방문기록을 지우거나 다른 PC에서 열면 사라져요.<br />파일로 백업해 두면 안전합니다.</p>
+      <div class="modal-actions">
+        <button id="backupNoticeLater" type="button">나중에 하기</button>
+        <button id="backupNoticeNow" type="button" class="primary">⤓ 지금 파일로 백업</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 라이브러리 부품 정보 편집 모달 -->
+  <div id="libEditModal" class="modal" hidden>
+    <div class="modal-box" style="width:min(460px,92vw)">
+      <h3>부품 정보 (BOM · 전력)</h3>
+      <div class="set-row"><label>이름<input type="text" id="libName" style="width:100%" /></label></div>
+      <div class="set-row"><label>스펙/설명<input type="text" id="libSpec" style="width:100%" placeholder="예: 2.1채널 D급 앰프" /></label></div>
+      <div class="set-row"><label>폴더<select id="libFolderSel" style="width:100%"></select></label></div>
+      <!-- 구매 링크와 단가 — 국내/해외를 따로 넣고, 체크한 쪽 하나만 BOM에 나간다.
+           둘 다 나오면 안 되므로 체크는 라디오(상호배타)로 둔다. 기본은 해외.
+           ★ 단가를 링크 **바로 옆**에 둔다 — 떨어져 있으면 어느 쪽 가격인지 헷갈린다.
+           통화는 원화 하나다(알리익스프레스도 한국 계정에는 원화로 보여준다).
+           환율·통화를 들이면 부품마다 고른 쪽이 달라 **합계를 낼 수 없게 된다.** -->
+      <div class="set-row buy-link-row">
+        <span class="buy-link-title">구매 링크 · 단가 <em>체크한 쪽이 BOM에 나갑니다</em></span>
+        <label class="buy-link-item">
+          <input type="radio" name="libLinkPref" id="libLinkPrefGlobal" value="global" checked />
+          <span class="buy-link-tag">해외</span>
+          <input type="text" id="libLink" placeholder="예: 알리익스프레스 https://..." />
+          <input type="text" inputmode="numeric" class="buy-link-price" id="libPrice" placeholder="단가(원)" />
+        </label>
+        <label class="buy-link-item">
+          <input type="radio" name="libLinkPref" id="libLinkPrefKr" value="kr" />
+          <span class="buy-link-tag">국내</span>
+          <input type="text" id="libLinkKr" placeholder="https://..." />
+          <input type="text" inputmode="numeric" class="buy-link-price" id="libPriceKr" placeholder="단가(원)" />
+        </label>
+      </div>
+
+      <hr style="border:none;border-top:1px solid #eee;margin:10px 0" />
+      <div class="set-row"><label>역할
+        <select id="libRole" style="width:100%">
+          <option value="load">부하(소비)</option>
+          <option value="battery">배터리(소스)</option>
+          <option value="converter">변환기</option>
+        </select>
+      </label></div>
+      <div class="elec-grid" id="libElecGrid">
+        <label id="libVoltWrap">전압 V<input type="number" id="libVolt" step="any" /></label>
+        <label id="libCurrentWrap">전류 A<input type="number" id="libCurrent" step="any" /></label>
+        <label id="libPowerWrap">전력 W<input type="number" id="libPower" step="any" /></label>
+      </div>
+      <p class="muted" id="libVipHint">V·A·W 중 2개만 넣으면 나머지는 자동 계산됩니다.</p>
+
+      <div class="elec-grid" id="libBattRow" hidden>
+        <label>용량 Ah<input type="number" id="libAh" step="any" /></label>
+        <label>가용용량 DoD %<input type="number" id="libDod" step="any" placeholder="80" /></label>
+        <span></span>
+      </div>
+      <div class="set-row" id="libDutyRow" hidden><label>시간당 가동시간 (분/시간, 최대 60)<input type="number" id="libMin" step="any" min="0" max="60" placeholder="60 = 상시" style="width:150px" /></label></div>
+      <div class="set-row" id="libEffRow" hidden><label>효율 %<input type="number" id="libEff" step="any" placeholder="87" style="width:120px" /></label></div>
+
+      <hr style="border:none;border-top:1px solid #eee;margin:10px 0" />
+      <div class="ds-section">
+        <div class="ds-head">
+          <span>데이터시트 (PDF·이미지)</span>
+          <button type="button" id="libDsAdd" class="small">＋ 파일 추가</button>
+          <!-- 링크로도 붙일 수 있게 한다. PDF 를 통째로 담으면 용량이 커져 저장·게시가 무거워진다
+               (고원빈, 2026-08-30). 제조사 데이터시트는 대개 공개 URL 이 있다. -->
+          <button type="button" id="libDsAddLink" class="small">＋ 링크 추가</button>
+          <input type="file" id="libDsInput" accept="application/pdf,image/*" multiple hidden />
+        </div>
+        <div id="libDsList" class="ds-list"></div>
+      </div>
+
+      <div class="modal-actions">
+        <button id="libEditCancel">취소</button>
+        <button id="libEditSave" class="primary">저장</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 데이터시트 미리보기 모달 -->
+  <div id="dsViewerModal" class="modal" hidden>
+    <div class="modal-box ds-viewer-box">
+      <div class="ds-viewer-head">
+        <strong id="dsViewerTitle">데이터시트</strong>
+        <div class="ds-viewer-actions">
+          <span id="dsZoomBtns" class="ds-zoom">
+            <button id="dsZoomOut" class="small" title="축소">－</button>
+            <button id="dsZoomFit" class="small" title="맞춤">맞춤</button>
+            <button id="dsZoomIn" class="small" title="확대">＋</button>
+          </span>
+          <button id="dsDownload" class="small">⤓ 다운로드</button>
+          <button id="dsOpenTab" class="small">↗ 새 탭</button>
+          <button id="dsMax" class="small" title="최대화/복원">⛶ 최대화</button>
+          <button id="dsViewerClose" class="primary">닫기</button>
+        </div>
+      </div>
+      <div class="ds-viewer-body">
+        <div id="dsViewerTabs" class="ds-viewer-tabs"></div>
+        <div id="dsViewerPreview" class="ds-viewer-preview"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 설정 모달 -->
+  <!-- 회원 탈퇴 확인.
+       무엇이 지워지고 무엇이 남는지를 먼저 보여준다 —
+       "도면도 사라지나?" 가 가장 먼저 드는 걱정인데, 실제로는 안 사라진다.
+       되돌릴 수 없는 동작이라 체크박스를 하나 거쳐야 버튼이 눌린다. -->
+  <!-- 새 비밀번호 설정.
+       재설정 메일의 링크를 누르고 돌아오면 뜬다 (주소에 type=recovery 가 붙어 온다).
+       그 순간 '임시로 로그인된' 상태라 자기 비밀번호만 바꿀 수 있다.
+       닫기(×)가 없다 — 여기서 나가면 링크를 다시 받아야 한다. -->
+      <!-- resetModal 은 js/authmodal.js 로 옮겼다 — 랜딩도 같이 쓴다 -->
+
+  <div id="settingsModal" class="modal" hidden>
+    <div class="modal-box" style="width:min(440px,92vw)">
+      <h3>설정</h3>
+      <div class="set-tabs">
+        <button class="set-tab active" data-settab="general">일반</button>
+        <button class="set-tab" data-settab="display">표시</button>
+        <button class="set-tab" data-settab="shortcuts">단축키</button>
+      </div>
+
+      <div class="set-pane" data-setpane="general">
+        <div class="set-row">
+          <label class="chk"><input type="checkbox" id="setAutosave" /> 자동 임시저장 사용</label>
+        </div>
+        <div class="set-row">
+          <label>저장 주기(초)
+            <input type="number" id="setAutosaveSec" min="1" max="300" step="1" style="width:80px" />
+          </label>
+        </div>
+        <p class="muted">자동 임시저장은 이 브라우저에 작업을 주기적으로 저장해 새로고침 시 복구합니다. 꺼두면 직접 '저장'으로만 보관됩니다.</p>
+      </div>
+
+      <div class="set-pane" data-setpane="display" hidden>
+        <h4 style="margin:0 0 6px">부품 이름표</h4>
+        <div class="set-row">
+          <label>글자 크기(px)
+            <input type="number" id="setLabelSize" min="8" max="28" step="1" style="width:80px" />
+          </label>
+        </div>
+        <div class="set-row">
+          <label class="chk"><input type="checkbox" id="setLabelBold" /> 굵게</label>
+        </div>
+        <div class="set-row">
+          <label class="chk"><input type="checkbox" id="setLabelBox" /> 배경 사각블럭 (배선·배경과 겹쳐도 잘 보이게)</label>
+        </div>
+      </div>
+
+      <div class="set-pane" data-setpane="shortcuts" hidden>
+        <p class="muted" style="margin:0 0 8px">칸을 클릭하고 원하는 키를 누르세요. (Backspace로 해제)</p>
+        <div class="sc-list">
+          <div class="sc-row"><span>선택 모드</span><input class="sc-input" data-action="mode-select" readonly /></div>
+          <div class="sc-row"><span>배선 모드</span><input class="sc-input" data-action="mode-wire" readonly /></div>
+          <div class="sc-row"><span>라벨 모드</span><input class="sc-input" data-action="mode-label" readonly /></div>
+          <div class="sc-row"><span>텍스트 모드</span><input class="sc-input" data-action="mode-text" readonly /></div>
+        </div>
+        <p class="muted" style="margin:8px 0 0">배선 모드로 전환할 때마다 마우스 위치 근처에 배선색 팝업이 자동으로 뜹니다.</p>
+      </div>
+
+      <div class="modal-actions"><button id="setClose" class="primary">확인</button></div>
+    </div>
+  </div>
+
+  <!-- 색상 팔레트 관리 모달 -->
+  <div id="paletteModal" class="modal" hidden>
+    <div class="modal-box">
+      <h3>배선 색상 팔레트</h3>
+      <p class="muted">색상 + 의미를 등록하면 배선색으로 쓰고, 나중에 PDF 범례에도 나옵니다.</p>
+      <div id="paletteList" class="preset-list"></div>
+      <div class="preset-add">
+        <input type="color" id="newPalColor" value="#3949ab" />
+        <input type="text" id="newPalLabel" placeholder="예: 오디오 R" />
+        <button id="btnAddPal" class="primary">＋ 추가</button>
+      </div>
+      <div class="modal-actions"><button id="palClose">닫기</button></div>
+    </div>
+  </div>
+
+  <!-- 단자 배치 편집 모달 (확대/축소) -->
+  <div id="termModal" class="modal" hidden>
+    <div class="modal-box term-editor">
+      <div class="te-head">
+        <h3>단자 배치</h3>
+        <div class="te-tools">
+          <button id="teModePlace" class="te-mode active" title="이미지 클릭으로 단자 추가 (W)">＋ 배치 모드</button>
+          <button id="teModeSelect" class="te-mode" title="드래그로 단자 다중선택 (V)">▣ 선택 모드</button>
+          <span class="sep"></span>
+          <button id="tePresetManage" class="small">프리셋 관리…</button>
+          <select id="tePlacePreset" hidden aria-hidden="true"></select>
+        </div>
+      </div>
+      <div class="te-panel-tabs" role="tablist" aria-label="단자 편집 패널">
+        <button id="tePanelLayout" class="active" type="button" role="tab" aria-selected="true">배치 편집</button>
+        <button id="tePanelManager" type="button" role="tab" aria-selected="false">단자 목록</button>
+      </div>
+      <div class="te-body">
+        <div id="teViewport" class="checker">
+          <svg id="teSvg" xmlns="http://www.w3.org/2000/svg">
+            <g id="teContent"></g>
+          </svg>
+          <div class="te-zoom-controls" aria-label="이미지 배율">
+            <button id="teZoomOut" type="button" title="축소">－</button>
+            <span id="teZoomLabel">100%</span>
+            <button id="teZoomIn" type="button" title="확대">＋</button>
+            <button id="teZoomFit" type="button" title="화면에 맞춤">맞춤</button>
+          </div>
+        </div>
+        <div class="te-side">
+          <section id="tePlacementPanel" class="te-placement-panel">
+            <div class="te-placement-head">
+              <strong>빠른 배치</strong>
+              <span id="tePlacementStatus">프리셋 없음</span>
+            </div>
+            <div id="tePlacementCurrent" class="te-placement-current"></div>
+            <div class="te-placement-actions">
+              <button id="tePlacePrev" type="button" title="이전 프리셋">← 이전</button>
+              <button id="tePlaceSkip" type="button" title="현재 프리셋을 건너뛰고 다음으로 이동">건너뛰기</button>
+              <button id="tePlaceRepeat" type="button" aria-pressed="false" title="같은 프리셋을 계속 배치">반복</button>
+            </div>
+            <div id="tePlacementQueue" class="te-placement-queue" aria-label="배치 프리셋 목록"></div>
+          </section>
+          <div id="teAlign" class="te-align" hidden>
+            <div class="te-align-row">
+              <button data-talign="x" title="같은 X로(수직 한 줄). 간격을 넣으면 그만큼 위아래로 벌림">
+                <svg viewBox="0 0 24 24"><line x1="12" y1="3" x2="12" y2="21"/><circle cx="12" cy="7" r="2.6"/><circle cx="12" cy="17" r="2.6"/></svg><span>세로정렬</span>
+              </button>
+              <button data-talign="y" title="같은 Y로(수평 한 줄). 간격을 넣으면 그만큼 좌우로 벌림">
+                <svg viewBox="0 0 24 24"><line x1="3" y1="12" x2="21" y2="12"/><circle cx="7" cy="12" r="2.6"/><circle cx="17" cy="12" r="2.6"/></svg><span>가로정렬</span>
+              </button>
+              <button data-talign="distY" title="세로 균등 간격(3개↑)">
+                <svg viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="2.5"/><rect x="4" y="10.75" width="16" height="2.5"/><rect x="4" y="18.5" width="16" height="2.5"/></svg><span>세로 균등</span>
+              </button>
+              <button data-talign="distX" title="가로 균등 간격(3개↑)">
+                <svg viewBox="0 0 24 24"><rect x="3" y="4" width="2.5" height="16"/><rect x="10.75" y="4" width="2.5" height="16"/><rect x="18.5" y="4" width="2.5" height="16"/></svg><span>가로 균등</span>
+              </button>
+            </div>
+            <div class="te-gap-row">
+              <!-- step="any": 균등 배치가 15.4 같은 소수를 넣어 주므로 1 단위로 묶으면 안 된다.
+                   (방향키 증감은 그대로 1씩이라 손으로 입력하는 감각은 달라지지 않는다) -->
+              <label class="te-gap">간격 <input id="teGap" type="number" value="0" min="0" step="any" title="균등 배치를 누르면 지금 간격이 여기 표시됩니다. 값을 다듬어 정렬을 누르면 그 간격으로 맞춰집니다." /> px</label>
+              <span class="muted">0이면 한 줄로 모으기만</span>
+            </div>
+          </div>
+          <div id="teLabelSide" class="te-align" hidden>
+            <span class="muted">라벨 방향(선택한 단자, 자동판정 애매할 때)</span>
+            <div class="te-dir-pad">
+              <button data-tside="T" title="위로 고정" class="te-dir-t">↑ 위</button>
+              <button data-tside="L" title="왼쪽으로 고정" class="te-dir-l">← 왼쪽</button>
+              <button data-tside="auto" title="자동 배치로 되돌림" class="te-dir-c">자동</button>
+              <button data-tside="R" title="오른쪽으로 고정" class="te-dir-r">→ 오른쪽</button>
+              <button data-tside="B" title="아래로 고정" class="te-dir-b">↓ 아래</button>
+            </div>
+          </div>
+        </div>
+        <aside class="te-manager" aria-label="단자 목록">
+          <div class="te-manager-head">
+            <div>
+              <strong>단자 목록</strong>
+              <span id="teVisibleCount">전체 0 · 사용 0</span>
+            </div>
+            <div class="te-manager-actions">
+              <button id="teShowAll" type="button">전체 사용</button>
+              <button id="teHideAll" type="button">전체 미사용</button>
+            </div>
+          </div>
+          <div class="te-terminal-filter">
+            <input id="teTermSearch" type="search" placeholder="단자 검색" autocomplete="off" />
+            <select id="teTermFilter" title="단자 사용 상태 필터">
+              <option value="all">전체</option>
+              <option value="visible">사용</option>
+              <option value="hidden">미사용</option>
+            </select>
+          </div>
+          <div id="teList" class="te-terminal-grid"></div>
+          <div class="te-terminal-selection-actions" hidden>
+            <span id="teBulkCount"></span>
+            <button id="teShowSelected" type="button">사용</button>
+            <button id="teHideSelected" type="button">미사용</button>
+          </div>
+        </aside>
+      </div>
+      <div class="modal-actions">
+        <button id="teDone" class="primary">완료</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 단자 프리셋 관리 모달 -->
+  <div id="presetModal" class="modal" hidden>
+    <div class="modal-box preset-manager-box">
+      <h3>단자 프리셋 관리</h3>
+      <div class="preset-manager-columns">
+        <section class="preset-manager-section" data-preset-drop="common">
+          <div class="preset-manager-head">
+            <strong>공용 단자</strong>
+            <button id="presetRestoreDefaults" type="button">기본 단자 복원</button>
+          </div>
+          <div id="presetList" class="preset-list" aria-label="공용 단자 목록"></div>
+          <!-- 공용 단자도 여기서 바로 만든다. 예전엔 만들 자리가 없어서
+               부품 단자에 만든 뒤 왼쪽으로 끌어와야 했다. -->
+          <div class="preset-add">
+            <button type="button" id="newCommonColor" class="color-trigger" title="색상" aria-label="색상"></button>
+            <input type="text" id="newCommonLabel" placeholder="예: VCC" autocomplete="off" />
+            <button id="btnAddCommon" class="primary">＋ 추가</button>
+          </div>
+        </section>
+        <section class="preset-manager-section" data-preset-drop="part">
+          <div class="preset-manager-head">
+            <strong>부품 단자</strong>
+            <span id="partPresetCount">0개</span>
+          </div>
+          <div id="partPresetList" class="preset-list" aria-label="부품 단자 목록"></div>
+          <div class="preset-add">
+            <button type="button" id="newPresetColor" class="color-trigger" title="색상" aria-label="색상"></button>
+            <input type="text" id="newPresetLabel" placeholder="예: MISO" autocomplete="off" />
+            <button id="btnAddPreset" class="primary">＋ 추가</button>
+          </div>
+        </section>
+        <!-- 단자 세트 — 부품 단자 목록을 이름 붙여 저장했다가 다른 부품에서 불러온다.
+             ★ 자리: 부품 단자 **표 바깥 아래**(격자 2행 2열).
+                표(테두리)는 좌우 모두 ＋추가 줄까지만 감싼다 — 그래야 두 표의 규격이 같아진다.
+                세트는 표에 딸린 것이 아니라 부품 단자를 통째로 다루는 별개 도구라 밖에 둔다. -->
+        <div class="preset-sets">
+          <input type="text" id="presetSetName" placeholder="단자 세트 이름" title="이 부품 단자 목록을 이름 붙여 저장합니다" autocomplete="off" maxlength="30" />
+          <button id="btnSavePresetSet" type="button">저장</button>
+          <select id="presetSetPick" title="고르면 부품 단자로 불러옵니다"></select>
+          <button id="btnDelPresetSet" type="button" class="preset-set-del" title="고른 세트 삭제" aria-label="고른 세트 삭제">×</button>
+        </div>
+      </div>
+      <div id="presetBulkBar" class="preset-bulk-bar" hidden>
+        <div class="preset-bulk-controls">
+          <strong id="presetBulkCount">0개 선택</strong>
+          <span class="preset-bulk-spacer"></span>
+          <button type="button" id="presetBulkColor" class="color-trigger" title="선택 단자 색상" aria-label="선택 단자 색상"></button>
+          <button id="presetClearSelection" type="button">선택 해제</button>
+        </div>
+      </div>
+      <div class="modal-actions"><button id="presetClose">닫기</button></div>
+    </div>
+  </div>
+
+  <!-- 배경 제거 모달 -->
+  <div id="bgModal" class="modal" hidden>
+    <div class="modal-box">
+      <h3>이미지 편집</h3>
+      <p class="muted" id="bgHint">이미지를 확인하고 필요하면 배경 제거·자르기·회전으로 다듬은 뒤 배치하세요.</p>
+      <div id="bgCanvasWrap" class="checker">
+        <canvas id="bgCanvas"></canvas>
+      </div>
+      <p class="muted" style="margin:4px 0 0;font-size:11px">Ctrl+휠: 확대/축소 · 휠클릭(가운데버튼) 드래그: 화면 이동</p>
+      <div class="bg-controls">
+        <button id="bgEnable" class="bg-toggle" title="켜면 배경(부품 주변)이 자동으로 투명하게 지워집니다">배경 제거</button>
+        <button id="bgCrop" class="bg-toggle" title="켜면 사각형 테두리를 지정해 그 안쪽만 남기고 잘라냅니다">자르기(테두리)</button>
+        <span class="sep" style="width:1px;height:18px;background:#ddd"></span>
+        <button id="bgRotL" class="small" title="왼쪽 90° 회전">↺ 90°</button>
+        <button id="bgRotR" class="small" title="오른쪽 90° 회전">↻ 90°</button>
+        <span class="sep" style="width:1px;height:18px;background:#ddd"></span>
+        <label class="slider" title="도면에 배치될 부품 크기(px). 한쪽을 바꾸면 비율에 맞춰 다른 쪽도 바뀝니다.">배치 크기
+          <input type="number" id="bgSizeW" min="10" max="2000" style="width:58px" /> ×
+          <input type="number" id="bgSizeH" min="10" max="2000" style="width:58px" /> px</label>
+        <button id="bgResetAll" class="small" style="margin-left:auto" title="배경 제거·자르기·회전 등 모든 편집을 원본 상태로 되돌립니다">↺ 초기화</button>
+      </div>
+      <p class="muted" id="bgCropHint" hidden>파란 사각형의 모서리를 드래그해 크기 조절, 안쪽을 드래그해 이동. 사각형 안만 남깁니다.</p>
+      <div class="modal-actions">
+        <button id="bgCancel">취소</button>
+        <button id="bgApply" class="primary">적용해서 배치</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 방문 안내 모달: 매번 접속할 때마다 표시(1회성 아님) -->
+  <!-- 베타 안내 — 에디터에 들어오면 한 번 뜬다.
+       ⚠ 랜딩(index.html)에는 넣지 않는다. 루트가 랜딩이라 포트원 심사자가 거기로 들어오는데,
+          첫 화면이 「베타」 모달이면 서비스가 준비 안 된 것처럼 읽힐 수 있다.
+          실제로 작업하는 사람은 에디터에 있고, 알아야 할 사람도 그쪽이다. -->
+  <div id="betaModal" class="modal" hidden>
+    <div class="modal-box beta-box">
+      <p class="beta-title">베타 테스트 중입니다</p>
+      <button id="betaOk" class="beta-ok">확인</button>
+    </div>
+  </div>
+
+  <div id="welcomeModal" class="modal" hidden>
+    <div class="modal-box welcome-box">
+      <div class="welcome-body">
+        <div class="welcome-head">
+          <h3><img class="brand-mark" src="assets/logo.svg" alt="" /> 이지케이블</h3>
+          <p>이미지로 부품을 올리고, 단자를 찍고, 선을 이어<br /><b>배선도를 가장 쉽게</b> 그리는 도구입니다.</p>
+        </div>
+
+        <ol class="welcome-steps">
+          <li><span class="ws-num">1</span><span>좌측 <b>부품 라이브러리 ＋ 부품 추가</b> — 부품 사진을 올리면 배경 제거까지</span></li>
+          <li><span class="ws-num">2</span><span>부품의 <b>⋯ 메뉴 → 단자 배치</b>로 단자를 찍고</span></li>
+          <li><span class="ws-num">3</span><span><b>╱ 배선</b> 모드로 단자끼리 클릭 연결 — <b>BOM·배선 리스트·PDF는 자동</b></span></li>
+        </ol>
+
+        <p class="welcome-note">작업물은 <b>이 브라우저에 자동 저장</b>됩니다.<br />의견은 언제든 <b>피드백</b>으로 남겨주세요.</p>
+
+        <button id="welcomeStart" class="primary welcome-start">시작하기</button>
+      </div>
+      <div class="welcome-foot">
+        <label class="welcome-dismiss"><input type="checkbox" id="welcomeDismiss" /> 24시간 동안 보지 않기</label>
+        <p class="welcome-privacy">이용 시 <a href="privacy.html" target="_blank" rel="noopener">개인정보처리방침</a>에 동의한 것으로 간주됩니다.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- 이전 버전 복구 모달 -->
+  <div id="historyModal" class="modal" hidden>
+    <div class="modal-box" style="width:min(480px,92vw)">
+      <h3>🕘 이전 버전 복구</h3>
+      <p class="muted" style="margin:0 0 10px">지금 배선도를 5분 간격으로 자동 보관한 기록입니다 (최대 40개).</p>
+      <div id="historyList" class="history-list"></div>
+      <div class="modal-actions"><button id="historyClose">닫기</button></div>
+    </div>
+  </div>
+
+  <!-- 최근 작업(다른 배선도) 목록 — 문서마다 자동저장 슬롯이 따로라 여기서 골라 이어서 연다 -->
+  <div id="recentModal" class="modal" hidden>
+    <div class="modal-box" style="width:min(520px,92vw)">
+      <h3>🗂 최근 작업</h3>
+      <p class="muted" style="margin:0 0 10px">이 브라우저에 자동 보관된 배선도입니다. 이어서 열 수 있습니다.</p>
+      <div id="recentList" class="history-list"></div>
+      <div class="modal-actions"><button id="recentClose">닫기</button></div>
+    </div>
+  </div>
+
+  <!-- 단축키 도움말 모달 -->
+  <div id="helpModal" class="modal" hidden>
+    <div class="modal-box" style="width:min(420px,92vw)">
+      <h3>단축키</h3>
+      <div class="sc-list" id="helpShortcutList"></div>
+      <p class="muted" style="margin:14px 0 0">계속 추가될 예정입니다. 단축키는 ⚙ 설정에서 변경할 수 있습니다.</p>
+      <p style="margin:10px 0 0"><a href="privacy.html" target="_blank" rel="noopener" style="font-size:11px;color:#aaa">개인정보처리방침</a></p>
+      <div class="modal-actions"><button id="helpClose" class="primary">확인</button></div>
+    </div>
+  </div>
+
+  <!-- 피드백 모달 -->
+  <div id="feedbackModal" class="modal" hidden>
+    <div class="modal-box" style="width:min(420px,92vw)">
+      <h3>💬 피드백</h3>
+      <p class="muted" style="margin:0 0 10px">의견이나 버그를 자유롭게 적어주세요. 바로 전달됩니다.</p>
+      <textarea id="feedbackText" rows="6" placeholder="예: 이런 기능이 있으면 좋겠어요 / 이 부분이 잘 안 돼요…" style="width:100%;resize:vertical;padding:8px;border:1px solid var(--bd);border-radius:var(--r);font:inherit;font-size:var(--fs)"></textarea>
+      <!-- 허니팟: 사람 눈엔 안 보이고 봇만 체크함 → 체크돼 있으면 전송 차단 -->
+      <input type="checkbox" id="feedbackBotcheck" style="display:none" tabindex="-1" autocomplete="off" />
+      <p id="feedbackStatus" class="muted" style="margin:8px 0 0;min-height:16px"></p>
+      <div class="modal-actions">
+        <button id="feedbackClose">취소</button>
+        <button id="feedbackSend" class="primary">보내기</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 출시 알림(이메일 수집) 모달 — 내보내기/저장 완료 후 또는 '🔔 출시 알림' 링크로 표시 -->
+  <div id="notifyModal" class="modal" hidden>
+    <div class="modal-box" style="width:min(430px,92vw)">
+      <h3>🔔 출시 소식 받기</h3>
+      <p class="muted" id="notifyLead" style="margin:0 0 14px">정식 출시·새 기능 소식을 이메일로 가장 먼저 알려드릴게요.<br />(스팸 없이 큰 소식만)</p>
+      <div class="notify-row">
+        <input type="email" id="notifyEmail" placeholder="예: myname@gmail.com" autocomplete="email" />
+        <button id="notifySend" class="primary">알림 받기</button>
+      </div>
+      <!-- 허니팟 -->
+      <input type="checkbox" id="notifyBotcheck" style="display:none" tabindex="-1" autocomplete="off" />
+      <p id="notifyStatus" class="muted" style="margin:8px 0 0"></p>
+      <button id="notifyClose" class="notify-later">나중에 볼게요</button>
+      <p class="muted" style="margin:8px 0 0;font-size:11px;text-align:center">입력하신 이메일은 소식 안내에만 사용됩니다. <a href="privacy.html" target="_blank" rel="noopener" style="color:inherit">개인정보처리방침</a></p>
+    </div>
+  </div>
+
+  <!-- 공용 부품 검색. 로컬 미리보기에서만 sample.ezc를 사용하고 운영에서는 서버 오류를 그대로 알린다. -->
+  <div id="publicLibraryModal" class="modal" hidden>
+    <div class="modal-box public-library-box" role="dialog" aria-modal="true" aria-labelledby="publicLibraryTitle">
+      <header class="public-library-head">
+        <div>
+          <h3 id="publicLibraryTitle">공용 부품</h3>
+          <span class="public-library-badge">공식 카탈로그</span>
+        </div>
+        <button id="publicLibraryClose" type="button" class="public-library-close" title="닫기" aria-label="닫기">×</button>
+      </header>
+      <form id="publicLibrarySearchForm" class="public-library-search" role="search">
+        <input id="publicLibrarySearch" type="search" placeholder="부품명, 모델명 또는 단자명 검색" autocomplete="off" />
+        <button type="submit" class="btn btn-primary">검색</button>
+      </form>
+      <div class="public-library-body">
+        <nav id="publicLibraryCategories" class="public-library-categories" aria-label="부품 분류"></nav>
+        <section class="public-library-results" aria-label="검색 결과">
+          <div class="public-library-results-head">
+            <strong>검색 결과</strong>
+            <span id="publicLibraryResultCount">0개</span>
+          </div>
+          <div id="publicLibraryResultList" class="public-library-result-list"></div>
+        </section>
+        <aside id="publicLibraryDetail" class="public-library-detail" aria-label="선택한 부품 정보"></aside>
+      </div>
+      <footer class="public-library-footer">
+        <!-- ⚠ 제휴 고지는 BOM 하단과 **글자 하나까지 같아야 한다.**
+             법정 고지가 두 벌로 갈라지면 한쪽만 고쳐진다 — verify_public_library_ui 가 두 개를 비교한다. -->
+        <p class="affiliate-note">※ 이지케이블은 제휴 링크를 사용하며, 구매 시 일정액의 수수료를 받습니다.<span class="affiliate-more">자세히<span class="affiliate-tip"><span>이지케이블은 알리, 쿠팡 제휴 마케팅 프로그램에 참여하고 있습니다.</span><span>부품 목록과 공용 부품의 구매 링크로 상품을 구매하시면 일정액의 수수료를 제공받으며, 서버 운영 등 서비스 유지에 사용됩니다.</span><b>구매자에게 추가 비용은 발생하지 않습니다.</b></span></span></p>
+        <span id="publicLibraryStatus" class="muted"></span>
+        <button id="publicLibraryRetry" type="button" class="btn" hidden>다시 시도</button>
+        <button id="publicLibraryCancel" type="button" class="btn">닫기</button>
+        <button id="publicLibraryAdd" type="button" class="btn">내 라이브러리에 추가</button>
+        <button id="publicLibraryPlace" type="button" class="btn btn-primary">배치</button>
+      </footer>
+    </div>
+  </div>
+
+  <!-- 관리자 확인이 끝난 계정에서만 컨텍스트 메뉴 진입점이 생성된다. -->
+  <div id="publicPublishModal" class="modal" hidden>
+    <div class="modal-box public-publish-box" role="dialog" aria-modal="true" aria-labelledby="publicPublishTitle">
+      <header class="public-library-head">
+        <div><h3 id="publicPublishTitle">공용 부품 게시</h3><span id="publicPublishSummary" class="muted"></span></div>
+        <button id="publicPublishClose" type="button" class="public-library-close" title="닫기" aria-label="닫기">×</button>
+      </header>
+      <div class="public-publish-body">
+        <img id="publicPublishPreview" class="public-publish-preview" alt="게시할 부품" />
+        <div class="public-publish-fields">
+          <label>부품 이름<input id="publicPublishName" type="text" maxlength="120" /></label>
+          <label>스펙/설명<input id="publicPublishSpec" type="text" maxlength="300" /></label>
+          <!-- 분류는 2단계다. 대분류를 고르면 그 아래 소분류만 두 번째 칸에 채워진다.
+               부품은 소분류에만 붙으므로 두 칸 모두 골라야 게시할 수 있다.
+               목록은 js/categories.js 가 DB 에서 읽어 채운다(하드코딩하지 않는다). -->
+          <label>분류
+            <span class="publish-category">
+              <select id="publicPublishCategoryRoot"></select>
+              <select id="publicPublishCategory"></select>
+            </span>
+          </label>
+          <!-- 이 부품이 카탈로그의 어떤 항목과 이어져 있을 때만 보인다.
+               ⚠ 예전에는 선택지가 없어서, 연결된 항목을 **조용히 덮어썼다**(2026-09-07 사고).
+                  무엇을 덮어쓰는지 이름으로 보여주고, 새 부품으로 낼 길을 함께 둔다. -->
+          <div id="publicPublishTarget" class="publish-target" hidden>
+            <b id="publicPublishTargetHead"></b>
+            <label><input type="radio" name="publicPublishMode" value="update" id="publicPublishModeUpdate" />
+              <span id="publicPublishModeUpdateText">기존 항목 갱신</span></label>
+            <label><input type="radio" name="publicPublishMode" value="new" id="publicPublishModeNew" />
+              새 부품으로 게시 <span class="muted">— 연결을 끊고 따로 만듭니다</span></label>
+            <p class="muted" id="publicPublishTargetNote"></p>
+          </div>
+          <p class="muted">이미지, 단자 좌표, 구매 정보와 데이터시트는 현재 부품의 스냅샷으로 게시됩니다.</p>
+        </div>
+      </div>
+      <footer class="public-library-footer">
+        <span id="publicPublishStatus" class="muted"></span>
+        <button id="publicPublishCancel" type="button" class="btn">취소</button>
+        <button id="publicPublishSubmit" type="button" class="btn btn-primary">게시</button>
+      </footer>
+    </div>
+  </div>
+
+  <!-- 빠른 배선색 선택 팝업 (단축키로 마우스 위치 근처에 표시) -->
+  <div id="quickColorPicker" class="qcp" hidden>
+    <div id="qcpSwatches" class="qcp-swatches"></div>
+  </div>
+
+  <!-- 스크립트: file:// 호환 위해 일반 script (모듈 아님), 순서 중요 -->
+  <script src="js/authmodal.js?v=2bee75f1"></script>  <!-- 로그인 창 마크업. auth.js 보다 먼저 꽂혀 있어야 한다 -->
+  <script src="js/flags.js?v=b0a55adc"></script>   <!-- 맨 앞: 다른 파일이 WE.flags 를 보고 동작을 정한다 -->
+  <script src="js/auth.js?v=4c327b78"></script>    <!-- flags 다음. SDK(js/vendor/supabase.js)는 필요할 때만 스스로 불러온다 -->
+<!-- 결제는 됐는데 이용권이 안 붙은 주문을 다음 접속 때 되살린다.
+     결제창에서 돌아오는 길이 끊기면(앱 전환·창 닫음·네트워크) 돈만 나가고 끝난다. -->
+<script src="js/payrecover.js?v=43022d21"></script>
+  <script src="js/pro.js?v=221b51bb"></script>     <!-- 무료/Pro 경계. LAUNCH 가 꺼져 있으면 제한이 안 걸린다 -->
+  <script src="js/i18n.js?v=bf372f4b"></script>   <!-- 가장 먼저: DOMContentLoaded 번역이 app.js 초기화보다 앞서야 함 -->
+  <script src="js/awg.js?v=8af811c8"></script>
+  <script src="js/model.js?v=9f5a9ea7"></script>
+  <script src="js/presets.js?v=698b6924"></script>
+  <script src="js/presetsets.js?v=07bc4ede"></script>   <!-- 단자 세트: 부품 단자 목록을 이름 붙여 저장·재사용 -->
+  <script src="js/presetmodal.js?v=490a73ee"></script>  <!-- 단자 프리셋 관리 모달 — 관리자 페이지와 공유 -->
+  <script src="js/geometry.js?v=cc7f4bef"></script>
+  <script src="js/render.js?v=5be1fcb0"></script>
+  <script src="js/colorpicker.js?v=e0379158"></script>   <!-- render 다음: 단자 색상 팝오버. termeditor/app 둘 다 이걸 쓴다 -->
+  <script src="js/bgremove.js?v=8e7d0005"></script>
+  <script src="js/termeditor.js?v=26f12188"></script>
+  <script src="js/interactions.js?v=c1a7ffad"></script>
+  <script src="js/store.js?v=d0a1ffe1"></script>
+  <script src="js/assets.js?v=c14bb23d"></script>   <!-- store.js 다음: 자산 풀이 store의 IndexedDB를 쓴다 -->
+  <script src="js/history.js?v=4ba57930"></script>
+  <script src="js/library.js?v=96f16755"></script>
+  <script src="js/categories.js?v=a553fee6"></script>   <!-- public-library 앞: 분류 목록을 여기서 읽는다 -->
+  <script src="js/public-library.js?v=45999375"></script>
+  <script src="js/catalogbackup.js?v=002f523c"></script>   <!-- 게시한 것을 로컬 백업 폴더에도 따라 쓴다 -->
+  <script src="js/public-publisher.js?v=351f5423"></script>
+  <script src="js/io.js?v=ff98fa19"></script>
+  <script src="js/pdf.js?v=65d9a7a5"></script>
+  <script src="js/xlsx.js?v=b4f1d49f"></script>
+  <script src="js/app.js?v=f8f07909"></script>
+  <!-- 인쇄 전용: 페이지 전체를 덮는 워터마크. 도면 칸 안에만 찍히던 것을 종이 전체로 넓혔다.
+       position:fixed 라 인쇄 시 '모든 장'에 반복해서 나온다(도면 장 · BOM 장 전부). -->
+  <div id="pageWatermark" aria-hidden="true"></div>
+
+</body>
+</html>

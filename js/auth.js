@@ -221,7 +221,7 @@ WE.auth = (function () {
   };
 
   /* SDK(207KB)를 필요할 때만 내려받는다.
-     index.html 에 <script> 로 박아두면 출시 전에도 모든 방문자가 받게 된다.
+     app.html 에 <script> 로 박아두면 출시 전에도 모든 방문자가 받게 된다.
      쓰지도 않을 207KB 를 받게 할 이유가 없다.
      자체 호스팅이므로 CSP(script-src 'self')를 풀 필요가 없다. */
   function loadSdk(done) {
@@ -860,7 +860,7 @@ document.addEventListener("DOMContentLoaded", function () { WE.auth.init(); });
 (function () {
 
   /* 문구 번역. **i18n 이 없어도 돌아가야 한다.**
-     랜딩(welcome.html)은 i18n.js(70KB)를 싣지 않는다 — 랜딩은 한국어 전용이고,
+     랜딩(index.html)은 i18n.js(70KB)를 싣지 않는다 — 랜딩은 한국어 전용이고,
      저장된 언어에 따라 랜딩 본문까지 번역되면 성격이 달라진다.
 
      ⚠ 예전에는 `WE.i18n.t(...)` 를 그대로 불렀다. 그래서 랜딩에서 로그인을 누르면
@@ -957,7 +957,7 @@ document.addEventListener("DOMContentLoaded", function () { WE.auth.init(); });
        네이버       기본 제공이 없어 커스텀 OIDC 로 붙인다 → 반드시 "custom:" 으로 시작
                     (issuer https://nid.naver.com — OIDC 표준을 지원하는 것을 확인했다)
   
-     버튼의 data-ready 는 index.html 에 있다. 심사가 끝나면 0 → 1 로 바꾸면 켜진다.
+     버튼의 data-ready 는 app.html 에 있다. 심사가 끝나면 0 → 1 로 바꾸면 켜진다.
      코드는 미리 준비해 두고, 켜는 것은 스위치 하나로 끝나게 한다. */
   var 수단 = [
     { id: "google", provider: "google",       버튼: "loginGoogle", 배지: "loginRecentGoogle", 이름: "Google" },
@@ -1145,7 +1145,7 @@ document.addEventListener("DOMContentLoaded", function () { WE.auth.init(); });
       if (가입동의) 가입동의.비우기();
     };
 
-    /* 밖에서 로그인 창을 여는 유일한 통로. 랜딩(welcome.html)의 「로그인」·「회원가입」이 쓴다.
+    /* 밖에서 로그인 창을 여는 유일한 통로. 랜딩(index.html)의 「로그인」·「회원가입」이 쓴다.
        openLogin 과 화면() 이 서로 다른 범위에 있어서, 둘을 함께 아는 여기서만 묶을 수 있다. */
     WE.auth.openAuth = function (어느쪽) {
       if (WE.authmodal) WE.authmodal.ensure();   // 랜딩은 스크립트 순서상 아직 안 꽂혔을 수 있다
@@ -1153,7 +1153,7 @@ document.addEventListener("DOMContentLoaded", function () { WE.auth.init(); });
       화면(어느쪽 === "signup" ? "up" : "in");
     };
 
-    /* 랜딩(welcome.html)의 「로그인」·「회원가입」에서 넘어온 경우 — ?auth=login / ?auth=signup.
+    /* 랜딩(index.html)의 「로그인」·「회원가입」에서 넘어온 경우 — ?auth=login / ?auth=signup.
        랜딩에는 인증 스크립트를 안 싣는다(auth.js 77KB + Supabase SDK 207KB). 첫 화면 속도를
        그만큼 깎을 이유가 없어서, 여기 와서 해당 화면을 여는 방식으로 뒀다.
 
