@@ -1946,7 +1946,12 @@ WE.app = (function () {
               "<span class='wl-sw' style='background:" + esc(net.colorHex) + "'></span>" +
               "<b>" + esc(net.origin.term) + "</b></td>";
           }
-          html += "<td class='wl-member'>" + esc(m.cmp) + "</td>";
+          // 같은 이름이 이어지면 위 칸이 덮는다 (_cmpSpan === 0 이면 칸을 안 만든다)
+          if (m._cmpSpan !== 0) {
+            html += "<td class='wl-member'" +
+              (m._cmpSpan > 1 ? " rowspan='" + m._cmpSpan + "'" : "") +
+              ">" + esc(m.cmp) + "</td>";
+          }
           /* ⚠ 연결부 단자에는 색을 안 붙인다. 이어진 단자끼리는 같은 색으로 잇게 되어 있어
                 시작 칸의 색과 늘 같다 — 줄마다 같은 견본을 반복하면 칸만 넓어진다.
                 (2026-09-03 고원빈) */
@@ -5147,7 +5152,43 @@ WE.app = (function () {
       색인[k].rows.push(net);
       색인[k].lines += net.count;
     });
-    return 작업순서로(묶음);
+    return 연결부품합치기(작업순서로(묶음));
+  }
+
+  /* 「연결 부품」 열에서 같은 이름이 이어지면 한 칸으로 합친다 (2026-09-11 고원빈).
+     ESP32 하나에 SD 카드 모듈이 여섯 줄 붙으면 같은 이름이 여섯 번 반복된다.
+     종이에서 그건 전부 소음이고, 정작 봐야 할 것은 오른쪽 단자 이름이다.
+     「부품」 열은 이미 같은 방식으로 합쳐져 있으니 눈에도 익다.
+
+     ⚠ 합치는 범위를 **부품 묶음 안**으로 한정한다. 묶음을 넘어 합치면 인쇄에서
+        칸이 잘린다 — pdf.js 는 좌우 2단으로 나눌 때 **묶음 단위로만** 가르고
+        묶음은 절대 쪼개지 않는다(pdf.js 의 '한 부품 묶음은 쪼개지 않는다' 참고).
+        그래서 묶음 안에서만 합치면 단·페이지 경계에 걸릴 일이 구조적으로 없다.
+     ⚠ 이 규칙을 **여기(데이터)에만** 둔다. 결선표는 화면(app.js)과 인쇄(pdf.js)가
+        각각 만들기 때문에, 렌더링 쪽에 두면 규칙이 두 벌이 되어 한쪽만 고쳐진다.
+        (BOM 내보내기에서 이미 겪은 함정이다 — "행 만드는 규칙이 두 벌이 되면
+         한쪽만 고쳐 표가 서로 달라진다")
+
+     _cmpSpan 의 뜻:
+       1 이상 → 이 줄에 칸을 만들고 그만큼 rowspan 을 준다
+       0      → 이 줄에는 칸을 만들지 않는다 (위 칸이 덮고 있다)
+       없음   → 옛 데이터. 그냥 한 칸으로 그린다(안전한 기본값) */
+  function 연결부품합치기(묶음) {
+    묶음.forEach(function (그룹) {
+      var 줄 = [];
+      그룹.rows.forEach(function (net) {
+        net.targets.forEach(function (m) { 줄.push(m); });
+      });
+      var i = 0;
+      while (i < 줄.length) {
+        var j = i;
+        while (j + 1 < 줄.length && 줄[j + 1].cmp === 줄[i].cmp) j++;
+        줄[i]._cmpSpan = j - i + 1;
+        for (var k = i + 1; k <= j; k++) 줄[k]._cmpSpan = 0;
+        i = j + 1;
+      }
+    });
+    return 묶음;
   }
 
   /* ---- 결선표 순서 = 도면을 읽는 순서(좌→우, 위→아래) ----

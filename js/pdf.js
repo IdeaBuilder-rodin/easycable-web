@@ -365,11 +365,17 @@ WE.pdf = (function () {
                 tr.appendChild(otd);
               }
 
-              // 부품명과 단자를 칸으로 나눈다 — 붙여 쓰면 어디까지가 부품 이름인지 안 보인다
-              var mtd = document.createElement("td");
-              mtd.className = "wl-member";
-              mtd.textContent = m.cmp;
-              tr.appendChild(mtd);
+              /* 부품명과 단자를 칸으로 나눈다 — 붙여 쓰면 어디까지가 부품 이름인지 안 보인다.
+                 같은 이름이 이어지면 한 칸으로 합친다 — 합칠 범위는 app.js 의
+                 연결부품합치기() 가 이미 정해 두었다(_cmpSpan). 여기서 다시 판단하지 않는다.
+                 ⚠ 묶음은 단을 나눌 때 쪼개지지 않으므로 이 병합이 단 경계에 걸리지 않는다. */
+              if (m._cmpSpan !== 0) {
+                var mtd = document.createElement("td");
+                mtd.className = "wl-member";
+                if (m._cmpSpan > 1) mtd.rowSpan = m._cmpSpan;
+                mtd.textContent = m.cmp;
+                tr.appendChild(mtd);
+              }
 
               /* ⚠ 연결부 단자에는 색을 안 붙인다. 이어진 단자끼리는 같은 색으로 잇게 되어 있어
                  시작 칸의 색과 늘 같다 — 반복하면 칸만 넓어진다. (2026-09-03 고원빈) */

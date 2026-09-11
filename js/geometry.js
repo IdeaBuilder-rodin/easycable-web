@@ -1195,16 +1195,29 @@ WE.geometry = (function () {
       var arr = groups[side];
       arr.sort(function (a, b) { return a.dot.x - b.dot.x; });
       var ly = side === "T" ? box.y - offset : box.y2 + offset;
-      // 밀도 판정: 평균 핀 간격이 평균 라벨 폭보다 좁으면 가로쓰기가 뭉개지므로 세로쓰기(90° 회전)로 전환.
-      // 개수가 아니라 간격 기준이라, 핀 2개짜리(배터리)는 가로 유지·촘촘한 핀헤더만 세로가 됨
+      /* 밀도 판정: 가로쓰기로 뒀을 때 라벨이 서로 닿으면 세로쓰기(90° 회전)로 전환한다.
+         개수가 아니라 간격 기준이라, 핀 2개짜리(배터리)는 가로 유지·촘촘한 핀헤더만 세로가 된다.
+
+         ⚠ **평균 간격으로 판정하면 안 된다.** 2026-09-11 고원빈 보고 —
+            「전체 단자 숨기기」를 누르면 세로였던 ESP32 라벨이 갑자기 가로로 바뀌며
+            "5VGPIOGPIOGPIOGPIO10" 처럼 뭉갰다.
+            그 버튼은 **연결 안 된 단자만** 숨기므로, 남는 것은 드문드문해지는데
+            GPIO10~13 처럼 **붙어 있던 몇 개는 그대로 남는다.**
+            평균만 보면 "넉넉하다"가 나오지만 그 뭉친 구간은 여전히 겹친다.
+
+         ⚠ 이웃 간격만 본다 — 하나라도 닿으면 그 변은 통째로 세운다.
+            한 변에서 어떤 라벨은 눕고 어떤 것은 서 있으면 읽는 순서가 헝클어진다.
+
+         ⚠ 덤으로 **방향이 안정된다.** 뭉친 구간과 상관없는 단자를 숨겨도
+            판정이 안 바뀌므로, 숨기기 전후로 라벨이 눕거나 서지 않는다. */
       var vertical = false;
       if (arr.length >= 2) {
-        var span = arr[arr.length - 1].dot.x - arr[0].dot.x;
-        var avgGap = span / (arr.length - 1);
-        var avgW = 0;
-        arr.forEach(function (o) { avgW += String(o.t.name || "").length * charW + 8; });
-        avgW /= arr.length;
-        vertical = avgGap < avgW;
+        var 폭 = arr.map(function (o) { return String(o.t.name || "").length * charW + 8; });
+        for (var vi = 1; vi < arr.length; vi++) {
+          // 가운데 정렬이라 이웃끼리 반폭씩 다가오면 닿는다
+          var 필요 = (폭[vi - 1] + 폭[vi]) / 2;
+          if (arr[vi].dot.x - arr[vi - 1].dot.x < 필요) { vertical = true; break; }
+        }
       }
       var lastX = -Infinity, gap = vertical ? minGapV : minGapTB;
       arr.forEach(function (o) {
