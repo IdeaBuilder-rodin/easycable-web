@@ -9,8 +9,23 @@ WE.store = (function () {
   // 자동저장 슬롯은 '문서 단위'다. 예전엔 주소(pathname)당 1개뿐이라
   // 탭 두 개로 서로 다른 도면을 그리면 3초마다 서로를 덮어썼다.
   var DRAFT_P = "draft::", SNAP_P = "snap::";
-  var LEGACY_DRAFT = "current::" + (location.pathname || "");
-  var LEGACY_SNAP = "history::" + (location.pathname || "");
+  // 옛 슬롯 키에는 주소(pathname)가 들어간다.
+  // 같은 서비스라도 사람마다 들어오는 주소가 다르다 — 어떤 사람은 easycable.co.kr/ 로,
+  // 어떤 사람은 /index.html 로 북마크해 두었다. 지금 주소로만 찾으면
+  // 다른 주소로 쓰던 사람의 옛 자동저장본을 영영 못 찾는다.
+  // (자동저장 개편이 7/29 였으므로, 그 뒤로 한 번도 안 들어온 사람이 해당된다)
+  // 그래서 옛 주소들도 함께 뒤진다.
+  function legacyPaths() {
+    var p = location.pathname || "";
+    var list = [p, "/", "/index.html"];
+    // file:// 로 쓰던 사람 — 같은 폴더에 있던 옛 파일명
+    if (/app.html$/i.test(p)) list.push(p.replace(/app.html$/i, "index.html"));
+    var out = [], seen = {};
+    for (var i = 0; i < list.length; i++) {
+      if (list[i] && !seen[list[i]]) { seen[list[i]] = 1; out.push(list[i]); }
+    }
+    return out;
+  }
 
   var db = null;
   var lastJson = "";
@@ -171,7 +186,19 @@ WE.store = (function () {
 
   // ---- 예전 슬롯(주소 기준 1개) → 문서 슬롯으로 이관 ----
   // 새 슬롯에 제대로 들어간 것을 확인한 뒤에만 옛 것을 지운다.
+  // 후보 주소를 하나씩 훑는다. 두 곳에 다 있으면 각각 별개 문서로 살린다
+  // (합치면 한쪽이 사라지므로 절대 합치지 않는다).
   function migrateLegacy(cb) {
+    var paths = legacyPaths(), i = 0;
+    (function next() {
+      if (i >= paths.length) { cb(); return; }
+      migrateOne(paths[i++], next);
+    })();
+  }
+
+  function migrateOne(path, cb) {
+    var LEGACY_DRAFT = "current::" + path;
+    var LEGACY_SNAP = "history::" + path;
     getRaw(LEGACY_DRAFT, function (v) {
       getRaw(LEGACY_SNAP, function (h) {
         if (!v && !h) { cb(); return; }
@@ -208,7 +235,7 @@ WE.store = (function () {
               console.warn("[store] 예전 자동저장본 이관을 확인하지 못해 원본을 남겨둡니다.");
               cb(); return;
             }
-            console.log("[store] 예전 자동저장본을 문서 슬롯으로 옮겼습니다. (문서 " + id + ")");
+            console.log("[store] 예전 자동저장본을 문서 슬롯으로 옮겼습니다. (문서 " + id + ", 옛 주소 " + path + ")");
             delRaw(LEGACY_DRAFT, function () { delRaw(LEGACY_SNAP, cb); });
           });
         });
@@ -248,6 +275,33 @@ WE.store = (function () {
     var c = readClaims();
     return !!(c[id] && c[id].tab !== tabId());
   }
+  /* 같은 문서를 두 탭이 열었을 때.
+     나중에 연 탭이 임자가 되고, 먼저 있던 탭은 **자동저장을 멈춘다.**
+     안 멈추면 먼저 있던 탭이 자기 옛 내용을 3초마다 덮어써서, 새 탭에서 한 작업이 사라진다.
+     (예전에는 아예 다른 도면을 열어 이 상황을 피했는데, 그게 "매번 다른 화면이 뜬다"의 원인이었다) */
+  var _양보함 = false, _양보알림 = null;
+  function yielded() { return _양보함; }
+  function onYield(fn) { _양보알림 = fn; }
+  function 임자잃었나() {
+    var id = _claimedId || docId();
+    var c = readClaims();
+    if (!(c[id] && c[id].tab !== tabId())) return false;
+    if (!_양보함) {
+      _양보함 = true;
+      /* ⚠ 예전에는 여기서 자동저장 시계를 껐다(clearInterval). **그러면 안 된다.**
+         시계를 끄면 saveNow 가 다시는 불리지 않아서, 이 탭이 나중에 **다른 문서로**
+         옮겨가도 그 사실을 알아챌 기회가 영영 없다.
+         실제 증상(2026-09-11 코덱스 감사에서 잡힘):
+           같은 도면을 두 탭에서 열어 이 탭이 물러난 뒤
+           → 「새 배선도로 시작」을 누르면
+           → 그 새 도면이 **자동저장이 하나도 안 되는데 사용자는 모른다.**
+         시계는 그대로 돌리고, 저장할지 말지는 saveNow 가 그때그때 판단한다.
+         (3초마다 점유표를 한 번 더 읽을 뿐이라 비용은 무시할 수준이다) */
+      try { if (_양보알림) _양보알림(); } catch (e) { /* 무시 */ }
+    }
+    return true;
+  }
+
   function claim(id) {
     if (!id) return;
     var c = readClaims();
@@ -269,11 +323,28 @@ WE.store = (function () {
     _claimedId = id;
   }
 
-  // 탭은 자기가 보던 문서를 기억한다(sessionStorage는 탭 단위이고 새로고침에도 남는다).
-  // 이게 없으면 '새 작업'으로 비운 뒤 새로고침했을 때, 버린 도면이 '가장 최근 작업'으로 잡혀 되살아난다.
+  /* 보던 문서를 기억한다. 두 군데에 적는다.
+       탭 서랍(sessionStorage)  이 탭이 보던 것 — '새 작업'으로 비운 뒤 새로고침해도
+                               버린 도면이 되살아나지 않게 한다.
+       브라우저 서랍(localStorage) 마지막으로 보던 것 — **새 탭도 이걸 보고 같은 도면을 연다.**
+
+     ⚠ 예전에는 탭 서랍에만 적었다. 그러니 관리자 페이지를 새 탭으로 열었다 돌아오거나
+        랜딩에서 에디터로 들어오면, 그 탭은 "내가 뭘 보고 있었는지"를 몰라 엉뚱한 도면을
+        열었다. 사용자에게 탭은 보이지 않는다 — 어디서 들어오든 하던 작업이 나와야 한다.
+        (2026-09-02) */
   var SESS_DOC = "we_docId";
-  function rememberDoc(id) { try { sessionStorage.setItem(SESS_DOC, id); } catch (e) { /* 무시 */ } }
+  var LAST_DOC = "we_docId_last";
+  function rememberDoc(id) {
+    try { sessionStorage.setItem(SESS_DOC, id); } catch (e) { /* 무시 */ }
+    try { localStorage.setItem(LAST_DOC, id); } catch (e) { /* 무시 */ }
+  }
   function myDoc() { try { return sessionStorage.getItem(SESS_DOC); } catch (e) { return null; } }
+  // 이 탭이 보던 것 우선, 없으면(새 탭) 마지막으로 보던 것
+  function lastDoc() {
+    var v = myDoc();
+    if (v) return v;
+    try { return localStorage.getItem(LAST_DOC); } catch (e) { return null; }
+  }
 
   // ---- 범용 키-값 (라이브러리 등) ----
   function putRaw(key, val) {
@@ -378,6 +449,12 @@ WE.store = (function () {
 
   // 변경 있을 때만 저장
   function saveNow() {
+    /* ⚠ 예전에는 `if (_양보함) return;` 이었다. _양보함 은 **한 번 켜지면 꺼지지 않는
+       기억**이라, 이 탭이 다른 문서로 옮겨가도 계속 "물러난 탭" 으로 남았다.
+       이제 **저장하려는 순간마다 점유표를 실제로 확인**한다 —
+       문서가 바뀌면 보는 줄이 저절로 바뀌므로 "기억을 지워 주는 코드" 가 필요 없다.
+       (그런 코드는 새로운 '문서 여는 길' 이 생길 때마다 넣어야 하고, 빠뜨리면 같은 버그가 난다) */
+    if (임자잃었나()) return;   // 이 문서의 임자는 다른 탭이다 — 덮어쓰면 안 된다
     var json = serialize();
     if (json === lastJson) return;
     lastJson = json;
@@ -422,7 +499,8 @@ WE.store = (function () {
     applyTimer();
     claimCurrent();
     // 편집 중이라는 표시를 계속 갱신 (탭이 죽으면 표시가 저절로 낡아 다른 탭이 이어받는다)
-    setInterval(claimCurrent, CLAIM_BEAT);
+    // 그 사이 다른 탭이 같은 문서를 열었으면 여기서 알아채고 물러난다.
+    setInterval(function () { if (!임자잃었나()) claimCurrent(); }, CLAIM_BEAT);
     // 마지막 작업이 항상 복구되도록, 닫기/숨김 직전엔 자동저장 설정과 무관하게 저장.
     // beforeunload는 모바일 사파리/안드로이드에서 생략되는 경우가 많아 pagehide를 함께 건다.
     function bye() { saveNow(); releaseClaim(_claimedId || docId()); }
@@ -440,6 +518,7 @@ WE.store = (function () {
     scanStateValues: scanStateValues, anyOtherTab: anyOtherTab,
     assetPutMany: assetPutMany, assetDelMany: assetDelMany, assetGetAll: assetGetAll,
     pushSnapshot: pushSnapshot, getSnapshots: getSnapshots,
+    lastDoc: lastDoc, yielded: yielded, onYield: onYield,
     // 문서 슬롯
     loadDraft: loadDraft, listDrafts: listDrafts, migrateLegacy: migrateLegacy, pruneDrafts: pruneDrafts,
     docId: docId, claim: claim, claimCurrent: claimCurrent, releaseClaim: releaseClaim, claimedByOther: claimedByOther,

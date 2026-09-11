@@ -39,9 +39,15 @@ WE.app = (function () {
     bindAnnoProps();
     bindMenu();
     bindTerminals();
-    bindPresetModal();
+    // 프리셋 관리 모달은 js/presetmodal.js 가 처음 열릴 때 스스로 묶는다(지연 초기화)
     bindFileButtons();
     bindLibrary();
+    if (WE.publicLibrary) {
+      WE.publicLibrary.init({ renderLibrary: renderLibrary, placePart: placeLibraryPart });
+    }
+    if (WE.publicPublisher) {
+      WE.publicPublisher.init({ onAdminChange: syncPublicPublishMenu });
+    }
     bindLibEdit();
     bindBackupNotice();
     bindDatasheetViewer();
@@ -54,12 +60,14 @@ WE.app = (function () {
     bindSettings();
     bindModalBackdrops();
     bindWelcome();
+    bindBeta();
     bindFeedback();
     bindNotify();
     bindQuickColorPicker();
     bindHelp();
     bindAppMenu();
     bindBOMView();
+    bindWireListView();   // 결선표 비고 칸
     bindRestoreBanner();
     bindRecentModal();
     loadSettings();
@@ -76,8 +84,13 @@ WE.app = (function () {
     WE.store.init(function () {
       function finish() {
         WE.store.syncBaseline();
+        WE.store.onYield(showYieldBanner);   // 다른 탭이 같은 작업을 열면 알린다
         WE.store.start();
         applySettings();
+        bindWireGap();   // 간격을 고치면 기억하도록
+        bindPageSize();  // 우측 하단 용지 크기 고르기
+        bindDateDrag();  // 작성일 상자 — 캔버스 위에 떠 있고 손잡이로 끌어 옮긴다
+        applyCanvasSize();   // 이 페이지의 용지 크기로 화면을 맞춘다
         WE.history.reset();
         WE.history.start();
         updateHistoryButtons();
@@ -90,28 +103,26 @@ WE.app = (function () {
         WE.library.load(function () {
           renderLibrary();
           WE.store.migrateLegacy(function () {
-            // 지난 작업 이어서 하기 — 창을 닫거나 브라우저가 죽어도 마지막 상태로 돌아온다.
-            var mine = WE.store.myDoc();
+            /* 지난 작업 이어서 하기.
+               ⚠ 어느 탭에서 들어오든 **마지막으로 보던 도면**이 나와야 한다.
+                  사용자에게 탭은 보이지 않는다 — 관리자 페이지를 갔다 오든 랜딩에서
+                  들어오든, 하던 작업이 그대로 이어져야 한다. (2026-09-02) */
+            var mine = WE.store.lastDoc();
             if (mine) {
-              // 이 탭이 보던 문서로 돌아간다(새로고침). 저장본이 없으면 '비워둔 채였다'는 뜻이므로
-              // 다른 도면을 끌어오지 않고 그대로 빈 화면으로 둔다.
               WE.store.loadDraft(mine, function (saved) {
                 if (saved && restoreDraft(saved)) { finish(); return; }
+                // 저장본이 없으면 '비워둔 채였다'는 뜻 — 다른 도면을 끌어오지 않는다
                 WE.model.project.meta.id = mine;
                 startFresh(false);
               });
               return;
             }
-            // 새로 연 탭 — 가장 최근 작업을 잇되, 다른 탭이 편집 중인 문서는 건너뛴다
+            // 기억이 아예 없는 첫 방문만 여기로 온다 — 가장 최근 작업을 잇는다
             WE.store.listDrafts(function (drafts) {
-              var pick = null;
-              for (var i = 0; i < drafts.length; i++) {
-                if (!WE.store.claimedByOther(drafts[i].id)) { pick = drafts[i]; break; }
-              }
-              if (!pick) { startFresh(drafts.length > 0); return; }
-              WE.store.loadDraft(pick.id, function (saved) {
+              if (!drafts.length) { startFresh(false); return; }
+              WE.store.loadDraft(drafts[0].id, function (saved) {
                 if (saved && restoreDraft(saved)) { finish(); return; }
-                startFresh(drafts.length > 0);
+                startFresh(true);
               });
             });
           });
@@ -126,7 +137,7 @@ WE.app = (function () {
               }
               finish();
               if (othersBusy) {
-                setHint(WE.i18n.t("새 배선도로 시작했습니다."), WE.i18n.t("다른 탭에서 편집 중인 작업이 있어 새 배선도로 시작했습니다. (☰ → 최근 작업)"));
+                setHint(WE.i18n.t("새 배선도로 시작했습니다."), WE.i18n.t("이전 작업을 불러오지 못해 새 배선도로 시작했습니다. (☰ → 최근 작업)"));
               }
             });
           }
@@ -183,6 +194,17 @@ WE.app = (function () {
     // 방해가 되지 않도록 잠시 뒤 스스로 사라진다(내용은 이미 화면에 복원돼 있다)
     _restoreBannerTimer = setTimeout(hideRestoreBanner, 15000);
   }
+  /* 같은 작업을 다른 탭에서 열었을 때. 이 탭은 자동저장을 멈춘 상태다.
+     말없이 멈추면 사용자는 계속 그리다가 전부 잃는다 — 배너는 스스로 사라지지 않는다. */
+  function showYieldBanner() {
+    if (_restoreBannerTimer) { clearTimeout(_restoreBannerTimer); _restoreBannerTimer = null; }
+    document.getElementById("restoreBannerText").innerHTML =
+      WE.i18n.t("이 작업을 다른 탭에서 열었습니다.") +
+      "<span class='rb-sub'>" +
+      esc(WE.i18n.t("여기서 고친 내용은 저장되지 않습니다. 새로 연 탭에서 작업하세요.")) + "</span>";
+    document.getElementById("restoreBanner").hidden = false;
+  }
+
   function bindRestoreBanner() {
     document.getElementById("restoreBannerClose").addEventListener("click", hideRestoreBanner);
     document.getElementById("restoreBannerNew").addEventListener("click", function () {
@@ -223,6 +245,41 @@ WE.app = (function () {
   }
 
   // 라이브러리 저장 (이름 중복 시 덮어쓰기/새로 추가 확인). 저장된 부품 반환
+  /* 배치된 부품의 '지금 모습' 을 라이브러리 부품 자료로 옮긴다.
+     여러 곳에서 같은 항목을 적어야 해서 한 군데로 모은다 —
+     빠뜨린 항목이 있으면 "저장했는데 그 부분만 안 따라온다" 가 된다. */
+  function 부품자료(c) {
+    return {
+      name: c.name, image: c.image,
+      defaultWidth: c.width, defaultHeight: c.height, terminals: c.terminals,
+      nameLabelPos: c.nameLabelPos,
+      terminalPlacementQueue: c.terminalPlacementQueue,
+      terminalPlacementQueueVersion: c.terminalPlacementQueueVersion
+    };
+  }
+
+  /* 공용 부품을 배치한 뒤 이미지·단자·이름을 고치면 그 부품만 개인 사본으로 분리한다.
+     위치·회전·크기처럼 도면 위 배치만 바꾸는 동작에서는 부르지 않는다. */
+  function makeComponentIndependent(c, syncDefinition) {
+    if (!c) return false;
+    var source = c.libraryId && WE.library.get(c.libraryId);
+    var linked = !!(c.publicId || (source && source.publicId));
+    if (!linked) return false;
+    if (source && source.publicId) {
+      var copy = WE.library.copyAsIndependent(source.id);
+      if (copy) c.libraryId = copy.id;
+    }
+    c.publicId = null;
+    c.publicVersion = null;
+    c.publicSnapshot = null;
+    // 편집이 끝난 현재 모습을 새 개인 항목에도 넣어 다음 배치부터 그대로 나오게 한다.
+    if (syncDefinition && c.libraryId && WE.library.get(c.libraryId)) {
+      WE.library.updatePart(c.libraryId, 부품자료(c));
+    }
+    renderLibrary();
+    return true;
+  }
+
   function saveToLibrary(name, buildData) {
     var existing = WE.library.findByName(name);
     var part;
@@ -247,6 +304,40 @@ WE.app = (function () {
   // ---- 라이브러리 부품 정보(BOM) 편집 ----
   var _editLibId = null;
   function gv(id) { return document.getElementById(id).value; }
+
+  // ---- 단가 입력 천단위 쉼표 ----
+  // ⚠ input[type=number] 로는 못 한다 — 브라우저가 "29,000" 을 잘못된 값으로 보고 빈 값을 준다.
+  //    그래서 type=text + inputmode=numeric 으로 두고 여기서 직접 찍는다.
+  // 소수점 이하는 건드리지 않는다 — 예전에 소수로 넣어 둔 단가를 조용히 바꾸면 안 된다.
+  function moneyText(v) {
+    var s = String(v == null ? "" : v).replace(/,/g, "").trim();
+    if (s === "") return "";
+    var neg = s.charAt(0) === "-" ? "-" : "";
+    s = s.replace(/[^\d.]/g, "");
+    var dot = s.indexOf(".");
+    var int = dot < 0 ? s : s.slice(0, dot);
+    var frac = dot < 0 ? "" : s.slice(dot);          // 점 포함
+    int = int.replace(/^0+(?=\d)/, "");              // 앞자리 0 제거
+    // Number() 로 돌리지 않는다 — 아주 큰 값에서 자릿수가 뭉개진다
+    int = int.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+    return neg + int + frac;
+  }
+  function moneyRaw(v) { return String(v == null ? "" : v).replace(/,/g, "").trim(); }
+  // 입력 중에도 쉼표를 찍는다. 커서는 **앞에 있던 숫자 개수** 기준으로 되돌린다 —
+  // 그냥 두면 쉼표가 끼면서 커서가 튀어 가운데를 못 고친다.
+  function bindMoneyInput(id) {
+    var elx = document.getElementById(id); if (!elx) return;
+    elx.addEventListener("input", function () {
+      var before = elx.value.slice(0, elx.selectionStart || 0).replace(/[^\d]/g, "").length;
+      elx.value = moneyText(elx.value);
+      var i = 0, seen = 0;
+      while (i < elx.value.length && seen < before) {
+        if (/\d/.test(elx.value.charAt(i))) seen++;
+        i++;
+      }
+      try { elx.setSelectionRange(i, i); } catch (_) {}
+    });
+  }
   function sv(id, v) { document.getElementById(id).value = v == null ? "" : v; }
 
   var _editDatasheets = [];   // 라이브러리 모달 편집 중인 데이터시트 작업본
@@ -284,11 +375,33 @@ WE.app = (function () {
     sel.value = (selectedId && WE.library.getFolder(selectedId)) ? selectedId : "";
   }
 
+  // 단가 칸에 천단위 쉼표를 물린다. 모달을 처음 열 때 한 번만.
+  var _moneyBound = false;
+  function bindMoneyInputsOnce() {
+    if (_moneyBound) return;
+    _moneyBound = true;
+    bindMoneyInput("libPrice"); bindMoneyInput("libPriceKr");
+  }
+
   function openLibEdit(id) {
+    bindMoneyInputsOnce();
     var p = WE.library.get(id); if (!p) return;
     _editLibId = id;
     fillLibFolderSel(p.folderId);
-    sv("libName", p.name); sv("libSpec", p.spec); sv("libLink", p.link); sv("libPrice", p.price);
+    sv("libName", p.name); sv("libSpec", p.spec);
+    // 구매 링크·단가 — 해외(link/price)·국내(linkKr/priceKr) 두 벌, 체크는 linkPref.
+    // 단가도 링크와 **같은 규칙**으로 BOM 에 나간다 — WE.library.bomPrice() 참고.
+    //
+    // ⚠ 예전 부품(체크한 적 없음)은 **국내로 놓는다.** 그때 넣어 둔 link/price 는
+    //    국내 쇼핑몰 기준이므로 국내 칸에 담아 보여준다(WE.library.legacyPref).
+    //    이러면 저장하는 순간 국내로 자연스럽게 옮겨가고, 넣어 둔 값도 안 사라진다.
+    var pref = WE.library.legacyPref(p);
+    var 예전 = p.linkPref !== "kr" && p.linkPref !== "global";
+    sv("libLink", 예전 ? "" : p.link);
+    sv("libLinkKr", 예전 ? (p.linkKr || p.link) : p.linkKr);
+    sv("libPrice", moneyText(예전 ? "" : p.price));
+    sv("libPriceKr", moneyText(예전 ? (p.priceKr !== "" && p.priceKr != null ? p.priceKr : p.price) : p.priceKr));
+    document.getElementById(pref === "kr" ? "libLinkPrefKr" : "libLinkPrefGlobal").checked = true;
     document.getElementById("libRole").value = p.role || "load";
     sv("libVolt", p.volt); sv("libCurrent", p.current); sv("libPower", p.power);
     sv("libAh", p.capacityAh); sv("libDod", p.dod); sv("libMin", p.minPerHour); sv("libEff", p.efficiency);
@@ -328,14 +441,27 @@ WE.app = (function () {
     im.src = dataUrl;
   }
 
+  // 데이터시트는 **파일**과 **링크** 두 가지다.
+  // 링크는 type:"link" 로 두고 data 에 주소를 담는다 — PDF 를 통째로 담으면
+  // 저장·게시·백업이 전부 무거워진다(고원빈, 2026-08-30).
+  // 사용자가 **링크로 붙인** 데이터시트. 게시·백업이 이 값만 보고 "파일이 아니다"를 판단한다.
+  function isDsLink(d) { return !!d && d.type === "link"; }
+  // data 가 주소인 것 전부. 링크뿐 아니라 **게시된 파일**(Storage 주소)도 여기 걸린다.
+  // ⚠ 이런 건 dataURLtoBlob 이 atob(undefined) 로 터진다 —
+  //    공용 부품을 담아서 「보기」를 누르면 예전부터 깨져 있었다. 새 탭으로 보내 같이 고친다.
+  function isDsRemote(d) { return !!d && (isDsLink(d) || /^https?:\/\//i.test(String(d.data || ""))); }
+
   // 데이터시트 편집 목록 렌더
   function renderDsList() {
     var box = document.getElementById("libDsList");
     if (!_editDatasheets.length) { box.innerHTML = WE.i18n.t("<span class='muted'>첨부된 파일 없음</span>"); return; }
     box.innerHTML = _editDatasheets.map(function (d, i) {
-      var icon = d.type === "application/pdf" ? "📄" : "🖼️";
-      return "<div class='ds-item'><span class='ds-name' title='" + esc(d.name) + "'>" + icon + " " + esc(d.name) + "</span>" +
-        "<button type='button' class='ds-item-view' data-i='" + i + WE.i18n.t("'>보기</button>") +
+      var link = isDsRemote(d);
+      var icon = link ? "🔗" : (d.type === "application/pdf" ? "📄" : "🖼️");
+      // 링크는 제목 툴팁에 주소를 같이 보여준다 — 어디로 가는지 모르고 누르면 안 된다
+      var tip = link ? (d.name + " — " + d.data) : d.name;
+      return "<div class='ds-item'><span class='ds-name' title='" + esc(tip) + "'>" + icon + " " + esc(d.name) + "</span>" +
+        "<button type='button' class='ds-item-view' data-i='" + i + "'>" + (link ? WE.i18n.t("열기") : WE.i18n.t("보기")) + "</button>" +
         "<button type='button' class='ds-item-del' data-i='" + i + WE.i18n.t("' title='삭제'>×</button></div>");
     }).join("");
   }
@@ -370,6 +496,17 @@ WE.app = (function () {
     document.getElementById("libDsAdd").addEventListener("click", function () {
       document.getElementById("libDsInput").click();
     });
+    document.getElementById("libDsAddLink").addEventListener("click", function () {
+      var url = (prompt(WE.i18n.t("데이터시트 주소를 붙여넣으세요 (http:// 또는 https://)")) || "").trim();
+      if (!url) return;
+      if (!/^https?:\/\//i.test(url)) { alert(WE.i18n.t("http:// 또는 https:// 로 시작하는 주소만 넣을 수 있습니다.")); return; }
+      // 이름은 주소의 파일명에서 뽑아 기본값으로 준다. 길고 지저분한 주소를 그대로 쓰면 목록이 안 읽힌다
+      var guess = "";
+      try { guess = decodeURIComponent((url.split("?")[0].split("#")[0].split("/").pop() || "")).slice(0, 60); } catch (_) {}
+      var name = (prompt(WE.i18n.t("이 링크의 이름"), guess || WE.i18n.t("데이터시트")) || "").trim() || (guess || WE.i18n.t("데이터시트"));
+      _editDatasheets.push({ id: WE.model.nextId("ds"), name: name, type: "link", data: url });
+      renderDsList();
+    });
     document.getElementById("libDsInput").addEventListener("change", function (e) {
       var files = Array.prototype.slice.call(e.target.files || []);
       files.forEach(function (f) {
@@ -387,7 +524,13 @@ WE.app = (function () {
     });
     document.getElementById("libDsList").addEventListener("click", function (e) {
       var v = e.target.closest(".ds-item-view");
-      if (v) { openDatasheetViewer(_editDatasheets, gv("libName") || WE.i18n.t("데이터시트"), +v.dataset.i); return; }
+      if (v) {
+        var dv = _editDatasheets[+v.dataset.i];
+        // 링크는 뷰어에 못 띄운다 — 다른 사이트 문서라 iframe 이 막히는 경우가 많다. 새 탭으로 연다
+        if (isDsRemote(dv)) { window.open(dv.data, "_blank", "noopener"); return; }
+        openDatasheetViewer(_editDatasheets, gv("libName") || WE.i18n.t("데이터시트"), +v.dataset.i);
+        return;
+      }
       var d = e.target.closest(".ds-item-del");
       if (d) { _editDatasheets.splice(+d.dataset.i, 1); renderDsList(); }
     });
@@ -403,7 +546,10 @@ WE.app = (function () {
         setLibLastFolder(selFolder);
         WE.library.updatePart(_editLibId, {
           name: newName, folderId: selFolder,
-          spec: gv("libSpec").trim(), link: gv("libLink").trim(), price: gv("libPrice"),
+          spec: gv("libSpec").trim(),
+          price: moneyRaw(gv("libPrice")), priceKr: moneyRaw(gv("libPriceKr")),
+          link: gv("libLink").trim(), linkKr: gv("libLinkKr").trim(),
+          linkPref: document.getElementById("libLinkPrefKr").checked ? "kr" : "global",
           role: gv("libRole"),
           volt: gv("libVolt"), current: gv("libCurrent"), power: gv("libPower"),
           capacityAh: gv("libAh"), dod: gv("libDod"), minPerHour: gv("libMin"), efficiency: gv("libEff"),
@@ -441,6 +587,9 @@ WE.app = (function () {
   }
   function openDatasheetViewer(list, title, startIdx) {
     if (!list || !list.length) return;
+    // 링크 하나만 열려는 것이면 뷰어를 띄우지 않고 바로 새 탭으로 보낸다
+    var only = list[startIdx || 0];
+    if (isDsRemote(only)) { window.open(only.data, "_blank", "noopener"); return; }
     _dsList = list; _dsIdx = startIdx || 0;
     document.getElementById("dsViewerTitle").textContent = title || WE.i18n.t("데이터시트");
     document.getElementById("dsViewerModal").hidden = false;
@@ -460,6 +609,14 @@ WE.app = (function () {
     var tabs = document.querySelectorAll("#dsViewerTabs .ds-tab");
     for (var k = 0; k < tabs.length; k++) tabs[k].classList.toggle("active", +tabs[k].dataset.i === i);
     if (_dsUrl) { URL.revokeObjectURL(_dsUrl); _dsUrl = null; }
+    // 링크는 blob 으로 못 만든다(dataURLtoBlob 이 터진다). 탭에서 고르면 새 창으로 보낸다
+    if (isDsRemote(d)) {
+      document.getElementById("dsZoomBtns").style.display = "none";
+      document.getElementById("dsViewerPreview").innerHTML =
+        "<p class='muted'>" + esc(d.name) + WE.i18n.t(" — 새 탭에서 열었습니다.</p>");
+      window.open(d.data, "_blank", "noopener");
+      return;
+    }
     _dsUrl = URL.createObjectURL(dataURLtoBlob(d.data, d.type));
     _dsZoom = 1; _dsPanX = 0; _dsPanY = 0;
     var box = document.getElementById("dsViewerPreview");
@@ -587,6 +744,7 @@ WE.app = (function () {
         c.height = Math.max(10, Math.round(c.width * aspect));
       }
       (c.terminals || []).forEach(function (t) { transformTerminal(t, tf); });
+      makeComponentIndependent(c, true);
       WE.render.renderAll();
     };
     probe.src = url;
@@ -761,20 +919,35 @@ WE.app = (function () {
       if (e.target.closest(".lib-fav")) { WE.library.toggleFav(part.id); renderLibrary(); return; }
       if (e.target.closest(".lib-edit")) { openLibEdit(part.id); return; }
       // 클릭 → 캔버스에 배치
-      _placeN = (_placeN + 1) % 8;
-      var opts = WE.library.instanceOpts(part, 180 + _placeN * 24, 150 + _placeN * 24);
-      var cmp = WE.model.addComponent(opts);
-      trackOnce("place_component");
-      WE.model.select("component", cmp.id);
-      touchLibRecent(part.id);   // 최근 사용 → 목록 상단으로
-      renderLibrary();
-      WE.render.renderAll(); refreshProps();
+      placeLibraryPart(part);
     });
     // 검색: 입력 즉시 필터링
     document.getElementById("libSearch").addEventListener("input", function (e) {
       _libQuery = e.target.value.trim().toLowerCase();
       renderLibrary();
     });
+  }
+
+  // 좌측 내 라이브러리와 공용 부품 검색이 같은 배치 경로를 쓴다.
+  // 한쪽만 따로 구현하면 무료 한도·최근 사용·선택 갱신이 쉽게 어긋난다.
+  function placeLibraryPart(part) {
+    if (!part) return null;
+    _placeN = (_placeN + 1) % 8;
+    var opts = WE.library.instanceOpts(part, 180 + _placeN * 24, 150 + _placeN * 24);
+    var cmp = WE.model.addComponent(opts);
+    // 무료 한도에 걸리면 null 이 온다 — 안내는 addComponent 안에서 이미 띄웠다.
+    if (!cmp) return null;
+    trackOnce("place_component");
+    WE.model.select("component", cmp.id);
+    touchLibRecent(part.id);
+    renderLibrary();
+    WE.render.renderAll(); refreshProps();
+    return cmp;
+  }
+
+  function componentPart(c) {
+    if (!c) return null;
+    return (c.libraryId && WE.library.get(c.libraryId)) || c.publicSnapshot || null;
   }
 
   // 라이브러리 드래그: 부품 순서 변경 + 폴더 이동
@@ -1001,13 +1174,23 @@ WE.app = (function () {
     thumb.className = "lib-thumb";
     if (part.image) thumb.src = part.image;
     thumbWrap.appendChild(thumb);
-    if (part.link) {
-      var lk = document.createElement("span"); lk.className = "lib-haslink"; lk.textContent = "🔗"; lk.title = WE.i18n.t("구매 링크 있음");
+    if (part.link || part.linkKr) {   // 국내·해외 어느 쪽이든 있으면 사슬 배지를 붙인다
+      /* ⚠ 예전에는 🔗 이모지였다. 배지가 15px 라 이모지가 뭉개져 무슨 그림인지 안 보였고,
+         OS 마다 다르게 그려졌다. SVG 로 바꾼다 (2026-09-10). 겉모습은 styles.css 의 .lib-haslink. */
+      var lk = document.createElement("span"); lk.className = "lib-haslink";
+      lk.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true">' +
+        '<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>' +
+        '<path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>';
+      lk.title = WE.i18n.t("구매 링크 있음");
       thumbWrap.appendChild(lk);
     }
     var info = document.createElement("div"); info.className = "lib-info";
     var nm = document.createElement("div"); nm.className = "lib-name";
     nm.innerHTML = hlHtml(part.name, q);
+    /* 두 줄로 늘려도 아주 긴 이름은 잘린다. 그때 전체를 볼 길을 남긴다. (2026-09-10)
+       ⚠ 툴팁은 **안쪽 것이 이긴다** — 이름 위에서는 행 툴팁("클릭: 캔버스에 배치 …")
+          대신 이것이 뜬다. 고원빈 확정: 이름 칸에서는 이름을 보여 준다. */
+    nm.title = part.name;
     info.appendChild(nm);
     if (part.spec) {
       var meta = document.createElement("div"); meta.className = "lib-meta";
@@ -1269,15 +1452,34 @@ WE.app = (function () {
     var map = {}, order = [];
     // 자재 발주는 프로젝트 단위 → 모든 시트의 부품을 합산한다(사용자 확정 2026-08-08)
     WE.model.allComponents().forEach(function (c) {
-      var lib = c.libraryId ? WE.library.get(c.libraryId) : null;
-      var key = c.libraryId || ("name:" + c.name);
+      var lib = componentPart(c);
+      var key = WE.model.cmpGroupKey(c);   // 집계 기준은 model 한 곳에 (부품 번호와 같은 기준이어야 한다)
       if (!map[key]) {
-        var basePrice = lib ? (lib.price || "") : (c.bomPrice || "");
+        // 부품 기본 단가 — 부품 정보에서 체크한 쪽(기본 해외). WE.library.bomPrice() 가 그 규칙을 갖는다.
+        // 링크는 해외인데 단가는 국내 것이 나가면 BOM 이 앞뒤가 안 맞는다.
+        var basePrice = lib ? (WE.library.bomPrice(lib) || "") : (c.bomPrice || "");
         var ov = WE.model.project.bomPrice ? WE.model.project.bomPrice[key] : undefined;
+        // BOM 은 사용자의 작업물이다. 표에서 고친 값(project.bomEdit)이 부품 기본값보다 항상 우선한다.
+        // 예전 프로젝트는 그 값이 부품 인스턴스(c.bomName/bomSpec/bomLink)에 남아 있으므로 같이 읽는다 —
+        // 안 읽으면 예전에 고쳐 둔 품명·구매처가 사라진다.
+        var ed = (WE.model.project.bomEdit && WE.model.project.bomEdit[key]) || {};
+        function edited(field, legacy, base) {
+          if (ed[field] != null) return { v: ed[field], on: true };
+          if (legacy != null) return { v: legacy, on: true };
+          return { v: base, on: false };
+        }
+        var baseName = lib ? lib.name : c.name;
+        var baseSpec = lib ? (lib.spec || "") : "";
+        // 부품 기본 구매링크 — 부품 정보에서 체크한 쪽(기본 해외). WE.library.bomLink() 가 그 규칙을 갖는다.
+        var baseLink = lib ? WE.library.bomLink(lib) : "";
+        var eName = edited("name", c.bomName, baseName);
+        var eSpec = edited("spec", c.bomSpec, baseSpec);
+        var eLink = edited("link", c.bomLink, baseLink);
         map[key] = {
-          key: key, libraryId: c.libraryId || null, name: lib ? lib.name : c.name, qty: 0,
-          spec: lib ? (lib.spec || "") : (c.bomSpec || ""),
-          link: lib ? (lib.link || "") : (c.bomLink || ""),
+          key: key, libraryId: c.libraryId || null, publicId: c.publicId || null,
+          name: eName.v, qty: 0, spec: eSpec.v, link: eLink.v,
+          baseName: baseName, baseSpec: baseSpec, baseLink: baseLink,
+          nameEdited: eName.on, specEdited: eSpec.on, linkEdited: eLink.on,
           basePrice: basePrice,
           price: (ov != null && ov !== "") ? ov : basePrice,   // 프로젝트 덮어쓰기 우선
           overridden: (ov != null && ov !== ""),
@@ -1301,10 +1503,10 @@ WE.app = (function () {
     return a.join(" · ");
   }
 
-  // 배선 리스트 UI 노출 여부.
-  // 지금 쓰임새가 없어 화면·인쇄·CSV에서 감춰 두었다. 기능 코드(wireListData·renderWireListView·
-  // 인쇄 섹션)는 그대로 살아 있으므로, 다시 필요해지면 이 값만 true로 되돌리면 된다.
-  var SHOW_WIRE_LIST = false;
+  /* 결선표 노출 여부.
+     예전에는 "라벨 붙은 배선만" 담아 목록이 거의 비어서 꺼 두었다.
+     지금은 넷 묶음(netListData)으로 바꿔 라벨 없이도 전부 나온다 — 그래서 켠다. */
+  var SHOW_WIRE_LIST = true;   // 결선표(넷 묶음)로 되살렸다 (2026-09-03)
   // 전력/배터리 요약은 계산이 아직 불안정해 화면·인쇄에서 모두 감춰 둔다(사용자 확정 2026-08-10).
   // 기능 자체는 코드로 살려 둔다 — 다시 켤 땐 이 값만 true 로.
   var SHOW_POWER_SUMMARY = false;
@@ -1418,6 +1620,12 @@ WE.app = (function () {
     var off = _clip.off;
     var made = WE.model.pasteBundle(_clip.data, off, off);
     if (!made) return false;
+    /* ⚠ 붙여넣기는 같은 자리에 또 붙일 때마다 20px 씩 민다(위 참조).
+       계속 붙이면 결국 캔버스 밖으로 나가고, 밖에 있는 부품은 화면에서 사라진다.
+       그래서 붙인 부품만 안쪽으로 당긴다. (2026-09-02) */
+    if (WE.geometry && WE.geometry.pullInside) {
+      made.components.forEach(function (c) { WE.geometry.pullInside(c); });
+    }
     // 붙인 것을 바로 선택해 둔다 — 방향키·드래그로 곧장 옮길 수 있게
     WE.model.setMultiSelection(
       made.components.map(function (c) { return c.id; }),
@@ -1467,11 +1675,13 @@ WE.app = (function () {
     WE.model.clearSelection();
     if (WE.model.setMultiSelection) WE.model.setMultiSelection([], [], []);   // 다중 선택·배선 클릭 지점까지 비운다
     switchView("wiring");
+    applyCanvasSize(); syncPageSizeBtn();   // 용지도 시트마다 다르다(2026-09-08)
     WE.render.renderAll(); WE.render.renderOverlay();
     renderSheetTabs(); refreshProps();
     syncProjNote();   // 비고는 시트마다 다르다 — 전환하면 그 시트 것으로 갈아 끼운다
   }
   function afterSheetChange(msg) {
+    applyCanvasSize(); syncPageSizeBtn();   // 새 시트는 기본 용지일 수 있다
     WE.render.renderAll(); WE.render.renderOverlay();
     renderSheetTabs(); setActiveTab(_view); refreshProps(); syncProjNote();
     if (WE.history) WE.history.commit();
@@ -1580,6 +1790,28 @@ WE.app = (function () {
     }, true);
     document.addEventListener("keydown", function (e) { if (e.key === "Escape") closeSheetMenu(); });
   }
+  /* BOM·배선 리스트가 화면을 채울 만큼 아래 여백을 준다. (2026-09-02)
+
+     이 창들은 배선도 **아래에** 붙고, 탭은 거기로 스크롤할 뿐이다.
+     그런데 창이 화면보다 짧으면 스크롤이 끝에 걸려 배선도 아랫부분이 화면에 남는다.
+     실측: 창 높이 714 · BOM 550 → 탭이 가려는 곳 637 인데 최대 스크롤이 509 라
+     **128px 모자라** 배선도가 그만큼 걸쳐 보였다. 부품이 적은 도면일수록 심하다.
+
+     모자란 만큼을 아래 여백으로 채우면 스크롤이 끝까지 가서 그 창이 화면 맨 위에 온다.
+     배선도를 숨기는 게 아니라 위로 밀어내는 것이라, '배선도는 항상 표시'라는 구성은 그대로다. */
+  /* BOM·배선 리스트가 화면을 꽉 채우게 만든다 — 짧은 표에서 카드가 반만 차고
+     아래가 허옇게 비어 보이는 것을 막는다.
+
+     ⚠ 예전에는 아래쪽 padding 을 늘렸다. 그러면 남는 공간이 내용보다 **바깥**에 깔려서,
+        맨 끝에 둔 제휴 고지가 표 바로 밑에 붙어 버린다(고지는 내용이니까).
+        min-height 로 바꾸면 남는 공간이 카드 **안쪽**에 생기고, 고지는 margin-top:auto 로
+        진짜 맨 아래까지 내려간다. box-sizing 이 border-box 라 바깥 높이는 예전과 같다. */
+  function 화면채우기(el) {
+    var wrap = document.getElementById("canvasWrap");
+    if (!wrap || !el || el.hidden) return;
+    el.style.minHeight = Math.max(0, wrap.clientHeight - 8) + "px";
+  }
+
   // 배선도는 항상 표시. BOM/배선 리스트 탭 = 배선도 아래에 해당 창을 추가 표시(스크롤 이동), 배선도 탭 = 둘 다 숨김.
   function switchView(view) {
     if (view === "wirelist" && !SHOW_WIRE_LIST) view = "wiring";   // 숨긴 상태에선 진입 자체를 막는다
@@ -1592,7 +1824,7 @@ WE.app = (function () {
     if (view === "bom") { renderBOMView(); wrap.scrollTo({ top: bom.offsetTop - 8, behavior: "smooth" }); }
     else if (view === "wirelist") { renderWireListView(); wrap.scrollTo({ top: wl.offsetTop - 8, behavior: "smooth" }); }
     else { wrap.scrollTo({ top: 0, behavior: "smooth" }); }   // 배선도만
-    syncCanvasMark();   // 각인은 배선도를 볼 때만 나온다
+    syncCanvasMark();   // 탭 전환 직후엔 스크롤 애니메이션 중이라도, 곧이어 scroll 이벤트가 실제 위치로 다시 잡아준다
   }
   // ---- 미연결 단자 확인 ----
   // 켜 두면 배선을 이을 때마다 빨간 표시가 하나씩 사라진다 — 고치면서 바로 확인이 된다.
@@ -1600,16 +1832,34 @@ WE.app = (function () {
   function toggleCheckTerminals() {
     WE.model.ui.checkTerminals = !WE.model.ui.checkTerminals;
     var b = document.getElementById("btnCheckTerm");
-    if (b) b.classList.toggle("active", !!WE.model.ui.checkTerminals);
+    if (b) {
+      b.classList.toggle("active", !!WE.model.ui.checkTerminals);
+      // 색만으로 상태를 알리면 화면을 못 보는 사람은 켜졌는지 모른다
+      b.setAttribute("aria-pressed", WE.model.ui.checkTerminals ? "true" : "false");
+    }
     WE.render.renderOverlay();
     syncCheckTermHint(true);
   }
   // force=true면 껐을 때도 알린다(버튼을 눌러 끈 순간). 평소엔 켜져 있을 때만 개수를 갱신한다.
   function syncCheckTermHint(force) {
     if (!WE.model.ui.checkTerminals) { if (force) setHint(WE.i18n.t("미연결 확인 끔")); return; }
-    var n = WE.render.unconnectedTerminals ? WE.render.unconnectedTerminals().length : 0;
-    setHint(n ? (WE.i18n.t("미연결 단자 ") + n + WE.i18n.t("개 — 도면에 표시했습니다"))
-              : WE.i18n.t("미연결 단자 없음 — 모든 단자가 이어졌습니다"));
+    /* ⚠ 숨긴 단자까지 세어 세 경우를 구분한다 (2026-09-07).
+       예전에는 보이는 것만 세서, 안 이어진 단자를 숨기면 "모든 단자가 이어졌습니다" 가
+       나왔다. 이어진 게 아니라 숨긴 것인데도. 점검 도구가 거짓 보고를 하면
+       배선이 빠진 도면을 그대로 납품하게 된다. */
+    if (!WE.render.unconnectedTerminals) return;
+    var 보임 = WE.render.unconnectedTerminals().length;
+    var 전부 = WE.render.unconnectedTerminals({ includeHidden: true }).length;
+    var 숨김 = 전부 - 보임;
+    if (보임) {
+      setHint(WE.i18n.t("미연결 단자 ") + 보임 + WE.i18n.t("개 — 도면에 표시했습니다"));
+    } else if (숨김) {
+      // 여기서 "모두 이어졌다" 고 말하면 안 된다 — 숨겨서 안 보이는 것뿐이다
+      setHint(WE.i18n.t("표시된 미연결 없음 · 숨긴 단자 ") + 숨김 + WE.i18n.t("개가 아직 안 이어졌습니다"),
+        WE.i18n.t("숨긴 단자는 도면에 안 보이지만 배선은 붙어 있지 않습니다. 단자 배치에서 다시 켜면 보입니다."));
+    } else {
+      setHint(WE.i18n.t("미연결 단자 없음 — 모든 단자가 이어졌습니다"));
+    }
   }
 
   // 모델 변경 시 BOM/배선 리스트가 열려 있으면 갱신
@@ -1619,24 +1869,102 @@ WE.app = (function () {
     else if (_view === "wirelist") renderWireListView();
     syncNoteWidth();   // 배선 색이 늘면 범례 열이 늘고 그만큼 비고 폭이 준다
   }
-  function renderWireListView() {
-    var rows = wireListData();
+  /* 결선표 화면 — 인쇄물과 같은 모양으로 보여 준다(종이가 본체라 화면이 그걸 따라간다).
+     한 넷을 여러 줄로 늘어놓되 첫 줄에만 색·굵기·체크칸을 두고 나머지는 이어지는 줄로 묶는다. */
+  /* ---- 결선표 비고 (2026-09-09 고원빈) ----
+     "배선수 우측에 칸 하나 만들자 비고란. 케이블 길이 같은 거 입력하면 좋을 것 같아"
+
+     ⚠ 넷 하나에 하나다 — 배선수 칸과 같은 묶음(rowspan)이라 자리도 그대로 맞는다.
+     ⚠ 키는 기준 단자의 **id** 로 잡는다. 단자 이름으로 잡으면 이름을 고치는 순간
+        적어 둔 메모가 사라진다.
+     ⚠ 값은 project.wireNote 에 담겨 **파일에 저장된다** — 현장 메모는 도면의 일부다. */
+  function 비고키(net) {
+    if (!net || !net.origin) return "";
+    return net.origin.cmpId + "|" + (net.origin.tid || net.origin.term || "");
+  }
+  function 비고읽기(k) {
+    var m = WE.model.project.wireNote;
+    return (m && m[k]) || "";
+  }
+  function 비고쓰기(k, v) {
+    var p = WE.model.project;
+    if (!p.wireNote) p.wireNote = {};
+    v = String(v == null ? "" : v).trim();
+    if (v) p.wireNote[k] = v; else delete p.wireNote[k];
+  }
+
+  function bindWireListView() {
     var t = document.getElementById("wireListTable");
-    if (!rows.length) {
-      t.innerHTML = "<tr><td class='muted' style='border:none'>" + esc(wireListEmptyHint()) + "</td></tr>";
+    if (!t) return;
+    t.addEventListener("focusout", function (e) {
+      var td = e.target.closest ? e.target.closest("td.wl-note") : null;
+      if (!td) return;
+      비고쓰기(td.dataset.k, td.textContent);
+      WE.history.commit();
+    });
+    t.addEventListener("keydown", function (e) {
+      var td = e.target.closest ? e.target.closest("td.wl-note") : null;
+      if (!td) return;
+      if (e.key === "Enter") { e.preventDefault(); td.blur(); }
+      else if (e.key === "Escape") { td.textContent = 비고읽기(td.dataset.k); td.blur(); }
+    });
+  }
+
+  function renderWireListView() {
+    var nets = netListByComponent();
+    var t = document.getElementById("wireListTable");
+    if (!nets.length) {
+      t.innerHTML = "<tr><td class='muted' style='border:none'>" +
+        esc(WE.i18n.t("연결된 배선이 없습니다.")) + "</td></tr>";
       return;
     }
-    var html = WE.i18n.t("<thead><tr><th>번호</th><th>색</th><th>AWG</th><th>전류(A)</th><th>출발</th><th>도착</th></tr></thead><tbody>");
-    rows.forEach(function (r) {
-      html += "<tr><td>" + esc(r.no) + "</td>" +
-        "<td><span style='display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:4px;vertical-align:middle;background:" + esc(r.colorHex) + "'></span>" + esc(r.color) + "</td>" +
-        "<td>" + (r.awg ? esc("AWG " + r.awg) : "") + "</td>" +
-        "<td>" + esc(r.current) + "</td>" +
-        "<td>" + esc(r.fromCmp) + " · " + esc(r.fromTerm) + "</td>" +
-        "<td>" + esc(r.toCmp) + " · " + esc(r.toTerm) + "</td></tr>";
+    // 연결부는 부품명과 단자를 **칸으로 나눈다** — 한 칸에 붙여 쓰면 굵기 차이만으로는
+    // 어디까지가 부품 이름인지 안 보인다(2026-09-03 고원빈)
+    /* 연결부는 부품명과 단자를 **칸으로 나눈다** — 한 칸에 붙여 쓰면 굵기 차이만으로는
+       어디까지가 부품 이름인지 안 보인다(2026-09-03 고원빈).
+       단자 앞의 색은 **같은 색이 이어지면 한 칸으로 합친다** — #1·#2 스텝다운의 IN- 처럼
+       같은 색으로 잇는 경우가 대부분이라, 줄마다 같은 견본을 반복하면 눈만 어지럽다.
+       색이 달라지는 자리에서만 칸이 새로 생기므로 **다른 색이 오히려 눈에 띈다.** */
+    var html = WE.i18n.t("<thead><tr><th>☐</th><th>부품</th><th>시작</th><th>연결 부품</th>" +
+      "<th>연결부 단자</th><th>배선수</th><th>비고</th></tr></thead><tbody>");
+    nets.forEach(function (그룹) {
+      var 부품첫줄 = true;
+      그룹.rows.forEach(function (net) {
+        net.targets.forEach(function (m, i) {
+          var 넷첫줄 = i === 0;
+          html += "<tr class='wl-row" + (넷첫줄 ? " wl-first" : "") + "'>";
+          if (넷첫줄) html += "<td class='wl-chk' rowspan='" + net.count + "'>☐</td>";
+          if (부품첫줄) {
+            // 부품 그림 + 이름은 그 부품의 모든 줄에 걸쳐 한 번만 — 손에 쥔 부품을 바로 알아보게
+            html += "<td class='wl-part' rowspan='" + 그룹.lines + "'>" +
+              (그룹.image ? "<img class='wl-thumb' src='" + esc(그룹.image) + "' alt='' />" : "") +
+              "<span class='wl-part-name'>" + esc(그룹.name) + "</span></td>";
+            부품첫줄 = false;
+          }
+          if (넷첫줄) {
+            html += "<td class='wl-origin' rowspan='" + net.count + "'>" +
+              "<span class='wl-sw' style='background:" + esc(net.colorHex) + "'></span>" +
+              "<b>" + esc(net.origin.term) + "</b></td>";
+          }
+          html += "<td class='wl-member'>" + esc(m.cmp) + "</td>";
+          /* ⚠ 연결부 단자에는 색을 안 붙인다. 이어진 단자끼리는 같은 색으로 잇게 되어 있어
+                시작 칸의 색과 늘 같다 — 줄마다 같은 견본을 반복하면 칸만 넓어진다.
+                (2026-09-03 고원빈) */
+          html += "<td class='wl-mterm'><b>" + esc(m.term) + "</b></td>";
+          if (넷첫줄) {
+            html += "<td class='wl-count' rowspan='" + net.count + "'>" +
+              net.count + "</td>";
+            var k = 비고키(net);
+            html += "<td class='wl-note' contenteditable='true' data-k='" + esc(k) +
+              "' rowspan='" + net.count + "'>" + esc(비고읽기(k)) + "</td>";
+          }
+          html += "</tr>";
+        });
+      });
     });
     html += "</tbody>";
     t.innerHTML = html;
+    화면채우기(document.getElementById("wireListView"));   // BOM 과 같은 이유
   }
 
   function won(v) { return n(v) ? "₩" + Math.round(n(v)).toLocaleString() : ""; }
@@ -1699,7 +2027,9 @@ WE.app = (function () {
         kind: "auto", rowId: rowId, key: r.key, libraryId: r.libraryId,
         name: r.name, spec: r.spec, qty: r.qty, price: r.price,
         basePrice: r.basePrice, overridden: r.overridden, sum: n(r.price) * r.qty,
-        link: r.link, dsNames: r.dsNames || [], custom: proj.bomCustom[rowId] || {}
+        baseName: r.baseName, baseSpec: r.baseSpec, baseLink: r.baseLink,
+        nameEdited: r.nameEdited, specEdited: r.specEdited, linkEdited: r.linkEdited,
+        publicId: r.publicId || null, link: r.link, dsNames: r.dsNames || [], custom: proj.bomCustom[rowId] || {}
       });
     });
     (proj.manualBom || []).forEach(function (m) {
@@ -1746,9 +2076,20 @@ WE.app = (function () {
       return "<td class='editable' data-col='" + esc(col.colId) + "'>" + esc(v) + "</td>";
     }
     var priceTxt;
+    // 고친 칸의 툴팁 — 원래 기본값이 무엇이었는지 알려 준다(되돌리면 이 값으로 간다)
+    function editedTitle(on, base) {
+      if (!on) return "";
+      var b = String(base == null ? "" : base).trim();
+      return " title='" + esc(b
+        ? WE.i18n.t("부품 기본값: ") + b + WE.i18n.t(" → 이 배선도에서 수정됨 (↺ 로 되돌리기)")
+        : WE.i18n.t("이 배선도에서 추가된 값 (↺ 로 되돌리기)")) + "'";
+    }
     switch (col.id) {
-      case "name": return "<td class='editable' data-f='name'>" + esc(r.name) + "</td>";
-      case "spec": return "<td class='editable' data-f='spec'>" + esc(r.spec) + "</td>";
+      // 고친 칸은 단가와 같은 표시(파란 굵은 글씨 + 기본값 툴팁)를 쓴다 — 표 안에서 규칙이 하나여야 한다
+      case "name": return "<td class='editable" + (r.nameEdited ? " overridden" : "") + "' data-f='name'" +
+        editedTitle(r.nameEdited, r.baseName) + ">" + esc(r.name) + "</td>";
+      case "spec": return "<td class='editable" + (r.specEdited ? " overridden" : "") + "' data-f='spec'" +
+        editedTitle(r.specEdited, r.baseSpec) + ">" + esc(r.spec) + "</td>";
       case "qty":
         if (r.kind === "manual") return "<td class='num editable' data-f='qty'>" + r.qty + "</td>";
         return "<td class='num'>" + r.qty + "</td>";
@@ -1760,10 +2101,11 @@ WE.app = (function () {
           WE.i18n.t(" title='라이브러리 기본단가 ₩") + Math.round(n(r.basePrice)).toLocaleString() + WE.i18n.t(" → 이 배선도에서 수정됨 (비우면 기본값 복귀)'") : "";
         return "<td class='" + pCls + "' data-f='price'" + pTitle + ">" + priceTxt + "</td>";
       case "sum": return "<td class='num'>" + won(r.sum) + "</td>";
-      case "link": return "<td class='bom-link-cell' data-f='link'>" + linkCell(r.link) + "</td>";
+      case "link": return "<td class='bom-link-cell" + (r.linkEdited ? " overridden" : "") + "' data-f='link'" +
+        editedTitle(r.linkEdited, r.baseLink) + ">" + linkCell(r.link) + "</td>";
       case "ds":
         var nn = (r.dsNames || []).length;
-        if (nn) return "<td class='ds-cell'><button class='ds-view' data-lib='" + esc(r.libraryId || "") + WE.i18n.t("' title='데이터시트 보기'>📎 ") + nn + "</button></td>";
+        if (nn) return "<td class='ds-cell'><button class='ds-view' data-lib='" + esc(r.libraryId || "") + "' data-pub='" + esc(r.publicId || "") + WE.i18n.t("' title='데이터시트 보기'>📎 ") + nn + "</button></td>";
         if (r.libraryId) return "<td class='ds-cell'><button class='ds-add' data-lib='" + esc(r.libraryId) + WE.i18n.t("' title='데이터시트 첨부'>＋</button></td>");
         return "<td class='ds-cell'></td>";
     }
@@ -1805,7 +2147,13 @@ WE.app = (function () {
       else attrs += " data-manid='" + esc(r.manId) + "'";
       html += "<tr class='" + (r.kind === "manual" ? "manual" : "") + "' " + attrs + ">";
       html += WE.i18n.t("<td class='bom-gutter'><span class='row-grip' draggable='true' title='드래그로 행 이동'>⠿</span>") +
-        (r.kind === "manual" ? WE.i18n.t("<button class='row-del' title='행 삭제'>×</button>") : "") + "</td>";
+        (r.kind === "manual" ? WE.i18n.t("<button class='row-del' title='행 삭제'>×</button>") : "") +
+        // 되돌리기 — 자동집계 행에만. 고친 것이 없으면 흐리게 두어 '되돌릴 게 없음'을 보여준다
+        (r.kind === "auto"
+          ? "<button class='row-reset" + (bomRowEdited(r) ? " on" : "") + "'" +
+            (bomRowEdited(r) ? "" : " disabled") +
+            " title='" + esc(WE.i18n.t("부품 정보에 설정한 기본값으로 되돌리기")) + "'>↺</button>"
+          : "") + "</td>";
       html += "<td class='num'>" + r.no + "</td>";
       cols.forEach(function (col) { html += bomCellHtml(col, r); });
       html += "</tr>";
@@ -1821,12 +2169,47 @@ WE.app = (function () {
     });
     html += "</tr></tbody>";
     t.innerHTML = html;
+    화면채우기(document.getElementById("bomView"));   // 행 수가 바뀌면 여백도 다시
   }
 
   function esc(s) {
     return String(s == null ? "" : s).replace(/[&<>"]/g, function (c) {
       return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c];
     });
+  }
+
+  // BOM 사용자 수정값 저장 — 빈 값이면 지워서 부품 기본값으로 되돌린다(단가와 같은 규칙)
+  function setBomEdit(key, field, text) {
+    var proj = WE.model.project;
+    if (!proj.bomEdit) proj.bomEdit = {};
+    if (text === "") {
+      if (proj.bomEdit[key]) {
+        delete proj.bomEdit[key][field];
+        if (!Object.keys(proj.bomEdit[key]).length) delete proj.bomEdit[key];
+      }
+      return;
+    }
+    if (!proj.bomEdit[key]) proj.bomEdit[key] = {};
+    proj.bomEdit[key][field] = text;
+  }
+  // 행 되돌리기 — 이 배선도에서 고친 이름·스펙·링크·단가를 모두 지우고 부품 기본값으로.
+  // 예전 프로젝트가 부품 인스턴스에 들고 있던 값도 함께 지워야 실제로 기본값이 나온다.
+  function resetBomRow(key) {
+    var proj = WE.model.project;
+    if (proj.bomEdit) delete proj.bomEdit[key];
+    if (proj.bomPrice) delete proj.bomPrice[key];
+    WE.model.allComponents().forEach(function (c) {
+      if ((c.libraryId || c.publicId || ("name:" + c.name)) !== key) return;
+      var lib = componentPart(c);
+      if (lib && c.bomName) c.name = lib.name;   // 캔버스 이름표도 부품 이름으로 되돌린다
+      delete c.bomName; delete c.bomSpec; delete c.bomLink;
+    });
+    WE.render.renderAll();
+    renderBOMView();
+  }
+  // 이 행에 되돌릴 사용자 수정이 하나라도 있는가 (↺ 버튼 활성 여부)
+  function bomRowEdited(r) {
+    return !!(r.nameEdited || r.specEdited || r.linkEdited || r.overridden);
   }
 
   function commitBomCell(td) {
@@ -1851,20 +2234,19 @@ WE.app = (function () {
       if (val === "") delete WE.model.project.bomPrice[pkey];
       else WE.model.project.bomPrice[pkey] = n(val);
     } else {
-      var libId = tr.dataset.lib;
-      if (libId) {
-        var patch = {}; patch[f] = text;   // 이름·스펙·링크는 라이브러리에 저장
-        WE.library.updatePart(libId, patch);
-      } else {
-        var key = tr.dataset.key;
-        WE.model.allComponents().forEach(function (c) {   // 전체 시트 — 다른 시트 부품 이름표도 갱신
-          if ((c.libraryId ? c.libraryId : "name:" + c.name) !== key) return;
-          if (f === "name") c.name = text;
-          else if (f === "spec") c.bomSpec = text;
-          else if (f === "link") c.bomLink = text;
-        });
-        if (f === "name") WE.render.renderAll();
-      }
+      // 이름·스펙·링크는 '이 배선도에만' 덮어쓴다. 부품 정보(라이브러리)는 건드리지 않는다.
+      // 그래야 우리가 부품 기본값(어필리에이트 링크 등)을 갱신해도 사용자가 넣은 값이 안 밀린다.
+      // 되돌리려면 행의 ↺ 버튼. 단가(bomPrice)와 같은 방식이다.
+      var key = tr.dataset.key;
+      setBomEdit(key, f, text);
+      // 예전 프로젝트가 부품 인스턴스에 들고 있던 값은 정리한다 — 안 지우면 ↺ 를 눌러도 그게 남아 되살아난다
+      WE.model.allComponents().forEach(function (c) {
+        if ((c.libraryId || c.publicId || ("name:" + c.name)) !== key) return;
+        if (f === "name") { c.name = text; delete c.bomName; }
+        else if (f === "spec") delete c.bomSpec;
+        else if (f === "link") delete c.bomLink;
+      });
+      if (f === "name") WE.render.renderAll();
     }
     renderBOMView();
   }
@@ -1928,11 +2310,17 @@ WE.app = (function () {
     WE.model.project.bomColW[key] = Math.max(40, Math.ceil(maxW) + extra);
     saveDefaultLayout(); renderBOMView();
   }
-  // CSV 내보내기
-  function exportBomCSV() {
+  // ---- BOM·결선표 내보내기 (CSV · Excel) ----
+  /* 내보내기 표 만들기 — CSV 와 Excel 이 **같은 행 데이터**를 쓴다.
+     예전에는 CSV 만 있어서 이 안에 다 있었는데, 엑셀을 붙이면서 둘로 갈라졌다.
+     행 만드는 규칙이 두 벌이 되면 한쪽만 고쳐 표가 서로 달라진다. (2026-09-06)
+
+     숫자는 숫자 그대로 둔다 — 엑셀에서 합계·정렬이 되려면 문자열이면 안 된다.
+     CSV 쪽은 어차피 문자로 찍히므로 손해가 없다. */
+  function bomExportRows() {
     var data = bomData(), cols = visibleCols();
-    function cell(v) { v = (v == null ? "" : String(v)); return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; }
-    var lines = [["No"].concat(cols.map(function (c) { return c.label; })).map(cell).join(",")];
+    var head = ["No"].concat(cols.map(function (c) { return c.label; }));
+    var rows = [];
     data.rows.forEach(function (r) {
       var row = [r.no];
       cols.forEach(function (c) {
@@ -1946,7 +2334,7 @@ WE.app = (function () {
         else if (c.id === "spec") row.push(r.spec);
         else row.push("");
       });
-      lines.push(row.map(cell).join(","));
+      rows.push(row);
     });
     var tot = [""];
     cols.forEach(function (c) {
@@ -1955,13 +2343,66 @@ WE.app = (function () {
       else if (c.id === "sum") tot.push(data.total);
       else tot.push("");
     });
-    lines.push(tot.map(cell).join(","));
-    var csv = "﻿" + lines.join("\r\n");   // BOM: 엑셀 한글 깨짐 방지
-    var blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    rows.push(tot);
+    return { head: head, rows: rows };
+  }
+
+  /* 한 칸을 CSV 규격으로 감싼다 — 쉼표·따옴표·줄바꿈이 든 값이 표를 깨뜨린다 */
+  function csvCell(v) {
+    v = (v == null ? "" : String(v));
+    return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v;
+  }
+
+  /* CSV 파일로 내려받기. 앞의 BOM(\ufeff)은 엑셀에서 한글이 깨지지 않게 하는 표식이다. */
+  function csvDownload(filename, table) {
+    var lines = [table.head.map(csvCell).join(",")];
+    table.rows.forEach(function (r) { lines.push(r.map(csvCell).join(",")); });
+    var blob = new Blob(["\ufeff" + lines.join("\r\n")], { type: "text/csv;charset=utf-8" });
     var url = URL.createObjectURL(blob), a = document.createElement("a");
-    a.href = url; a.download = (WE.model.project.meta.name || "BOM") + "_BOM.csv";
+    a.href = url; a.download = filename;
     document.body.appendChild(a); a.click(); document.body.removeChild(a);
     setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+  }
+
+  /* 표 내보내기는 Pro 전용이다 (2026-09-06).
+     화면에서 보는 것·인쇄하는 것은 무료로 그대로 둔다 — 막는 것은 '파일로 빼는 것'뿐이다.
+
+     ⚠ 기준이 limited() 인 이유 (watermark() 와 일부러 다르다).
+        limited() 는 FREE_LIMIT 을 함께 본다. 심사 기간에는 그 값이 false 라
+        아무도 안 막힌다 — 그게 맞다. 아직 실결제가 안 되는 때(포트원 테스트 채널)
+        내보내기를 막으면 "막히는데 살 수는 없는" 상태가 되고, 그건 FREE_LIMIT 을
+        만든 이유 그 자체다(js/flags.js). 개수 한도만 그 규칙을 따르고 내보내기는
+        안 따르면 같은 실수를 다시 하는 것이다.
+
+        워터마크는 반대로 isPro() 를 본다 — 그건 **막는 것이 아니라** 결과물에
+        서명을 남기는 것이라, 심사 기간에도 남겨야 Pro 의 값어치가 보인다.
+
+     ⚠ 실채널로 넘어가면서 FREE_LIMIT 을 true 로 되돌리면 이 차단도 함께 켜진다.
+        스위치가 하나라 되돌리는 것을 잊을 수가 없다. */
+  function 내보내기막힘() {
+    if (!WE.pro || !WE.pro.limited()) return false;
+    if (WE.app && WE.app.notice) {
+      WE.app.notice(
+        WE.i18n.t("Pro 전용 기능입니다"),
+        WE.i18n.t("BOM·결선표를 CSV·엑셀 파일로 내보내는 것은 Pro 이용권이 필요합니다.")
+        + "\n\n"
+        + WE.i18n.t("화면에서 보고 인쇄하는 것은 무료로 그대로 쓸 수 있습니다.")
+      );
+    }
+    return true;
+  }
+
+  function exportBomCSV() {
+    if (내보내기막힘()) return;
+    csvDownload((WE.model.project.meta.name || "BOM") + "_BOM.csv", bomExportRows());
+  }
+
+  /* 엑셀(.xlsx) — CSV 와 같은 표를 진짜 엑셀 파일로 낸다(js/xlsx.js). */
+  function exportBomXlsx() {
+    if (내보내기막힘()) return;
+    var t = bomExportRows();
+    WE.xlsx.download((WE.model.project.meta.name || "BOM") + "_BOM.xlsx",
+      [{ name: "BOM", headRows: 1, rows: [t.head].concat(t.rows) }]);
   }
   function syncBomControls() {
     var p = WE.model.project;
@@ -2061,6 +2502,10 @@ WE.app = (function () {
       var dsv = e.target.closest(".ds-view");
       if (dsv) {
         var lp = WE.library.get(dsv.dataset.lib);
+        if (!lp && dsv.dataset.pub) {
+          var pc = WE.model.allComponents().filter(function (c) { return c.publicId === dsv.dataset.pub; })[0];
+          lp = pc && pc.publicSnapshot;
+        }
         if (lp && lp.datasheets && lp.datasheets.length) openDatasheetViewer(lp.datasheets, lp.name, 0);
         return;
       }
@@ -2068,6 +2513,12 @@ WE.app = (function () {
       if (dsa) { openLibEdit(dsa.dataset.lib); return; }
       var cdel = e.target.closest(".col-del");
       if (cdel) { removeBomColumn(cdel.dataset.col); return; }
+      var rst = e.target.closest(".row-reset");
+      if (rst) {
+        if (rst.disabled) return;
+        resetBomRow(rst.closest("tr").dataset.key);
+        return;
+      }
       var del = e.target.closest(".row-del");
       if (del) {
         var mid = del.closest("tr").dataset.manid;
@@ -2178,8 +2629,10 @@ WE.app = (function () {
 
     // 툴바
     document.getElementById("bomExportCsv").addEventListener("click", exportBomCSV);
+    document.getElementById("bomExportXlsx").addEventListener("click", exportBomXlsx);
     document.getElementById("bomExportWires").addEventListener("click", exportWireListCSV);
     document.getElementById("wlExportCsv").addEventListener("click", exportWireListCSV);
+    document.getElementById("wlExportXlsx").addEventListener("click", exportWireListXlsx);
     var cbs = document.querySelectorAll("#bomColCfg input[data-col]");
     for (var j = 0; j < cbs.length; j++) {
       cbs[j].addEventListener("change", function (e) {
@@ -2236,7 +2689,7 @@ WE.app = (function () {
   function buildPowerSummary() {
     var loadW = 0, effs = [], battWh = 0, battV = 0, hasBatt = false, hasLoad = false;
     WE.model.allComponents().forEach(function (c) {   // BOM과 같은 이유로 전체 시트
-      var lib = c.libraryId ? WE.library.get(c.libraryId) : null;
+      var lib = componentPart(c);
       if (!lib) return;
       var role = lib.role || "load";
       if (role === "battery") {
@@ -2332,10 +2785,84 @@ WE.app = (function () {
     document.getElementById("btnRedo").addEventListener("click", function () { WE.history.doRedo(); });
   }
 
+  /* ⊘ 숨기기 — 배선이 안 붙은 단자를 이 도면(현재 시트)에서 한 번에 숨긴다. (2026-09-07)
+
+     예전에는 부품마다 단자 배치 창을 열고 "전체 미사용" 을 눌러야 했다. 부품이 열댓 개면
+     그 짓을 열댓 번 한다. 실제 작업 흐름이 "다 그림 → 미연결 확인 → 정리" 라서
+     점검 버튼 바로 옆이 제자리다.
+
+     ⚠ 연결된 단자는 애초에 안 숨겨진다 — WE.model.setTerminalVisible 이 거부한다.
+        그래서 여기서 따로 걸러낼 필요가 없고, 걸러내면 규칙이 두 곳에 생겨 갈라진다.
+
+     ⚠ 범위는 **현재 시트**다. 옆의 미연결 확인이 현재 시트만 보므로 맞췄다 —
+        나란히 둔 두 버튼이 서로 다른 범위를 보면 "확인한 것과 숨긴 것이 다른" 상태가 된다. */
+  /* 이 버튼이 숨겨 둔 단자가 있는가 — 있으면 다음 누름은 '도로 보이기' 가 된다. */
+  function 숨긴것있나() {
+    return WE.model.project.components.some(function (c) {
+      return (c.terminals || []).some(function (t) { return t.visible === false && t.autoHidden; });
+    });
+  }
+  function syncHideUnusedBtn() {
+    var b = document.getElementById("btnHideUnused"); if (!b) return;
+    var 켜짐 = 숨긴것있나();
+    b.classList.toggle("active", 켜짐);
+    b.setAttribute("aria-pressed", 켜짐 ? "true" : "false");
+  }
+
+  function hideUnusedTerminals() {
+    /* 한 번 더 누르면 되돌린다 — 실수로 눌렀을 때 되찾는 길을 버튼 자신이 갖고 있어야 한다.
+       (2026-09-08 고원빈)
+
+       ⚠ "전부 다시 보이게" 로 하면 안 된다. 사용자가 **예전에 일부러 숨겨 둔 단자**까지
+          같이 켜져서, 되돌리는 것이 아니라 남의 작업을 망치는 것이 된다.
+          그래서 이 버튼이 숨긴 것만 autoHidden 으로 표시해 두고 그것만 되돌린다. */
+    if (숨긴것있나()) {
+      var 되살림 = 0;
+      WE.model.project.components.forEach(function (c) {
+        (c.terminals || []).forEach(function (t) {
+          if (t.visible === false && t.autoHidden && WE.model.setTerminalVisible(c, t.id, true)) 되살림++;
+        });
+      });
+      WE.render.renderAll(); refreshProps(); syncHideUnusedBtn(); syncCheckTermHint();
+      setHint(WE.i18n.t("숨겼던 단자 ") + 되살림 + WE.i18n.t("개를 도로 켰습니다"),
+        WE.i18n.t("이 버튼으로 숨긴 것만 되돌립니다. 직접 끄신 단자는 그대로 둡니다."));
+      return;
+    }
+
+    var 숨김 = 0, 부품 = 0;
+    WE.model.project.components.forEach(function (c) {
+      var 이번 = 0;
+      (c.terminals || []).forEach(function (t) {
+        if (t.visible === false) return;                       // 이미 숨겨져 있다
+        if (WE.model.setTerminalVisible(c, t.id, false)) {      // 연결된 것은 여기서 거부된다
+          t.autoHidden = true;                                  // 이 버튼이 숨긴 것 — 되돌릴 대상
+          이번++;
+        }
+      });
+      if (이번) { 숨김 += 이번; 부품++; }
+    });
+    if (!숨김) {
+      setHint(WE.i18n.t("숨길 단자가 없습니다 — 보이는 단자가 모두 이어져 있습니다"));
+      return;
+    }
+    WE.render.renderAll();
+    refreshProps();
+    syncHideUnusedBtn();
+    /* 미연결 확인이 켜져 있었으면 끈다 (2026-09-08 고원빈).
+       숨기고 나면 확인할 것이 화면에 없다 — 켜 둔 채로 두면 아무것도 강조되지 않는
+       빈 점검 상태가 남고, "미연결이 없구나" 로 잘못 읽힌다.
+       ⚠ setHint 보다 **먼저** 부른다 — 이 함수가 "미연결 확인 끔" 을 상태줄에 쓰므로,
+          뒤에 두면 방금 무슨 일을 했는지 알려주는 문구를 덮어쓴다. */
+    if (WE.model.ui.checkTerminals) toggleCheckTerminals();
+    setHint(WE.i18n.t("안 쓰는 단자 ") + 숨김 + WE.i18n.t("개를 숨겼습니다 · 부품 ") + 부품 + WE.i18n.t("개에서"),
+      WE.i18n.t("한 번 더 누르면 도로 보입니다. Ctrl+Z 로도 되돌아갑니다."));
+  }
+
   // ---- 모드 (선택 / 배선 / 라벨 / 텍스트) ----
   function bindModes() {
     // ⚠ 미연결 확인 — 켜 두는 토글. 배타적 모드가 아니라 어느 모드에서든 켤 수 있다.
     document.getElementById("btnCheckTerm").addEventListener("click", toggleCheckTerminals);
+    document.getElementById("btnHideUnused").addEventListener("click", hideUnusedTerminals);
     document.getElementById("modeSelect").addEventListener("click", function () { setMode("select"); });
     document.getElementById("modeWire").addEventListener("click", function () { setMode("wire"); });
     document.getElementById("modeLabel").addEventListener("click", function () { setMode("label"); });
@@ -2351,7 +2878,12 @@ WE.app = (function () {
     document.body.classList.toggle("wire-mode", mode === "wire");
     document.body.classList.toggle("text-mode", mode === "text");
     document.body.classList.toggle("label-mode", mode === "label");
+    /* 라벨 모드에서만 우측 패널에 '다음에 붙일 글자' 를 보인다.
+       ⚠ 들어갈 때마다 새로 채운다 — 그 도면에 이미 붙은 번호를 보고 다음 값을 고른다. */
+    if (mode === "label") 라벨칸채우기();
+    refreshProps();
     if (WE.render.setLabelPreview) WE.render.setLabelPreview(null);   // 모드 전환 시 미리보기 정리
+    if (WE.render.setTextPreview) WE.render.setTextPreview(null);
     if (mode !== "select") { WE.model.clearSelection(); WE.render.renderOverlay(); refreshProps(); }
     // 짧은 안내를 보여주고, 원래의 자세한 설명은 툴팁으로 남긴다
     if (mode === "wire") {
@@ -2366,6 +2898,44 @@ WE.app = (function () {
     } else {
       setHint("");
     }
+  }
+
+  /* ---- 라벨 모드의 '다음에 붙일 글자' 칸 (2026-09-09 고원빈) ----
+     "라벨 버튼을 누르면 그 상태에서 Q1 R1 이런 식으로 바로 설정할 수 있게"
+     "W1 W2 W3 으로 하다가 갑자기 Q1 Q2 Q3 이렇게 될 수도 있다"
+     "꼭 저런 식이 아니라 그냥 텍스트만 입력할 수도 있고"
+
+     ⚠ '접두사 설정' 이 아니라 **다음에 붙일 글자 그 자체**를 보여 준다. 그래야 도면 중간에
+        규칙이 바뀌어도 칸만 고쳐 쓰면 되고, 숫자 없는 자유 글자도 그대로 쓸 수 있다.
+     ⚠ 값은 어디에도 저장하지 않는다. 라벨 모드에 들어갈 때마다 이미 붙은 번호를 보고
+        다음 값을 채운다 — 도면을 열 때마다 그 도면의 규칙을 따라간다. */
+  function 라벨칸() { return document.getElementById("labelNext"); }
+
+  function 라벨칸채우기() {
+    var el =라벨칸(); if (!el) return;
+    el.value = nextWireLabel();
+  }
+
+  // 지금 붙일 글자. 칸이 비어 있으면 자동 번호로 되돌린다.
+  function 붙일라벨() {
+    var el = 라벨칸();
+    var v = el ? (el.value || "").trim() : "";
+    return v || nextWireLabel();
+  }
+
+  /* 하나 붙인 뒤 다음 값. 끝이 숫자면 +1, 아니면 그대로.
+     ⚠ 그대로 두는 쪽이 맞다 — "전원" 같은 글자를 억지로 올릴 수는 없고,
+        같은 글자를 여러 배선에 붙이는 것도 정상적인 쓰임이다. */
+  function 라벨칸올리기() {
+    var el = 라벨칸(); if (!el) return;
+    var m = /^(.*?)(\d+)$/.exec((el.value || "").trim());
+    if (!m) return;
+    var 다음 = String(parseInt(m[2], 10) + 1);
+    // 자릿수를 맞춰 쓰고 있었다면(W01) 그대로 이어간다
+    if (m[2].length > 1 && m[2][0] === "0") {
+      while (다음.length < m[2].length) 다음 = "0" + 다음;
+    }
+    el.value = m[1] + 다음;
   }
 
   // 다음 자동 라벨 번호: 사용자가 마지막에 쓴 접두사(W/B/C 등)를 이어감 — "B3"까지 썼으면 "B4"
@@ -2404,13 +2974,14 @@ WE.app = (function () {
   }
   function setZoom(z, clientX, clientY) {
     var canvas = document.getElementById("canvas"), wrap = document.getElementById("canvasWrap");
+    var sz = WE.geometry.canvasSize();          // 페이지마다 다를 수 있다(2026-09-08)
     var before = canvas.getBoundingClientRect();
-    var scaleOld = before.width / 1600;
+    var scaleOld = before.width / sz.width;
     if (clientX == null) { var wr = wrap.getBoundingClientRect(); clientX = wr.left + wr.width / 2; clientY = wr.top + wr.height / 2; }
     var px = (clientX - before.left) / scaleOld, py = (clientY - before.top) / scaleOld;
     _zoom = Math.max(0.15, Math.min(7, z));
-    canvas.style.width = (1600 * _zoom) + "px";
-    canvas.style.height = (900 * _zoom) + "px";
+    canvas.style.width = (sz.width * _zoom) + "px";
+    canvas.style.height = (sz.height * _zoom) + "px";
     var after = canvas.getBoundingClientRect();
     wrap.scrollLeft += (after.left + px * _zoom) - clientX;   // 커서 지점 고정
     wrap.scrollTop += (after.top + py * _zoom) - clientY;
@@ -2426,9 +2997,17 @@ WE.app = (function () {
     var mark = document.getElementById("canvasMark");
     var canvas = document.getElementById("canvas"), wrap = document.getElementById("canvasWrap");
     if (!mark || !canvas || !wrap) return;
-    // BOM·배선 리스트는 같은 스크롤 영역 안에서 도면 아래에 붙는다. 도면이 화면에 조금 남아 있어도
-    // 그때는 '작업창'이 아니므로, 겹침을 재지 말고 현재 보고 있는 뷰로 판단한다.
-    if (canvas.hidden || _view !== "wiring") { mark.style.display = "none"; return; }
+    // Pro 는 각인을 안 쓴다 (2026-09-06). 화면 각인도 같이 뗀다 — 결과물에는 안 나오는데
+    // 작업 화면에만 남아 있으면 "샀는데 로고가 그대로네" 로 읽힌다.
+    if (WE.pro && !WE.pro.watermark()) { mark.hidden = true; return; }
+    mark.hidden = false;
+    // BOM·배선 리스트는 같은 스크롤 영역 안에서 도면 아래에 붙는다. 탭을 바꾸면 도면 대부분이
+    // 스크롤로 밀려나가 아래 겹침 계산이 자연히 '안 보임'으로 판정하지만, BOM·배선 리스트를
+    // 연 채로 위로 스크롤해 도면이 다시 보이면 각인도 같이 있어야 한다 — 그래서 _view 로
+    // 미리 끄지 않고 실제 겹침만으로 판단한다.
+    // (2026-09-03 수정 — 예전엔 _view !== "wiring" 이면 무조건 껐다. BOM 화면에서 스크롤을
+    //  올려 도면이 보여도 각인이 안 나와, 그 상태를 캡처하면 출처 표시가 빠지는 문제였다.)
+    if (canvas.hidden) { mark.style.display = "none"; return; }
     mark.style.display = "";
     var c = canvas.getBoundingClientRect(), w = wrap.getBoundingClientRect(), p = wrap.offsetParent;
     var base = p ? p.getBoundingClientRect() : { left: 0, bottom: window.innerHeight };
@@ -2462,6 +3041,11 @@ WE.app = (function () {
     }
     wrap.addEventListener("scroll", ping);
     window.addEventListener("resize", ping);
+    // 여백은 창 높이에 딸린 값이라 창이 바뀌면 다시 잰다 (스크롤 때는 잴 필요가 없다)
+    window.addEventListener("resize", function () {
+      화면채우기(document.getElementById("bomView"));
+      화면채우기(document.getElementById("wireListView"));
+    });
     // 확대·축소는 canvas 의 width/height 를, 비고 바 펼침은 wrap 의 높이를 바꾼다.
     // 크기 변화를 직접 보면 각 기능의 구현을 몰라도 자리를 맞출 수 있다.
     if (window.ResizeObserver) {
@@ -2472,9 +3056,267 @@ WE.app = (function () {
   }
   function fitZoom() {
     var wrap = document.getElementById("canvasWrap");
-    var z = Math.min((wrap.clientWidth - 60) / 1600, (wrap.clientHeight - 60) / 900);
+    var sz = WE.geometry.canvasSize();
+    var z = Math.min((wrap.clientWidth - 60) / sz.width, (wrap.clientHeight - 60) / sz.height);
     setZoom(z);
   }
+
+  /* 용지 크기가 바뀌었을 때 화면을 통째로 맞춘다.
+     ⚠ viewBox 를 같이 고쳐야 한다 — 이게 좌표계라서, 안 고치면 부품이 늘어나 보인다.
+     ⚠ 인쇄 전용 각인(#canvasMarkPrint)도 우하단에 붙어 있어야 하므로 함께 옮긴다.
+     ⚠ @page 방향도 바꾼다 — 세로 도면을 가로 용지에 인쇄하면 반이 빈다. */
+  /* 인쇄 용지 방향. 세로 도면을 가로 용지에 뽑으면 반이 빈다.
+
+     ⚠ CSS 변수로는 못 한다 — 크롬은 @page 안에서 var() 를 풀지 않는다.
+        규칙에 글자로는 남아 있어서 "썼으니 되겠지" 하고 넘어가기 딱 좋다(2026-09-08에 걸림).
+        그래서 방향만 **글자 그대로** 규칙에 써 넣는다. 여백(margin)은 styles.css 에 그대로 둔다. */
+  function setPageOrient(방향) {
+    var st = document.getElementById("pageOrient");
+    if (!st) {
+      st = document.createElement("style");
+      st.id = "pageOrient";
+      document.head.appendChild(st);
+    }
+    /* 세 규칙을 **한 덩어리로** 넣는다.
+       ⚠ 이름 없는 @page 는 모든 쪽에 걸린다. 이름 붙은 규칙(pr-wide/pr-tall)이 그것을
+          이겨야 하는데, 둘이 다른 파일에 흩어져 있으면 나중에 온 쪽이 이긴다.
+          같은 style 안에 **이름 없는 것 먼저, 이름 있는 것 나중에** 두면 순서가 확실하다.
+       ⚠ 용지를 A4 로 박는다. 예전에는 방향만 적어서 브라우저 기본 용지(레터 279×216mm)가
+          나왔다 — 이 앱의 인쇄 배치는 처음부터 A4(210×297) 기준이라 그만큼 어긋난다
+          (2026-09-10 고원빈: "배치가 맞지 않는 것 같아"). 실측으로 확인했다. */
+    var 원하는 =
+      "@page { size: A4 " + 방향 + "; margin: 8mm; }" +
+      "@page pr-wide { size: A4 landscape; margin: 8mm; }" +
+      "@page pr-tall { size: A4 portrait; margin: 8mm; }";
+    if (st.textContent !== 원하는) st.textContent = 원하는;
+  }
+
+  /* ── 인쇄했을 때 도면이 차지할 칸 (2026-09-08) ─────────────────────
+     종이는 A4 로 본다. 브라우저는 실제 용지를 알려 주지 않고, 이 프로그램의
+     인쇄 레이아웃은 처음부터 A4 로 맞춰 다듬어 왔다.
+
+       인쇄 가능 폭  = 210 − 여백 8×2 = 194mm  (세로일 때. 가로면 297 − 16 = 281)
+       머리글·범례 몫 = 35mm
+
+     이 35mm 는 인쇄 매체에서 **실제로 재서** 나온 값이다(tests/probe_print.mjs) —
+       제목칸 7.9 + 제목 아래 여백 3 + 밴드 위 여백 3 + 범례 밴드 19.4 = 33.3mm
+     범례 밴드는 BAND_MAX_LINES(=4줄, js/pdf.js) 로 묶여 있어 19.4mm 가 천장이다.
+     비고를 아무리 길게 써도 더 커지지 않으므로 예산이 흔들리지 않는다.
+     남은 1.7mm 는 반올림·글꼴 차이 몫이다.
+
+     ⚠ 왜 하필 35 인가 — 가로(1600×900) 출력이 예전과 **한 치도 달라지면 안 되기** 때문이다.
+        그 배치는 수십 번 다듬어 확정한 것이다. 35mm 까지는 가로 가용 높이가 159mm 로
+        1600×900 이 필요로 하는 158.1mm 보다 커서 폭이 먼저 걸린다 → 결과가 그대로다.
+        36mm 로 올리면 158mm 가 되어 높이가 먼저 걸리고 도면이 0.1mm 줄어든다.
+        즉 **가로를 안 건드리면서 세로 여유를 가장 많이 주는 값**이 35다.
+
+     ⚠ 남은 위험: 도면 제목(프로젝트 이름)이 길어 두 줄로 접히면 제목칸이 6mm 쯤 커져
+        1.7mm 여유를 넘어선다. 이건 예전부터 있던 위험이고(가로도 여유가 2.6mm 뿐이었다)
+        이번에 더 나빠지지는 않았다. 실제로 겪으면 그때 제목을 한 줄로 묶어야 한다.
+
+     ⚠ 폭·높이를 **둘 다** 준다. 폭만 100% 로 두면 비율이 안 맞을 때
+        테두리는 지면 끝까지 가고 도면만 가운데로 쪼그라든다(= 신고된 증상). */
+  var 종이_짧은쪽 = 210, 종이_긴쪽 = 297, 종이여백 = 8, 머리글과범례 = 35;
+  function printBox(sz) {
+    var 세로냐 = sz.height > sz.width;
+    var 폭 = (세로냐 ? 종이_짧은쪽 : 종이_긴쪽) - 종이여백 * 2;
+    var 높이 = (세로냐 ? 종이_긴쪽 : 종이_짧은쪽) - 종이여백 * 2 - 머리글과범례;
+    var 배율 = Math.min(폭 / sz.width, 높이 / sz.height);
+    return { w: sz.width * 배율, h: sz.height * 배율 };
+  }
+  function setPrintSize(sz) {
+    var svg = document.getElementById("canvas"); if (!svg) return;
+    var b = printBox(sz);
+    // 인쇄에서만 쓰이는 값이다 — 화면 크기는 setZoom 이 정한다(@media print 에서만 읽는다).
+    // ⚠ 인라인으로 둬야 한다: 여러 장 인쇄는 #canvas 를 시트마다 복제하는데(js/pdf.js),
+    //    복제본이 자기 시트의 크기를 그대로 들고 가야 한다.
+    svg.style.setProperty("--print-w", (Math.round(b.w * 10) / 10) + "mm");
+    svg.style.setProperty("--print-h", (Math.round(b.h * 10) / 10) + "mm");
+  }
+
+  function applyCanvasSize() {
+    var sz = WE.geometry.canvasSize();
+    var svg = document.getElementById("canvas");
+    if (svg) svg.setAttribute("viewBox", "0 0 " + sz.width + " " + sz.height);
+    var mk = document.getElementById("canvasMarkPrint");
+    if (mk) { mk.setAttribute("x", sz.width - 14); mk.setAttribute("y", sz.height - 14); }
+    setPageOrient(sz.height > sz.width ? "portrait" : "landscape");
+    setPrintSize(sz);
+    if (WE.render.refreshWatermark) WE.render.refreshWatermark();   // 타일 범위가 달라진다
+    setZoom(_zoom);                                                  // 픽셀 크기 다시 계산
+  }
+  /* ── 용지 크기 (페이지마다 다르게) ────────────────────────────────
+     고원빈 확정 2026-09-08:
+       · 페이지(시트) 단위다 — 파일 단위가 아니다
+       · 부품은 **옮기지 않는다.** 자리가 모자라면 가장자리로 밀어 넣기만 한다
+       · Ctrl+Z 로 되돌아가야 한다
+
+     ⚠ 목록에 "A4" 를 함께 둔다. 지금 쓰던 1600×900 은 사실 16:9 라
+        A4 용지에 인쇄하면 위아래가 남는다. 종이에 꽉 채우고 싶은 사람을 위해 √2 비율을 준다. */
+  /* 용지는 둘뿐이다 — 둘 다 **A4 를 꽉 채운다** (2026-09-10 고원빈).
+
+     예전에는 "A4 가로/세로" 를 따로 뒀다. 기본 세로(900×1600)가 A4 에 인쇄하면 좌우가
+     많이 남아서, 종이를 채우고 싶은 사람에게 √2 비율을 따로 준 것이다.
+     그런데 목록에 비슷한 항목이 넷이면 무엇을 골라야 하는지가 오히려 어려워진다.
+     "세로형에서 여백이 많으면 그냥 에디터에서 가로 사이즈를 키우면 되는 거 아닌가" —
+     맞는 말이라 **세로 자체를 채우는 비율로 바꾸고 A4 항목을 없앴다.**
+
+     숫자의 근거 (printBox 참고, A4·여백 8mm·머리글과범례 35mm):
+       가로 — 도면 칸 281 × 159mm. 1600×900 → 배율 min(281/1600, 159/900)=0.17563
+              → 281.0 × 158.1mm. 폭을 꽉 채운다. **이 배치는 건드리지 않는다.**
+       세로 — 도면 칸 194 × 246mm(비율 0.7886). 1262×1600 = 0.7888
+              → 배율 min(194/1262, 246/1600)=0.15372 → 194.0 × 246.0mm. 딱 맞는다.
+              (900×1600 은 0.5625 라 가로를 71% 만 썼다 — 그 29% 가 신고된 여백이다)
+
+     ⚠ 예전에 900×1600 이나 1131×1600 으로 저장해 둔 도면은 **그대로 둔다.**
+        목록에 없는 크기는 지금용지()가 null 을 주고 단추에 숫자로 표시된다. */
+  var PAGE_SIZES = [
+    { id: "wide",     이름: "가로형",    w: 1600, h: 900,  아이콘: "▭" },
+    { id: "tall",     이름: "세로형",    w: 1262, h: 1600, 아이콘: "▯" }
+  ];
+  function 지금용지() {
+    var sz = WE.model.sheetSize();
+    for (var i = 0; i < PAGE_SIZES.length; i++) {
+      if (PAGE_SIZES[i].w === sz.width && PAGE_SIZES[i].h === sz.height) return PAGE_SIZES[i];
+    }
+    return null;   // 목록에 없는 크기(예전 파일이 손으로 바꾼 값) — 그대로 존중한다
+  }
+  function syncPageSizeBtn() {
+    var b = document.getElementById("btnPageSize"); if (!b) return;
+    var cur = 지금용지(), sz = WE.model.sheetSize();
+    b.textContent = cur ? (cur.아이콘 + " " + cur.이름)
+                        : ((sz.height > sz.width ? "▯ " : "▭ ") + sz.width + "×" + sz.height);
+    b.title = "이 페이지의 용지 — " + sz.width + "×" + sz.height +
+              " · 페이지마다 다르게 둘 수 있습니다";
+  }
+  function buildPageSizeMenu() {
+    var m = document.getElementById("pageSizeMenu"); if (!m) return;
+    var sz = WE.model.sheetSize();
+    m.innerHTML = "";
+    PAGE_SIZES.forEach(function (p) {
+      var b = document.createElement("button");
+      b.type = "button";
+      b.className = (p.w === sz.width && p.h === sz.height) ? "on" : "";
+      /* ⚠ 예전에는 옆에 '1600×900' 같은 화면 크기를 함께 보였는데 걷어냈다. (2026-09-10)
+         사용자에게 의미가 없는 숫자다 — 고르는 기준은 '종이를 눕히나 세우나' 뿐이고,
+         두 값의 비율이 서로 달라서(각자 A4 가로·세로를 꽉 채우도록 정한 값이라 그렇다)
+         나란히 놓으면 오히려 "왜 다르지?" 하는 의문만 만든다. */
+      b.innerHTML = '<span>' + p.아이콘 + " " + esc(p.이름) + '</span>';
+      b.addEventListener("click", function () { 용지바꾸기(p.w, p.h); closePageSizeMenu(); });
+      m.appendChild(b);
+    });
+  }
+  function openPageSizeMenu() {
+    buildPageSizeMenu();
+    document.getElementById("pageSizeMenu").hidden = false;
+    document.getElementById("btnPageSize").setAttribute("aria-expanded", "true");
+    setTimeout(function () { document.addEventListener("pointerdown", pageSizeOutside, true); }, 0);
+  }
+  function closePageSizeMenu() {
+    var m = document.getElementById("pageSizeMenu"); if (!m) return;
+    m.hidden = true;
+    document.getElementById("btnPageSize").setAttribute("aria-expanded", "false");
+    document.removeEventListener("pointerdown", pageSizeOutside, true);
+  }
+  function pageSizeOutside(e) {
+    if (!e.target.closest(".canvas-size-pick")) closePageSizeMenu();
+  }
+
+  /* ⚠ 앞뒤로 commit 을 감싼다 — 이 동작 하나가 되돌리기 한 단계가 되게.
+     history 는 0.7초마다 스스로 저장하는데, 그 타이밍에 맡기면 크기 변경과
+     직전 작업이 한 단계로 뭉치거나 아예 안 남을 수 있다. 크기 변경은
+     부품 위치까지 건드리므로 **확실히 되돌아가야 한다**(고원빈 요구). */
+  function 용지바꾸기(w, h) {
+    WE.history.commit();                       // 바꾸기 **전** 상태를 확실히 남긴다
+    if (!WE.model.setSheetSize(w, h)) return;
+    applyCanvasSize();
+    WE.render.renderAll();
+    refreshProps();
+    syncPageSizeBtn();
+    WE.history.commit();                       // 이 변경을 한 단계로 확정
+    setHint(WE.i18n.t("용지를 ") + w + "×" + h + WE.i18n.t(" 로 바꿨습니다"),
+      WE.i18n.t("부품은 그대로 두고, 새 용지 밖으로 나가는 것만 가장자리로 넣었습니다. Ctrl+Z 로 되돌릴 수 있습니다."));
+  }
+  /* ── 작성일 상자를 끌어서 옮긴다 (2026-09-09 고원빈) ──────────────
+     예전에는 캔버스 위에 줄 하나(#canvasHeader)를 차지해 도면 볼 자리를 그만큼 먹었다.
+     띄우고 나니 "저 자리가 도면과 겹친다" 는 경우가 생기므로 옮길 수 있어야 한다.
+
+     ⚠ **손잡이로만** 끈다. 입력칸을 끌게 하면 날짜 글자를 선택할 수 없다.
+     ⚠ 자리는 이 브라우저에만 기억한다 — 도면이 아니라 보는 사람의 취향이다.
+        파일에 넣으면 남에게 보낼 때 그 사람 화면에서 엉뚱한 데 붙는다. */
+  var _날짜자리키 = "we_datePos";
+
+  function 날짜상자가두기() {
+    var box = document.getElementById("canvasHeader");
+    var wrap = document.getElementById("canvasWrap");
+    if (!box || !wrap || !box.style.left) return;
+    var W = wrap.clientWidth, H = wrap.clientHeight;
+    var w = box.offsetWidth, h = box.offsetHeight;
+    var x = Math.max(4, Math.min(parseFloat(box.style.left) || 0, Math.max(4, W - w - 4)));
+    var y = Math.max(4, Math.min(parseFloat(box.style.top) || 0, Math.max(4, H - h - 4)));
+    box.style.left = x + "px"; box.style.top = y + "px";
+  }
+
+  function bindDateDrag() {
+    var box = document.getElementById("canvasHeader");
+    var grip = box && box.querySelector(".fd-grip");
+    var wrap = document.getElementById("canvasWrap");
+    if (!box || !grip || !wrap) return;
+
+    // 기억해 둔 자리로 되돌린다. 없으면 CSS 기본(우측 상단) 그대로 둔다.
+    try {
+      var 저장 = JSON.parse(localStorage.getItem(_날짜자리키) || "null");
+      if (저장 && typeof 저장.x === "number" && typeof 저장.y === "number") {
+        box.style.left = 저장.x + "px"; box.style.top = 저장.y + "px"; box.style.right = "auto";
+        날짜상자가두기();
+      }
+    } catch (e) { /* 무시 — 기본 자리로 둔다 */ }
+
+    var 끄는중 = null;
+    grip.addEventListener("pointerdown", function (e) {
+      var r = box.getBoundingClientRect(), wr = wrap.getBoundingClientRect();
+      끄는중 = { dx: e.clientX - r.left, dy: e.clientY - r.top };
+      box.style.left = (r.left - wr.left) + "px";
+      box.style.top = (r.top - wr.top) + "px";
+      box.style.right = "auto";
+      box.classList.add("dragging");
+      try { grip.setPointerCapture(e.pointerId); } catch (_) {}
+      e.preventDefault();
+    });
+    grip.addEventListener("pointermove", function (e) {
+      if (!끄는중) return;
+      var wr = wrap.getBoundingClientRect();
+      box.style.left = (e.clientX - wr.left - 끄는중.dx) + "px";
+      box.style.top = (e.clientY - wr.top - 끄는중.dy) + "px";
+      날짜상자가두기();
+    });
+    function 끝() {
+      if (!끄는중) return;
+      끄는중 = null;
+      box.classList.remove("dragging");
+      try {
+        localStorage.setItem(_날짜자리키, JSON.stringify({
+          x: Math.round(parseFloat(box.style.left) || 0),
+          y: Math.round(parseFloat(box.style.top) || 0)
+        }));
+      } catch (e) { /* 저장 못 해도 이번 화면에서는 그대로 쓴다 */ }
+    }
+    grip.addEventListener("pointerup", 끝);
+    grip.addEventListener("pointercancel", 끝);
+
+    // 창을 줄이면 상자가 화면 밖으로 나갈 수 있다 — 그때마다 도로 넣는다
+    window.addEventListener("resize", 날짜상자가두기);
+  }
+
+  function bindPageSize() {
+    var b = document.getElementById("btnPageSize"); if (!b) return;
+    b.addEventListener("click", function () {
+      if (document.getElementById("pageSizeMenu").hidden) openPageSizeMenu();
+      else closePageSizeMenu();
+    });
+    syncPageSizeBtn();
+  }
+
   function updateZoomLabel() {
     document.getElementById("btnZoomLevel").textContent = Math.round(_zoom * 100) + "%";
   }
@@ -2554,7 +3396,12 @@ WE.app = (function () {
   // ---- 설정 (자동저장 등) ----
   var _settings = {
     autosaveEnabled: true, autosaveSec: 3,
-    labelFontSize: 12, labelBold: true, labelBox: true   // 부품명: 굵게 + 배경 사각블럭이 기본
+    labelFontSize: 12, labelBold: true, labelBox: true,  // 부품명: 굵게 + 배경 사각블럭이 기본
+    /* 구간 정렬로 배선을 나란히 놓을 때 줄 사이 간격(px).
+       ⚠ 도면이 아니라 **작업하는 사람**에게 딸린 값이다 — 20으로 맞춰 쓰는 사람은
+          다음 도면에서도 20을 쓴다. 그래서 파일이 아니라 여기(브라우저 설정)에 둔다.
+          남에게 파일을 줘도 그 사람이 쓰던 간격을 덮어쓰지 않는다. (2026-09-08) */
+    wireGap: 15
   };
   function loadSettings() {
     try {
@@ -2566,6 +3413,7 @@ WE.app = (function () {
         if (s.labelFontSize > 0) _settings.labelFontSize = s.labelFontSize;
         if (typeof s.labelBold === "boolean") _settings.labelBold = s.labelBold;
         if (typeof s.labelBox === "boolean") _settings.labelBox = s.labelBox;
+        if (s.wireGap >= 0) _settings.wireGap = s.wireGap;
       }
     } catch (e) { /* 무시 */ }
   }
@@ -2578,6 +3426,21 @@ WE.app = (function () {
     root.setProperty("--cmp-label-size", _settings.labelFontSize + "px");
     root.setProperty("--cmp-label-weight", _settings.labelBold ? "700" : "400");
     root.setProperty("--cmp-label-box-display", _settings.labelBox ? "inline" : "none");
+    var gapEl = document.getElementById("wireGap");
+    if (gapEl) gapEl.value = String(_settings.wireGap);
+  }
+
+  /* 간격을 고칠 때마다 기억해 둔다.
+     ⚠ 'change' 가 아니라 'input' 으로 받는다 — 화살표로 값을 올리다 창을 닫아도
+        마지막 값이 남아야 한다. change 는 포커스를 잃어야 오는데 그때는 늦다. */
+  function bindWireGap() {
+    var el = document.getElementById("wireGap"); if (!el) return;
+    el.addEventListener("input", function () {
+      var v = parseInt(el.value, 10);
+      if (!(v >= 0)) return;                 // 지우는 중(빈 칸)에는 저장하지 않는다
+      _settings.wireGap = v;
+      persistSettings();
+    });
   }
   // 첫 방문 시 샘플 프로젝트(sample.json) 자동 로드 (한 번만). 없거나 file://면 그냥 빈 화면.
   // 첫 방문자에게 샘플 프로젝트 자동 표시.
@@ -2615,12 +3478,64 @@ WE.app = (function () {
     }).catch(function () { cb(false); });
   }
 
-  // ---- 방문 안내 모달: 베타 기간이라 접속할 때마다 표시. 단 '24시간 보지 않기' 체크 시 하루 숨김 ----
+  /* ---- 방문 안내 모달 ------------------------------------------------
+     2026-09-01 고원빈 결정으로 **더 이상 띄우지 않는다.**
+
+     왜 껐나: 들어오자마자 읽을 것을 내미는 것이 진입을 막는다.
+              랜딩에서 이미 "무엇을 하는 도구인지" 를 다 말하고 들어온다.
+
+     ⚠ 기능 코드는 지우지 않고 스위치만 내렸다 (SHOW_WIRE_LIST 와 같은 방식).
+        다시 필요하면 이 값만 true 로 되돌리면 된다. HTML(#welcomeModal)도 그대로다.
+
+     ⚠ 이 모달에 있던 "이용 시 개인정보처리방침에 동의한 것으로 간주됩니다" 안내가
+        같이 사라졌다. 다만 법적 고지는 랜딩·푸터와 로그인 동의 화면이 맡고 있고,
+        여기 것은 보조 안내였다. (로그인할 때는 별도 동의 절차가 그대로 있다) */
+  var SHOW_WELCOME = false;
+
+  /* ---- 베타 안내 모달 ------------------------------------------------
+     아직 베타이므로 들어온 사람에게 한 번은 알린다(고원빈 결정 2026-09-03).
+
+     ⚠ 새로고침마다 뜨면 성가시다. 그래서 닫으면 **그 탭에서는** 다시 안 뜬다
+        (sessionStorage 는 탭 단위이고 새로고침에도 남는다).
+        체크하면 7일간 아예 안 뜬다(localStorage).
+     ⚠ 정식 출시하면 SHOW_BETA 만 false 로 내린다 — SHOW_WELCOME 과 같은 방식이다. */
+  var SHOW_BETA = true;
+  var 베타본키 = "we_betaSeen", 베타숨김키 = "we_betaHideUntil";
+
+  function bindBeta() {
+    var modal = document.getElementById("betaModal");
+    if (!modal) return;
+    var 숨길때까지 = 0, 이탭에서봤나 = false;
+    try { 숨길때까지 = Number(localStorage.getItem(베타숨김키) || 0); } catch (e) { /* 무시 */ }
+    try { 이탭에서봤나 = sessionStorage.getItem(베타본키) === "1"; } catch (e) { /* 무시 */ }
+    if (SHOW_BETA && !이탭에서봤나 && Date.now() >= 숨길때까지) modal.hidden = false;
+
+    document.getElementById("betaOk").addEventListener("click", function () {
+      /* 확인을 누르면 7일 동안 안 뜬다.
+         체크박스를 없애고(고원빈 2026-09-03: 「확인 버튼만 하나」) 기본 동작으로 옮겼다 —
+         누를 것이 하나뿐인 창에서 「다시 보지 않기」를 또 고르게 할 이유가 없다. */
+      try { localStorage.setItem(베타숨김키, String(Date.now() + 7 * 24 * 60 * 60 * 1000)); } catch (e) { /* 무시 */ }
+      try { sessionStorage.setItem(베타본키, "1"); } catch (e) { /* 무시 */ }
+      modal.hidden = true;
+    });
+
+    /* Esc 로도 닫는다. 이 앱에는 「모든 모달을 Esc 로 닫는」 공용 규칙이 없고
+       모달마다 따로 붙여 왔다 — 여기서 구조를 바꾸지 않고 같은 방식을 따른다. */
+    /* ⚠ 버튼에 focus() 를 주지 않는다. 브라우저가 검은 포커스 링을 그려서
+       파란 버튼에 테두리가 두른 것처럼 보인다(고원빈 지적 2026-09-03).
+       Enter 는 여기서 직접 받으므로 초점을 안 줘도 똑같이 동작한다. */
+    document.addEventListener("keydown", function (e) {
+      if (modal.hidden) return;
+      if (e.key !== "Escape" && e.key !== "Enter") return;
+      document.getElementById("betaOk").click();
+    });
+  }
+
   function bindWelcome() {
     var modal = document.getElementById("welcomeModal");
     var hideUntil = 0;
     try { hideUntil = Number(localStorage.getItem("we_welcomeHideUntil") || 0); } catch (e) { /* 무시 */ }
-    if (Date.now() >= hideUntil) modal.hidden = false;
+    if (SHOW_WELCOME && Date.now() >= hideUntil) modal.hidden = false;
     document.getElementById("welcomeStart").addEventListener("click", function () {
       if (document.getElementById("welcomeDismiss").checked) {
         try { localStorage.setItem("we_welcomeHideUntil", String(Date.now() + 24 * 60 * 60 * 1000)); } catch (e) { /* 무시 */ }
@@ -2667,12 +3582,33 @@ WE.app = (function () {
   }
   // 내보내기/저장 완료 후 호출 — 이미 구독했거나 이번 세션에 한 번 제안했으면 다시 안 뜸(벽 방지)
   function offerNotifyAfterValue() {
+    // ⚠ 출시 후에는 제안하지 않는다. "정식 출시 소식을 알려드릴게요" 는
+    //    이미 출시된 서비스에서는 말이 안 된다. (아래 bindNotify 도 같이 막는다)
+    if (WE.flags && WE.flags.LAUNCH) return;
     if (hasNotifySubscribed() || _notifyOfferedThisSession) return;
     _notifyOfferedThisSession = true;
     setTimeout(function () { openNotifyModal("after_export"); }, 700);   // 저장/다운로드 끝난 뒤 살짝 여유
   }
   function bindNotify() {
-    document.getElementById("btnNotify").addEventListener("click", function () { openNotifyModal("manual"); });
+    var 알림버튼 = document.getElementById("btnNotify");
+
+    /* ⚠ 출시 후에는 「🔔 출시 알림」 자체가 사라진다.
+       출시 전 베타에서 "정식 출시되면 알려드릴게요" 로 이메일을 받던 기능이라,
+       출시하고 나면 문구도 목적도 성립하지 않는다.
+
+       ⚠ 파일에서 지우지 않고 플래그로 끄는 이유 —
+          index.html 은 배포용·출시준비 양쪽에 다 있는 파일이다. 한쪽에서만 지우면
+          병합할 때 충돌한다(CLAUDE.md §2). 그리고 9/1 에 손으로 지우려면 잊는다.
+          LAUNCH 가 켜지는 순간 자동으로 사라지는 편이 안전하다.
+
+       지금 어디서 꺼지나 — 미리보기 · 로컬(?launch=1) · 출시 후.
+       베타 본서비스(easycable.co.kr)에서는 그대로 보인다. */
+    if (WE.flags && WE.flags.LAUNCH) {
+      if (알림버튼) 알림버튼.hidden = true;
+      return;   // 모달을 여는 길 자체를 막는다
+    }
+
+    알림버튼.addEventListener("click", function () { openNotifyModal("manual"); });
     document.getElementById("notifyClose").addEventListener("click", function () {
       document.getElementById("notifyModal").hidden = true;
     });
@@ -2813,6 +3749,7 @@ WE.app = (function () {
     libEditModal: "libEditCancel",
     bgModal: "bgCancel",
     welcomeModal: "welcomeStart",
+    betaModal: "betaOk",
     helpModal: "helpClose",
     feedbackModal: "feedbackClose",
     historyModal: "historyClose",
@@ -3023,13 +3960,90 @@ WE.app = (function () {
       }
       dstEls[i].setAttribute("style", st);
     }
+    /* 격자는 통째로 뺀다.
+       ⚠ 예전에는 `grid.setAttribute("fill", "#ffffff")` 로 흰색을 칠했는데 **안 먹었다** —
+          바로 위 반복문이 이미 복제본에 style="fill:url(#gridPattern)" 을 박아 놓았고
+          인라인 style 이 attribute 를 이긴다. 그래서 이미지에 격자가 그대로 남아 있었다.
+          PDF 쪽(pdf.js buildSheetPages)도 같은 이유로 지운다 — 칠하지 말고 없앤다.
+          배경 흰색은 아래 캔버스가 fillRect 로 먼저 칠한다. */
     var grid = clone.querySelector("#gridBg");
-    if (grid) grid.setAttribute("fill", "#ffffff");   // 격자 대신 흰 배경
-    var wm = clone.querySelector("#layerWatermark");
-    if (wm) wm.setAttribute("style", "display:block"); // 화면에선 숨긴 워터마크를 이미지엔 표시
+    if (grid && grid.parentNode) grid.parentNode.removeChild(grid);
+
+    /* 인쇄 전용 각인(#canvasMarkPrint)도 지운다. styles.css 의 display:none 은 화면 안에서만
+       먹는 규칙이라, 잘라낸 SVG 를 홀로 띄우면(styles.css 를 안 물고 오므로) 기본값(보임)으로
+       같이 찍혀 아래서 새로 넣는 PNG 전용 각인과 겹쳐 두 번 찍힌다. */
+    var markPrint = clone.querySelector("#canvasMarkPrint");
+    if (markPrint && markPrint.parentNode) markPrint.parentNode.removeChild(markPrint);
 
     var W = x2 - x1, H = y2 - y1, SCALE = 2;
     clone.setAttribute("viewBox", x1 + " " + y1 + " " + W + " " + H);
+
+    /* ── 워터마크를 '내보낼 범위'에 맞춰 다시 깐다 ────────────────────────
+       ⚠ 왜 다시 까는가 (2026-08-26 에 실측으로 드러난 결함) —
+          render.js 의 buildWatermark() 는 타일을 **고정 좌표**에만 깐다
+          (x 120~2060 · y 140~1130, 23개). 내보내기는 내용 범위로 viewBox 를
+          바꾸므로 두 사각형이 어긋나고, 어긋난 만큼 워터마크가 없다.
+          부품을 아래쪽에 놓고 내보내면 **워터마크가 통째로 없는 이미지**가 나왔다 —
+          무료 사용자가 서명 없는 결과물을 얻는 우회로였다.
+
+       ⚠ 스타일을 손으로 적지 않고 화면의 견본에서 베낀다.
+          내보낸 SVG 는 홀로 서는 파일이라 styles.css 가 따라가지 않는다.
+          여기에 색·크기를 또 적어두면 CSS 를 고칠 때 이쪽만 남아 어긋난다. */
+    var wm = clone.querySelector("#layerWatermark");
+    /* ⚠ Pro 는 여기서 끝난다. render.js 에서 화면 레이어를 비워도 이 코드가 견본 없이
+       기본 문구로 **다시 채우므로**, 여기를 막지 않으면 Pro 가 내보낸 PNG 에 워터마크가
+       그대로 남는다 (2026-09-06). */
+    if (wm && WE.pro && !WE.pro.watermark()) {
+      while (wm.firstChild) wm.removeChild(wm.firstChild);
+      wm = null;
+    }
+    if (wm) {
+      var 견본 = svg.querySelector("#layerWatermark text");
+      var 무늬style = "";
+      if (견본) {
+        var cs2 = getComputedStyle(견본);
+        for (var q = 0; q < PROPS.length; q++) {
+          var v2 = cs2.getPropertyValue(PROPS[q]);
+          if (v2) 무늬style += PROPS[q] + ":" + v2 + ";";
+        }
+      }
+      var 문구 = 견본 ? 견본.textContent : "EasyCable · easycable.co.kr";
+      wm.setAttribute("style", "display:block");   // 화면에선 숨긴 레이어다
+      while (wm.firstChild) wm.removeChild(wm.firstChild);
+
+      // 한 칸씩 더 바깥에서 시작해 가장자리에도 빈틈이 없게 한다
+      var COL_W = 460, ROW_H = 230;
+      for (var r2 = 0, wy = y1 - ROW_H; wy < y2 + ROW_H; r2++, wy += ROW_H) {
+        var off = (r2 % 2) ? COL_W / 2 : 0;        // 벽돌식 엇배치 — 화면과 같은 규칙
+        for (var wx = x1 - COL_W + off; wx < x2 + COL_W; wx += COL_W) {
+          var t2 = document.createElementNS("http://www.w3.org/2000/svg", "text");
+          t2.setAttribute("transform", "translate(" + wx + "," + wy + ") rotate(-30)");
+          t2.setAttribute("text-anchor", "middle");
+          t2.setAttribute("style", 무늬style);
+          t2.textContent = 문구;
+          wm.appendChild(t2);
+        }
+      }
+    }
+
+    /* 대각선 워터마크는 옅게 반복돼 눈에 잘 안 띌 수 있다 — 내보낸 범위(x1~x2,y1~y2)의
+       우하단에 뚜렷한 로고 각인 하나를 더 찍는다. 화면 전용 #canvasMark 와 같은 문구·색이지만
+       이건 실제 출력물 안에 들어가는 별개의 표식이다(작업 화면 로고 ≠ 결과물 서명). (2026-09-03) */
+    var markPad = 14;
+    // Pro 는 각인 없이 내보낸다 (2026-09-06)
+    if (!WE.pro || WE.pro.watermark()) {
+      var mark2 = document.createElementNS("http://www.w3.org/2000/svg", "text");
+      mark2.setAttribute("x", x2 - markPad);
+      mark2.setAttribute("y", y2 - markPad);
+      mark2.setAttribute("text-anchor", "end");
+      mark2.setAttribute("style",
+        "font:700 44px 'Segoe UI','Malgun Gothic',sans-serif;letter-spacing:.1em;" +
+        "fill:#5a6675;opacity:.35;" +
+        "text-shadow:0 1px 0 rgba(255,255,255,.55), 0 -1px 0 rgba(255,255,255,.35);");
+      mark2.textContent = "EASYCABLE";
+      clone.appendChild(mark2);
+    }
+
     clone.setAttribute("width", Math.round(W * SCALE));
     clone.setAttribute("height", Math.round(H * SCALE));
 
@@ -3230,12 +4244,16 @@ WE.app = (function () {
       [WE.i18n.t("화면 이동(팬)"), WE.i18n.t("Space 드래그 · 휠클릭 드래그")],
       [WE.i18n.t("확대 / 축소"), WE.i18n.t("Ctrl+휠")],
       [WE.i18n.t("선택 항목 이동 (Shift: 1px 미세)"), WE.i18n.t("방향키")],
+      [WE.i18n.t("단자명·부품명 이동"), WE.i18n.t("Alt+드래그")],
+      [WE.i18n.t("단자명·부품명 위치 초기화"), WE.i18n.t("Alt+더블클릭")],
       [WE.i18n.t("단자 이름 위치 초기화"), WE.i18n.t("부품 더블클릭")],
       [WE.i18n.t("선택 항목 삭제"), "Delete / Backspace"],
       [WE.i18n.t("즉시 저장"), "Ctrl+S"],
       [WE.i18n.t("다른 이름으로 저장"), "Ctrl+Shift+S"],
       [WE.i18n.t("파일 열기"), "Ctrl+O"],
       [WE.i18n.t("라이브러리 폴더 전체 접기/펼치기"), "Shift+C"],
+      [WE.i18n.t("배선 라벨 지우기 (양 끝 모두)"), "Delete"],
+      [WE.i18n.t("배선 라벨 한쪽 끝만 감추기"), "Shift+Delete"],
       [WE.i18n.t("이 도움말"), "?"]
     ];
     document.getElementById("helpShortcutList").innerHTML = rows.map(function (r) {
@@ -3247,7 +4265,12 @@ WE.app = (function () {
   function loadWireSettings() {
     try {
       var w = localStorage.getItem("we_wireWidth");
-      if (w) WE.model.ui.wireWidth = parseInt(w, 10);
+      /* ⚠ 상한을 30 → 15 로 낮췄다(2026-09-09). 그 전에 저장된 값이 그대로 돌아오면
+         칸에는 15 가 최대라고 적혀 있는데 실제로는 20 이 들어가 있는 상태가 된다. */
+      if (w) {
+        var wv = parseInt(w, 10);
+        if (!isNaN(wv)) WE.model.ui.wireWidth = Math.max(1, Math.min(WIRE_WIDTH_MAX, wv));
+      }
       var c = localStorage.getItem("we_wireColor");
       if (c) WE.model.ui.wireColor = c;
       var r = localStorage.getItem("we_wireRouting");
@@ -3262,11 +4285,18 @@ WE.app = (function () {
     } catch (e) { /* 무시 */ }
   }
 
+  /* 배선 두께 상한. 도면에서 그 이상은 쓸 일이 없다 (2026-09-09 고원빈).
+     index.html 의 두 입력칸(#wireWidthSel · #wireWidth)의 max 와 **같은 값이어야 한다.** */
+  var WIRE_WIDTH_MAX = 15;
+
   // ---- 색상 팔레트 ----
   function bindPalette() {
     document.getElementById("wireWidthSel").addEventListener("input", function (e) {
       var v = parseInt(e.target.value, 10);
       if (isNaN(v) || v < 1) return;
+      /* ⚠ HTML 의 max="15" 는 **브라우저 힌트일 뿐**이다 — 칸에 직접 30 을 쳐 넣으면
+         그대로 들어간다. 실제로 막는 것은 여기다. (2026-09-09 상한 30 → 15) */
+      if (v > WIRE_WIDTH_MAX) { v = WIRE_WIDTH_MAX; e.target.value = String(v); }
       WE.model.ui.wireWidth = v;
       saveWireSettings();
     });
@@ -3354,6 +4384,39 @@ WE.app = (function () {
 
   // 현재 배선 모양을 버튼에 반영. 배선을 골라 뒀으면 '그 배선의 모양'을 보여 주는 게 맞다 —
   // 그 상태에서 버튼을 누르면 바뀌는 대상이 그 배선이기 때문이다.
+  /* 지금 고른 배선들. 하나만 골랐으면 한 개짜리 목록.
+     ⚠ 예전에는 같은 규칙이 세 군데(속성 갱신·팔레트·이벤트 연결부)에 따로 적혀 있었다.
+        한 곳만 고치면 화면이 서로 다른 말을 하게 된다. */
+  function 고른배선들() {
+    var ids = WE.model.getMultiWire();
+    if (ids && ids.length) {
+      return ids.map(function (id) { return WE.model.getWire(id); }).filter(Boolean);
+    }
+    var w = WE.model.getSelectedWire();
+    return w ? [w] : [];
+  }
+
+  /* 고른 배선들이 그 값에 대해 한목소리인가. 같으면 그 값, 섞여 있으면 null.
+
+     ⚠ 섞였을 때 대표 배선의 값을 보여 주면 **거짓말**이 된다 — 두께 2 와 3 을 함께
+        골랐는데 칸에 3 이라고 적혀 있으면 전부 3 인 줄 안다. 그 상태에서 옆 칸을
+        건드리면 두께가 3 으로 덮인 줄도 모른다.
+        (2026-09-09 고원빈: "보통 다른 서비스들은 이런 경우에는 공란으로 뒀던 거 같은데")
+        비워 두면 "여기는 하나가 아니다" 가 눈에 보이고, 값을 넣을 때만 전부 바뀐다. */
+  function 공통값(ws, get) {
+    if (!ws || !ws.length) return null;
+    var v = get(ws[0]);
+    for (var i = 1; i < ws.length; i++) if (get(ws[i]) !== v) return null;
+    return v;
+  }
+
+  // 섞여 있으면 칸을 비우고 '혼합' 이라고 옅게 적어 둔다
+  function 값칸(id, 값) {
+    var el = document.getElementById(id); if (!el) return;
+    setIfNotFocused(id, 값 == null ? "" : 값);
+    el.placeholder = (값 == null) ? WE.i18n.t("혼합") : "";
+  }
+
   function syncWireRoutingBtns() {
     var box = document.getElementById("wireRouting"); if (!box) return;
     var mode = WE.model.ui.wireRouting;
@@ -3365,10 +4428,13 @@ WE.app = (function () {
         var w = WE.model.getWire(id);
         return w && (w.routing || mode) === (first.routing || mode);
       });
-      if (same && first) mode = first.routing || mode;   // 섞여 있으면 기본값 표시를 유지
+      /* ⚠ 섞여 있으면 **아무 버튼도 켜지 않는다.** 예전에는 기본값 버튼이 켜져 있어
+         "고른 배선이 전부 꺾임" 처럼 보였다 — 두께 칸을 비우는 것과 같은 이유다. */
+      if (!same) mode = null;
+      else if (first) mode = first.routing || mode;
     }
     Array.prototype.forEach.call(box.querySelectorAll(".seg-btn"), function (b) {
-      b.classList.toggle("active", b.dataset.routing === mode);
+      b.classList.toggle("active", mode != null && b.dataset.routing === mode);
     });
   }
 
@@ -3384,12 +4450,7 @@ WE.app = (function () {
     var wrap = document.getElementById("wirePalette");
     if (!wrap) return;
     wrap.innerHTML = "";
-    // 선택된 배선 목록. 같은 이름의 함수가 아래 이벤트 연결부에도 있지만
-    // 그건 그 함수 안쪽 범위라 여기서는 안 보인다 — 같은 규칙을 여기에 둔다.
-    var 고른것 = WE.model.getMultiWire();
-    var ws = (고른것 && 고른것.length)
-      ? 고른것.map(function (id) { return WE.model.getWire(id); }).filter(Boolean)
-      : (WE.model.getSelectedWire() ? [WE.model.getSelectedWire()] : []);
+    var ws = 고른배선들();
     if (!ws.length) { wrap.hidden = true; return; }
     wrap.hidden = false;
 
@@ -3481,7 +4542,14 @@ WE.app = (function () {
       var label = document.createElement("input");
       label.type = "text"; label.className = "plabel"; label.value = p.label;
       var del = document.createElement("button");
-      del.className = "pdel"; del.textContent = WE.i18n.t("삭제");
+      /* ⚠ 글자는 반드시 × 하나여야 한다.
+         .pdel 은 28×28 정사각(styles.css)이라 "삭제" 두 글자를 넣으면 줄바꿈이 나서
+         버튼 안에서 글자가 위아래로 쪼개진다. 실제로 그렇게 보였다(2026-09-01).
+         프리셋 관리(js/presetmodal.js)가 이미 × 를 쓰고 있으므로 같은 모양으로 맞춘다 —
+         같은 자리에서 같은 일을 하는 버튼이 화면마다 다르면 안 된다.
+         뜻은 title·aria-label 이 전한다(눈으로도, 화면읽기 프로그램에도). */
+      del.className = "pdel"; del.type = "button"; del.textContent = "×";
+      del.title = WE.i18n.t("삭제"); del.setAttribute("aria-label", WE.i18n.t("삭제"));
       row.appendChild(color); row.appendChild(label); row.appendChild(del);
       pl.appendChild(row);
     });
@@ -3525,14 +4593,7 @@ WE.app = (function () {
   // ---- 배선 속성 ----
   function bindWireProps() {
     // 선택된 배선들(다중선택 포함)을 반환
-    function selectedWires() {
-      var ids = WE.model.getMultiWire();
-      if (ids && ids.length) {
-        return ids.map(function (id) { return WE.model.getWire(id); }).filter(Boolean);
-      }
-      var w = WE.model.getSelectedWire();
-      return w ? [w] : [];
-    }
+    var selectedWires = 고른배선들;
     document.getElementById("wireColor").addEventListener("input", function (e) {
       var ws = selectedWires(); if (!ws.length) return;
       ws.forEach(function (w) { w.color = e.target.value; });
@@ -3562,15 +4623,41 @@ WE.app = (function () {
       w.labelText = e.target.value;
       WE.render.renderWires();
     });
+    /* 라벨 모드로 가지 않고 바로 번호를 붙인다 (2026-09-09 고원빈).
+       ⚠ nextWireLabel() 은 이미 붙은 번호들을 보고 다음 번호를 고른다. 그래서 여러 개를
+          고른 채 눌러도 하나씩 차례로 붙는다 — 먼저 붙인 것이 다음 계산에 반영된다. */
+    document.getElementById("wireLabelAuto").addEventListener("click", function () {
+      var ws = selectedWires(); if (!ws.length) return;
+      var 붙임 = 0;
+      ws.forEach(function (w) {
+        if ((w.labelText || "").trim()) return;   // 이미 있으면 그대로 둔다
+        w.labelText = 붙일라벨();
+        라벨칸올리기();
+        delete w.labelPos; delete w.labelT; delete w.labelAt; delete w.labelSkip;
+        붙임++;
+      });
+      if (!붙임) return;
+      WE.render.renderWires();
+      WE.render.renderOverlay();
+      WE.history.commit();
+      refreshProps();
+      if (trackOnce) trackOnce("add_wire_label");
+    });
     document.getElementById("wireLabelReset").addEventListener("click", function () {
       var ws = selectedWires(); if (!ws.length) return;
-      ws.forEach(function (w) { delete w.labelPos; delete w.labelT; });
+      // labelSkip 도 함께 지운다 — 한쪽 끝을 Delete 로 치웠던 것도 여기서 되살아난다
+      ws.forEach(function (w) {
+        delete w.labelPos; delete w.labelT; delete w.labelAt; delete w.labelSkip;
+      });
       WE.render.renderWires();
       WE.history.commit();
     });
     document.getElementById("wireLabelRemove").addEventListener("click", function () {
       var ws = selectedWires(); if (!ws.length) return;
-      ws.forEach(function (w) { delete w.labelText; delete w.labelPos; delete w.labelT; });
+      ws.forEach(function (w) {
+        delete w.labelText; delete w.labelPos; delete w.labelT;
+        delete w.labelAt; delete w.labelSkip;
+      });
       WE.render.renderWires();
       WE.render.renderOverlay();
       WE.history.commit();
@@ -3640,12 +4727,12 @@ WE.app = (function () {
     var box = document.getElementById("wireLoadList"); if (!box) return;
     var seen = {}, html = "";
     WE.model.allComponents().forEach(function (c) {   // 전체 시트 — 다른 시트 부품도 부하로 고를 수 있게
-      var lib = c.libraryId ? WE.library.get(c.libraryId) : null;
+      var lib = componentPart(c);
       var role = lib ? (lib.role || "load") : "load";
       if (role !== "load") return;
       var P = lib ? partPower(lib) : 0;
       if (!(P > 0)) return;   // 전력 있는 부하만
-      var key = c.libraryId || ("name:" + c.name);
+      var key = WE.model.cmpGroupKey(c);   // 집계 기준은 model 한 곳에 (부품 번호와 같은 기준이어야 한다)
       if (seen[key]) return; seen[key] = 1;
       var name = lib ? lib.name : c.name;
       html += "<label class='wg-load'><input type='checkbox' data-p='" + P + "' /> " + esc(name) + " (" + round(P) + "W)</label>";
@@ -3704,7 +4791,13 @@ WE.app = (function () {
   }
   function segIsVertical(pts, i) { return Math.abs(pts[i].x - pts[i + 1].x) < 0.5; }
   // 이 배선에서 정렬 대상 구간 인덱스: 클릭한 구간 우선, 없으면 원하는 방향의 가장 긴 구간
-  function wireTargetSeg(wire, pts, wantVertical) {
+  /* 이 배선에서 '대상 구간'을 고른다.
+     기준용=true 면 **옮길 수 있는지 따지지 않는다.** (2026-09-02)
+       기준 배선은 방향과 좌표만 읽히고 setWireSeg 에 아예 안 넘어간다 — 즉 안 움직인다.
+       그런데 예전에는 기준에도 segMovable 을 물어서, 단자에 바로 붙은 구간을 기준으로
+       잡으면 **나머지 배선까지 통째로 멈췄다.** 옮기지도 않을 구간에 '옮길 수 있는가'를
+       물은 것이 잘못이었다. (고원빈 보고: 솔밸브 GND 를 기준으로 3개 정렬 → 아무것도 안 움직임) */
+  function wireTargetSeg(wire, pts, wantVertical, 기준용) {
     var pt = WE.model.getWireClickPt(wire.id);
     if (pt) {
       var idx = WE.geometry.nearestSegmentIndex(pts, pt);
@@ -3715,7 +4808,7 @@ WE.app = (function () {
       // 잡아 둔 구간이 단자에 물려 있어 못 옮기는 자리여도 건너뛴다. 다른 구간을 대신 집으면
       // 사용자가 보고 있는 굵은 구간과 실제로 움직이는 구간이 달라진다.
       if (idx >= 0) {
-        if (!segMovable(wire, pts, idx)) return -1;
+        if (!기준용 && !segMovable(wire, pts, idx)) return -1;
         return (wantVertical == null || segIsVertical(pts, idx) === wantVertical) ? idx : -1;
       }
     }
@@ -3732,13 +4825,33 @@ WE.app = (function () {
     w.waypoints = np.slice(1, np.length - 1);
     // 분기로 끝나는 배선은 접점도 호스트 선 위에서 함께 옮겨야 한다.
     // 안 그러면 구간만 이동하고 접점은 남아 마지막이 ㄱ자로 꺾인다(구간 정렬에서 그랬다).
-    snapBranchEndsTo(w, np, vertical, coord);
+    // 접점은 **옮긴 구간이 그 끝에 닿아 있을 때만** 따라간다.
+    // 조건 없이 옮기면, 엉뚱한 구간을 정렬했는데 접점만 끌려가 배선이 꼬인다(아래 참조).
+    snapBranchEndsTo(w, np, vertical, coord, idx === 0, idx + 1 === pts.length - 1);
   }
   // 옮긴 구간의 좌표에 맞춰 분기 접점을 호스트 선 위로 다시 붙인다
-  function snapBranchEndsTo(w, np, vertical, coord) {
+  /* 분기로 끝나는 배선은 접점도 호스트 선 위에서 함께 옮긴다.
+     안 그러면 구간만 이동하고 접점은 남아 마지막이 ㄱ자로 꺾인다.
+
+     ⚠ 단, **옮긴 구간이 실제로 그 끝에 닿아 있을 때만** 이다. (2026-09-02)
+        예전에는 분기로 끝나기만 하면 조건 없이 접점을 coord 로 끌고 갔다.
+        그래서 접점과 상관없는 가운데 구간을 정렬해도 접점이 딸려 갔고,
+        정작 접점 옆 꺾임점은 제자리에 남아 배선이 Z 자로 꼬였다.
+
+          전   705,706 → 835,706 → 835,810 → 510,810 → 510,740 → 208,740
+          후   705,706 → 835,706 → 835,839 → 510,839 → 510,740 → 510,780 → 208,780
+                                                       └ 위로 갔다 다시 아래로 ┘
+
+        (실제 도면 「퍼미어스 테스트」의 릴레이 COM2 배선. 고원빈 보고)
+        접점은 호스트 배선 위에서만 미끄러지므로, 가운데 구간이 움직였다고
+        접점이 따라갈 이유가 없다.
+
+     앞끝/뒤끝이 undefined 로 오면(옛 호출) 예전처럼 둘 다 옮긴다 — false 일 때만 건너뛴다. */
+  function snapBranchEndsTo(w, np, vertical, coord, 앞끝, 뒤끝) {
     ["from", "to"].forEach(function (k) {
       var ref = w[k];
       if (!ref || !ref.wireId) return;
+      if (k === "from" ? 앞끝 === false : 뒤끝 === false) return;
       var host = WE.model.getWire(ref.wireId);
       var hp = host && WE.geometry.wireRoutePoints(host);
       if (!hp) return;
@@ -3757,9 +4870,10 @@ WE.app = (function () {
     if (!ids || ids.length < 2) return;
     var anchor = WE.model.getWire(ids[0]); if (!anchor) return;
     var aPts = WE.geometry.wireRoutePoints(anchor); if (!aPts) return;
-    // 기준선에서 옮길 수 있는 구간을 못 찾으면(단자에 물린 구간만 잡아 둔 경우 등) 아무것도 안 한다
-    var aIdx = wireTargetSeg(anchor, aPts, null);
-    if (aIdx < 0) { setHint(WE.i18n.t("옮길 수 있는 구간이 없습니다."), WE.i18n.t("기준 배선에서 옮길 수 있는 구간을 찾지 못했습니다. 단자에 바로 붙은 구간은 옮길 수 없습니다.")); return; }
+    // 기준선은 좌표만 읽어 가므로 '옮길 수 있는 구간'일 필요가 없다(기준용=true).
+    // 여기서 -1 이 나오는 건 잡아 둔 구간 자체가 없을 때뿐이다.
+    var aIdx = wireTargetSeg(anchor, aPts, null, true);
+    if (aIdx < 0) { setHint(WE.i18n.t("기준으로 삼을 구간이 없습니다."), WE.i18n.t("기준 배선에서 맞출 구간을 찾지 못했습니다. 기준 배선의 구간을 한 번 클릭한 뒤 다시 눌러 주세요.")); return; }
     var vertical = segIsVertical(aPts, aIdx);
     var C = vertical ? aPts[aIdx].x : aPts[aIdx].y;
     var gapEl = document.getElementById("wireGap");
@@ -3910,53 +5024,228 @@ WE.app = (function () {
     for (var i = 0; i < pal.length; i++) if (pal[i].color === color) return pal[i].label;
     return color;
   }
-  function endParts(ref) {
-    var c = WE.model.getComponent(ref.componentId);
-    var t = c ? WE.model.getTerminal(c, ref.terminalId) : null;
-    return { cmp: c ? c.name : "?", term: t ? t.name : "?" };
-  }
-  // 화면·PDF·CSV 공용 배선 리스트 데이터
-  // 배선 리스트: 라벨을 부착한 배선만 담는다.
-  // 라벨(수축튜브 번호)이 실물 전선과 목록을 잇는 유일한 식별자라, 라벨 없는 배선을 넣으면
-  // 목록의 그 줄이 어느 전선인지 현장에서 찾을 수가 없다.
-  // (예전엔 라벨이 없으면 "W1, W2…"를 자동으로 만들어 붙여, 달지도 않은 라벨이 목록에 나왔다)
-  function wireListData() {
-    var out = [];
-    WE.model.project.wires.forEach(function (w) {
-      var label = (w.labelText || "").trim();
-      if (!label) return;
-      var a = endParts(w.from), b = endParts(w.to);
-      out.push({
-        no: label,
-        color: colorLabel(w.color), colorHex: w.color,
-        awg: w.awg || "", current: w.current > 0 ? w.current : "",
-        fromCmp: a.cmp, fromTerm: a.term, toCmp: b.cmp, toTerm: b.term
+  /* ⚠ 예전에는 여기 wireListData(배선 한 가닥씩, 라벨 붙은 것만)가 있었다. 지웠다.
+        · 라벨 붙은 배선만 담아서 목록이 거의 비었고 그래서 기능이 통째로 꺼져 있었다
+        · 한 가닥씩 늘어놓으면 "이 단자에 몇 군데가 물리는지" 를 알 수 없다
+        · 끝점이 분기면 "? / ?" 로 찍혔다(endParts 가 componentId 만 봐서)
+        아래 netListData 가 대신한다. 되살리지 말 것. (2026-09-03) */
+
+  /* ---- 결선표(넷 묶음) ----
+     종이를 보며 결선할 때 쓰는 표다. **한 가닥씩이 아니라 넷(전기적으로 이어진 한 덩어리)으로 묶는다.**
+
+     왜 넷인가 (2026-09-03 고원빈, 실제 결선 중에 막힘)
+       배터리 VCC 에 스텝다운모듈 둘과 릴레이가 물려 있는데, From-To 를 한 줄씩 늘어놓으면
+       세 줄로 흩어진다. 그러면 **"여기 몇 군데가 물리는가"** 를 알 수 없어서 케이블을 어떻게 뺄지
+       (분기할지·단자에 여러 가닥을 압착할지) 판단이 안 되고, 두 군데 중 한 군데만 하고 넘어간다.
+       한 덩어리로 보여 주면 그 자리에서 정할 수 있다.
+
+     ⚠ 분기는 netFrom 이 타고 넘어가 **실제 단자까지** 펼친다. 한 가닥만 보면 분기 지점이
+        끝점으로 잡혀 "? / ?" 가 된다(예전 wireListData 가 그랬다).
+     ⚠ 라벨(수축튜브 번호)이 없어도 담는다. 예전 목록은 라벨 붙은 배선만 담아 거의 비어 있었고
+        그래서 기능이 통째로 꺼져 있었다 — 실제 작업은 표를 보고 그 자리에서 전선을 만드는
+        방식이라, 줄을 가리키는 것은 번호가 아니라 **양 끝 이름**이다. */
+  function netListData() {
+    var 본것 = {}, out = [];
+    _열표 = null;   // 부품을 옮기면 열이 달라진다 — 표를 만들 때마다 새로 센다
+    WE.model.allComponents().forEach(function (c) {
+      (c.terminals || []).forEach(function (t) {
+        if (본것[c.id + "|" + t.id]) return;
+        var net = WE.geometry.netFrom([{ componentId: c.id, terminalId: t.id }]);
+        if (!net.wireIds.length) return;                    // 배선이 없는 단자는 표에 안 넣는다
+        var 멤버 = [];
+        net.terms.forEach(function (r) {
+          본것[r.componentId + "|" + r.terminalId] = 1;
+          var cc = WE.model.getComponent(r.componentId);
+          var tt = cc && WE.model.getTerminal(cc, r.terminalId);
+          if (!cc || !tt) return;
+          var lib = componentPart(cc);
+          /* 이 단자에 실제로 꽂히는 배선의 색.
+             넷 전체를 한 색으로 뭉뚱그리면 안 된다 — 분기된 넷은 구간마다 색이 다를 수 있고,
+             작업자는 "이 단자에 무슨 색을 꽂는가" 를 알아야 한다. (2026-09-03 고원빈) */
+          var 내배선 = null;
+          net.wireIds.forEach(function (wid) {
+            if (내배선) return;
+            var w = WE.model.getWire(wid); if (!w) return;
+            [w.from, w.to].forEach(function (ref) {
+              if (내배선) return;
+              if (ref && ref.componentId === r.componentId && ref.terminalId === r.terminalId) 내배선 = w;
+            });
+          });
+          멤버.push({ cmp: WE.model.cmpLabel(cc), term: tt.name || "", no: Number(cc.no) || 0,
+                      // tid: 결선표 비고를 매다는 키. 이름은 바뀌지만 id 는 안 바뀐다.
+                      cmpId: cc.id, tid: tt.id,
+                      image: cc.image || (lib && lib.image) || null,
+                      color: 내배선 ? colorLabel(내배선.color) : "",
+                      colorHex: 내배선 ? 내배선.color : "#000",
+                      awg: (내배선 && 내배선.awg) || "",
+                      role: (lib && lib.role) || (cc.publicSnapshot && cc.publicSnapshot.role) || "load" });
+        });
+        if (멤버.length < 2) return;                        // 한쪽만 남은 것은 결선이 아니다
+        // 부품을 놓은 순서대로 — 같은 부품에서 나가는 넷들이 표에서 서로 붙어 있게 된다
+        멤버.sort(function (a, b) { return a.no - b.no || a.term.localeCompare(b.term); });
+        /* 기준이 될 한쪽(origin)을 고른다.
+           작업자는 한 단자 앞에 서서 "여기서 나갈 선이 몇 가닥인가" 를 본다. 다섯을 대등하게
+           늘어놓으면 지금 어디에 서 있는지가 없어서 눈에 안 들어온다(2026-09-03 고원빈).
+           그래서 공급하는 쪽을 왼쪽에 두고 받는 쪽을 뻗어나가게 적는다.
+
+           ⚠ 전기적 방향은 데이터에 없다. 아래는 **어림짐작**이다:
+             배터리(role) > OUT/VCC 로 시작하는 단자 > 그 밖 > IN 으로 시작하는 단자
+           맞추기 어려운 넷에서는 기준이 뒤바뀔 수 있다. 그래도 표의 모양('한쪽 + 뻗어나감')이
+           유지되므로 '몇 가닥인가' 는 그대로 읽힌다. */
+        멤버.forEach(function (m) {
+          var t = String(m.term || "").toUpperCase();
+          m.rank = m.role === "battery" ? 0
+                 : /^OUT/.test(t) ? 1
+                 : /^(VCC|VBAT|\+V|V\+)/.test(t) ? 2
+                 : /^IN/.test(t) ? 4
+                 : 3;
+        });
+        var 기준 = 멤버.slice().sort(function (a, b) {
+          return a.rank - b.rank || a.no - b.no || a.term.localeCompare(b.term);
+        })[0];
+        // 연결부도 도면 읽는 순서(좌→우, 위→아래)로 — 표를 훑는 눈과 도면을 훑는 눈이 같아야 한다
+        var 상대 = 멤버.filter(function (m) { return m !== 기준; }).sort(function (a, b) {
+          return 자리비교(WE.model.getComponent(a.cmpId), WE.model.getComponent(b.cmpId));
+        });
+        /* 넷을 대표하는 색·굵기는 **기준 단자에 꽂히는 배선** 것을 쓴다.
+           연결부 쪽 색은 멤버가 각자 들고 있다(위 참고) — 분기 구간마다 다를 수 있어서다. */
+        var w0 = WE.model.getWire(net.wireIds[0]);
+        out.push({
+          color: 기준.color || (w0 ? colorLabel(w0.color) : ""),
+          colorHex: 기준.colorHex || (w0 ? w0.color : "#000"),
+          awg: 기준.awg || (w0 && w0.awg) || "",
+          origin: 기준,          // 왼쪽에 세우는 기준 단자
+          targets: 상대,         // 거기서 뻗어나가는 단자들
+          count: 상대.length,    // = 그 단자에서 나가야 하는 가닥 수
+          members: 멤버          // (검사·CSV 용 전체 목록)
+        });
       });
+    });
+    // 기준 부품이 도면에 놓인 자리 순서(좌→우, 위→아래)로 — 표와 도면을 같은 눈으로 훑는다
+    out.sort(function (a, b) {
+      return 자리비교(WE.model.getComponent(a.origin.cmpId), WE.model.getComponent(b.origin.cmpId)) ||
+             a.origin.term.localeCompare(b.origin.term);
     });
     return out;
   }
+
+  /* 결선표를 **부품 단위로 묶는다.**
+     배터리의 GND 줄과 VCC 줄은 결국 같은 배터리 이야기다. 따로 떨어져 있으면 작업자가
+     "이 부품에서 할 일" 을 한눈에 못 본다. 부품 그림을 왼쪽에 한 번만 크게 두고 그 아래로
+     단자들을 모으면, 손에 부품을 쥔 채 그 칸만 보고 끝낼 수 있다. (2026-09-03 고원빈)
+     반환: [{ cmpId, name, image, rows: [넷…], lines: 전체 줄 수 }] */
+  function netListByComponent() {
+    var 묶음 = [], 색인 = {};
+    netListData().forEach(function (net) {
+      var k = net.origin.cmpId;
+      if (!색인[k]) {
+        색인[k] = { cmpId: k, name: net.origin.cmp, image: net.origin.image, rows: [], lines: 0 };
+        묶음.push(색인[k]);
+      }
+      색인[k].rows.push(net);
+      색인[k].lines += net.count;
+    });
+    return 작업순서로(묶음);
+  }
+
+  /* ---- 결선표 순서 = 도면을 읽는 순서(좌→우, 위→아래) ----
+     (2026-09-03 고원빈 확정. 실제 회로도 관례를 참고해서 정했다)
+
+     전기 회로도에는 오래된 관례가 있다:
+       · 전원부는 **좌상단**에 그린다
+       · 신호는 **왼쪽에서 오른쪽으로** 흐르게 배치한다
+       · 읽는 사람은 글을 읽듯 좌→우, 위→아래로 훑는다
+     그래서 '도면에 놓인 자리 순서'가 곧 '전원부터 시작하는 순서'가 된다 —
+     둘을 따로 맞출 필요가 없다. 전원을 좌상단에 두기만 하면 저절로 맞는다.
+
+     이 방식의 장점은 **설명이 한 줄로 끝나고 어림짐작이 없다**는 것이다.
+     (예전에는 배터리 role·색 이름으로 전원 계통을 추측해 퍼뜨렸는데, role 은 대부분
+      기본값이고 색 이름은 자유 입력이라 근거가 약했다.)
+
+     ⚠ **가로 줄이 아니라 세로 열로 묶는다.** 글처럼 한 줄씩 읽으면 배터리(x=10) 다음에
+        같은 높이의 ESP32(x=1050)로 건너뛴다. 그런데 전원은 왼쪽 열에서 오른쪽 열로 단계를
+        밟아 흐르므로, 실제 결선은 '열 하나를 끝내고 다음 열' 순서다.
+        실측(2026-09-03): 배터리(10) → #1·#2 스텝다운(230) → 릴레이(490) → 레벨시프터(720)
+        — 고원빈이 말한 순서와 열 기준이 정확히 일치한다.
+     ⚠ 열을 '폭 몇 px 씩' 으로 자르면 안 된다. 20px 차이인 둘이 경계에 걸려 갈라지고
+        (워터펌프 920 / 솔밸브 940), 멀리 떨어진 둘이 한 열이 된다.
+        **간격이 벌어지는 곳에서 끊는다** — 부품 사이가 60px 넘게 비면 다음 열로 본다.
+     ⚠ 굵기(AWG)로 정하는 게 사실 더 정확하다 — 굵은 선을 먼저 깔아야 가는 선을 그 사이에
+        끼울 수 있다. 지금은 AWG 가 거의 비어 있어 못 쓴다. 채워지면 1순위로 올릴 것.
+     ⚠ '다른 부품에 묻히는 자리를 먼저'는 조립 방향의 문제라 프로그램이 알 수 없다. */
+  var 열간격 = 60;      // 좌우로 이만큼 넘게 벌어지면 '다음 열'로 본다
+  var _열표 = null;     // { cmpId: {시트, 열} } — 한 번 그릴 때 여러 번 쓰므로 만들어 두고 쓴다
+
+  function 열표만들기() {
+    var 표 = {};
+    (WE.model.project.sheets || []).forEach(function (sh, si) {
+      var cs = (sh.components || []).slice().sort(function (a, b) { return (a.x || 0) - (b.x || 0); });
+      var 열 = 0;
+      cs.forEach(function (c, i) {
+        if (i > 0 && (c.x || 0) - (cs[i - 1].x || 0) > 열간격) 열++;
+        표[c.id] = { 시트: si, 열: 열 };
+      });
+    });
+    return 표;
+  }
+  function 자리순서(cmp) {
+    if (!cmp) return { 시트: 0, 열: 0, y: 0 };
+    if (!_열표) _열표 = 열표만들기();
+    var v = _열표[cmp.id] || { 시트: 0, 열: 0 };
+    return { 시트: v.시트, 열: v.열, y: cmp.y || 0 };
+  }
+  function 자리비교(a, b) {
+    var p = 자리순서(a), q = 자리순서(b);
+    return p.시트 - q.시트 || p.열 - q.열 || p.y - q.y;
+  }
+  function 작업순서로(묶음) {
+    return 묶음.sort(function (a, b) {
+      return 자리비교(WE.model.getComponent(a.cmpId), WE.model.getComponent(b.cmpId));
+    });
+  }
+
   // 라벨이 하나도 없을 때 화면에 띄울 안내 (배선은 있는데 목록이 빈 이유를 알려 준다)
   function wireListEmptyHint() {
-    var total = (WE.model.project.wires || []).length;
-    return total
-      ? WE.i18n.t("라벨을 부착한 배선만 표시됩니다. ▭ 라벨 모드에서 배선을 클릭해 번호를 붙여 주세요.")
+    return (WE.model.project.wires || []).length
+      ? WE.i18n.t("연결된 배선이 없습니다.")
       : WE.i18n.t("배선이 없습니다.");
   }
-  function exportWireListCSV() {
-    var rows = wireListData();
-    if (!rows.length) { setHint(wireListEmptyHint()); return; }
-    function cell(v) { v = (v == null ? "" : String(v)); return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; }
-    var lines = [[WE.i18n.t("번호"), WE.i18n.t("색"), "AWG", WE.i18n.t("전류(A)"), WE.i18n.t("출발 부품"), WE.i18n.t("출발 단자"), WE.i18n.t("도착 부품"), WE.i18n.t("도착 단자")].map(cell).join(",")];
-    rows.forEach(function (r) {
-      lines.push([r.no, r.color, r.awg, r.current, r.fromCmp, r.fromTerm, r.toCmp, r.toTerm].map(cell).join(","));
+  /* 결선표 표 만들기 — 넷 하나가 여러 줄이 되므로 '넷 번호' 열로 묶음을 표시한다.
+     엑셀에서 그 열로 정렬·필터하면 한 덩어리가 흩어지지 않는다. */
+  function wireListExportRows() {
+    var nets = netListData();
+    var head = [WE.i18n.t("넷"), WE.i18n.t("색"), "AWG",
+                WE.i18n.t("여기서 부품"), WE.i18n.t("여기서 단자"),
+                WE.i18n.t("여기로 부품"), WE.i18n.t("여기로 단자"), WE.i18n.t("배선수"),
+                WE.i18n.t("비고")];
+    var rows = [];
+    nets.forEach(function (net, i) {
+      net.targets.forEach(function (m, j) {
+        // 기준 단자는 첫 줄에만 — '넷' 열로 묶어 보면 한 덩어리가 그대로 보인다
+        rows.push([i + 1, j === 0 ? net.color : "", j === 0 ? net.awg : "",
+                   j === 0 ? net.origin.cmp : "", j === 0 ? net.origin.term : "",
+                   m.cmp, m.term, j === 0 ? net.count : "",
+                   j === 0 ? 비고읽기(비고키(net)) : ""]);
+      });
     });
-    var csv = "﻿" + lines.join("\r\n");   // UTF-8 BOM: 엑셀 한글 깨짐 방지
-    var blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
-    var url = URL.createObjectURL(blob), a = document.createElement("a");
-    a.href = url; a.download = (WE.model.project.meta.name || WE.i18n.t("배선도")) + WE.i18n.t("_배선리스트.csv");
-    document.body.appendChild(a); a.click(); document.body.removeChild(a);
-    setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
-    setHint(WE.i18n.t("배선 리스트 내보내기: ") + rows.length + WE.i18n.t("개"));
+    return { head: head, rows: rows, nets: nets.length };
+  }
+
+  function exportWireListCSV() {
+    var t = wireListExportRows();
+    if (!t.nets) { setHint(wireListEmptyHint()); return; }
+    if (내보내기막힘()) return;
+    csvDownload((WE.model.project.meta.name || WE.i18n.t("배선도")) + WE.i18n.t("_결선표.csv"), t);
+    setHint(WE.i18n.t("결선표 내보내기: ") + t.nets + WE.i18n.t("개 넷"));
+  }
+
+  function exportWireListXlsx() {
+    var t = wireListExportRows();
+    if (!t.nets) { setHint(wireListEmptyHint()); return; }
+    if (내보내기막힘()) return;
+    WE.xlsx.download((WE.model.project.meta.name || WE.i18n.t("배선도")) + WE.i18n.t("_결선표.xlsx"),
+      [{ name: WE.i18n.t("결선표"), headRows: 1, rows: [t.head].concat(t.rows) }]);
+    setHint(WE.i18n.t("결선표 내보내기: ") + t.nets + WE.i18n.t("개 넷"));
   }
 
   // ---- 단자 편집 ----
@@ -3973,61 +5262,10 @@ WE.app = (function () {
   }
 
   // ---- 프리셋 관리 모달 ----
-  function bindPresetModal() {
-    document.getElementById("presetClose").addEventListener("click", function () {
-      document.getElementById("presetModal").hidden = true;
-    });
-    document.getElementById("btnAddPreset").addEventListener("click", function () {
-      var label = document.getElementById("newPresetLabel").value.trim();
-      var color = document.getElementById("newPresetColor").value;
-      if (!label) { document.getElementById("newPresetLabel").focus(); return; }
-      WE.presets.add(label, color);
-      document.getElementById("newPresetLabel").value = "";
-      renderPresetList();
-      onPresetsChanged();
-    });
-    var pl = document.getElementById("presetList");
-    pl.addEventListener("input", function (e) {
-      var row = e.target.closest(".preset-row"); if (!row) return;
-      if (e.target.classList.contains("plabel")) WE.presets.update(row.dataset.id, { label: e.target.value });
-      else if (e.target.classList.contains("pcolor")) WE.presets.update(row.dataset.id, { color: e.target.value });
-      onPresetsChanged();
-    });
-    pl.addEventListener("click", function (e) {
-      if (!e.target.classList.contains("pdel")) return;
-      var row = e.target.closest(".preset-row");
-      WE.presets.remove(row.dataset.id);
-      renderPresetList();
-      onPresetsChanged();
-    });
-  }
+  // 컨트롤러를 js/presetmodal.js 로 옮겼다 — 관리자 페이지(admin.html)도 같은 코드를 쓴다.
+  // 여기 남는 것은 에디터가 부르는 입구뿐이다.
+  function openPresetModal() { WE.presetModal.open(); }
 
-  function openPresetModal() {
-    renderPresetList();
-    document.getElementById("presetModal").hidden = false;
-  }
-
-  function renderPresetList() {
-    var pl = document.getElementById("presetList");
-    pl.innerHTML = "";
-    WE.presets.getAll().forEach(function (p) {
-      var row = document.createElement("div");
-      row.className = "preset-row"; row.dataset.id = p.id;
-      var color = document.createElement("input");
-      color.type = "color"; color.className = "pcolor"; color.value = p.color;
-      var label = document.createElement("input");
-      label.type = "text"; label.className = "plabel"; label.value = p.label;
-      var del = document.createElement("button");
-      del.className = "pdel"; del.textContent = WE.i18n.t("삭제");
-      row.appendChild(color); row.appendChild(label); row.appendChild(del);
-      pl.appendChild(row);
-    });
-  }
-
-  // 프리셋 목록 변경 시 관련 UI 갱신
-  function onPresetsChanged() {
-    if (WE.termeditor.isOpen()) WE.termeditor.refreshPresets();
-  }
 
   // ---- 부품 ⋯ 컨텍스트 메뉴 ----
   var _menuCmpId = null;
@@ -4045,33 +5283,111 @@ WE.app = (function () {
         WE.termeditor.open(c);
       } else if (act === "bg" && c.image) {
         WE.bgremove.open(c.image, function (url, tf, size) { applyInstanceImage(c, url, tf, size); }, { width: c.width, height: c.height });
-      } else if (act === "tolib") {
-        var savedPart = saveToLibrary(c.name, function () {
-          return {
-            name: c.name, image: c.image,
-            defaultWidth: c.width, defaultHeight: c.height, terminals: c.terminals
-          };
-        });
+      } else if (act === "info") {
+        /* 부품 정보 편집 — 이미 라이브러리에 연결돼 있으면 그 정보를 바로 연다.
+           아직 연결이 없으면(직접 그려 넣었거나 예전 프로젝트) 먼저 라이브러리에 저장한
+           뒤 같은 편집창을 연다 — 예전 "라이브러리에 저장" 메뉴가 하던 일과 같다.
+           메뉴에 두 항목으로 나눠 두면 "뭐부터 눌러야 하지"가 생긴다. (2026-09-03) */
+        if (c.libraryId && WE.library.get(c.libraryId)) { openLibEdit(c.libraryId); return; }
+        var savedPart = saveToLibrary(c.name, function () { return 부품자료(c); });
         if (savedPart) { c.libraryId = savedPart.id; openLibEdit(savedPart.id); }
-      } else if (act === "duplicate") {
-        var copy = WE.model.duplicateComponent(c.id);
-        WE.model.select("component", copy.id);
-        WE.render.renderAll(); refreshProps();
-      } else if (act === "delete") {
-        WE.model.removeComponent(c.id);
-        WE.render.renderAll(); refreshProps();
+      } else if (act === "tolib") {
+        /* 도면에서 고친 모습을 라이브러리 원본에 반영한다 (2026-09-08 되살림).
+           ⚠ 이미 **배치된** 부품들은 안 바뀐다 — 배치하는 순간 자기 사본을 갖기 때문이다.
+              바뀌는 건 '앞으로 꺼내 쓸 때' 다. 그래서 되돌리기(Ctrl+Z)로도 안 돌아온다.
+              그러니 자동으로 하지 않고 이 메뉴를 눌렀을 때만 한다. */
+        if (c.libraryId && WE.library.get(c.libraryId)) {
+          WE.library.updatePart(c.libraryId, 부품자료(c));
+          renderLibrary();
+          queueBackupNotice();
+          setHint(WE.i18n.t("라이브러리 부품을 지금 모습으로 갱신했습니다: ") + c.name,
+            WE.i18n.t("이미 배치된 부품은 그대로입니다 — 앞으로 꺼내 쓸 때부터 바뀐 모습이 나옵니다."));
+        } else {
+          var 새부품 = saveToLibrary(c.name, function () { return 부품자료(c); });
+          if (새부품) c.libraryId = 새부품.id;
+        }
+      } else if (act === "hidename") {
+        /* 부품 이름표 감추기/보이기 — 토글이다. 감춘 것을 되돌릴 길이 없으면 안 된다.
+           ⚠ 이름 자체는 안 지운다. BOM·결선표는 그대로 이 부품을 이름으로 부른다. */
+        if (c.hideName) delete c.hideName; else c.hideName = true;
+        WE.render.renderAll();
+        setHint(c.hideName ? WE.i18n.t("부품 이름을 숨겼습니다 — 우클릭에서 다시 켤 수 있습니다")
+                           : WE.i18n.t("부품 이름을 다시 보입니다"));
+      } else if (act === "front" || act === "forward" || act === "backward" || act === "back") {
+        // 겹침 순서 — 캔바 류의 네 동작. 부품이 서로 겹칠 때 위아래를 바꿀 방법이 없었다(2026-09-03).
+        var 바뀜 = act === "front" ? WE.model.bringToFront(c.id)
+                : act === "back" ? WE.model.sendToBack(c.id)
+                : act === "forward" ? WE.model.bringForward(c.id)
+                : WE.model.sendBackward(c.id);
+        if (바뀜) WE.render.renderAll();
+      } else if (act === "publish" && WE.publicPublisher) {
+        WE.publicPublisher.open(c, function (published) {
+          if (!published) return;
+          c.publicId = published.publicId;
+          c.publicVersion = published.publicVersion;
+          if (c.libraryId) WE.library.updatePart(c.libraryId, {
+            publicId: published.publicId, publicVersion: published.publicVersion
+          });
+          WE.store.saveNow();
+        });
       }
     });
   }
 
+  // 관리자 확인 전에는 게시 버튼 자체를 DOM에 만들지 않는다.
+  function syncPublicPublishMenu(isAdmin) {
+    var menu = document.getElementById("cmpMenu");
+    var old = menu.querySelector('[data-act="publish"]');
+    if (isAdmin && !old) {
+      var btn = document.createElement("button");
+      btn.type = "button";
+      btn.dataset.act = "publish";
+      btn.textContent = "공용 부품으로 게시…";
+      // 게시는 '이 부품에 대한 정보 작업' 묶음의 끝 — 겹침 순서 divider 바로 위에 둔다.
+      var divider = document.getElementById("cmpMenuDivider2") || menu.querySelector("hr");
+      menu.insertBefore(btn, divider);
+    } else if (!isAdmin && old) old.remove();
+    syncAdminPageMenu(isAdmin);
+  }
+
+  // 계정 메뉴의 '관리자 페이지' — 관리자일 때만 DOM에 만든다.
+  // ⚠ 숨기는 것은 보안이 아니다. admin.html 은 정적 파일이라 주소를 아는 사람은 열 수 있다.
+  //    실제로 막는 것은 DB의 RLS 이고(supabase/03_public_categories.sql),
+  //    관리자가 아니면 분류 추가·수정·삭제가 서버에서 거부된다. 여기서는 눈에 안 띄게만 한다.
+  function syncAdminPageMenu(isAdmin) {
+    var menu = document.getElementById("acctMenu"); if (!menu) return;
+    var old = menu.querySelector("#acctAdmin");
+    if (!isAdmin) { if (old) old.remove(); return; }
+    if (old) return;
+    var btn = document.createElement("button");
+    btn.type = "button"; btn.className = "acct-item"; btn.id = "acctAdmin";
+    btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">' +
+      '<path d="M12 3.2l7 3v5.3c0 4.2-2.9 7.6-7 9.3-4.1-1.7-7-5.1-7-9.3V6.2z"/><path d="M9.4 12.1l1.8 1.8 3.4-3.6"/></svg>' +
+      WE.i18n.t("관리자 페이지");
+    // 새 창으로 연다 — 그리던 배선도를 두고 나갔다 오게 하지 않는다.
+    // noopener: 새 창이 window.opener 로 이 창을 건드리지 못하게 막는다(보안 기본).
+    btn.addEventListener("click", function () { window.open("admin.html", "_blank", "noopener"); });
+    // 요금제 아래, 로그아웃 위 구분선 앞에 둔다
+    var sep = menu.querySelector(".acct-sep");
+    if (sep) menu.insertBefore(btn, sep); else menu.appendChild(btn);
+  }
+
   function openComponentMenu(menuBtnEl, cmp) {
+    var r = menuBtnEl.getBoundingClientRect();
+    openComponentMenuAt(r.left, r.bottom + 2, cmp);
+  }
+
+  function openComponentMenuAt(clientX, clientY, cmp) {
     _menuCmpId = cmp.id;
     var menu = document.getElementById("cmpMenu");
-    var r = menuBtnEl.getBoundingClientRect();
+    // 토글이므로 지금 상태를 글자로 알려준다 — 누르기 전에 무엇이 될지 보여야 한다
+    var 이름버튼 = menu.querySelector('[data-act="hidename"]');
+    if (이름버튼) 이름버튼.textContent = cmp.hideName ? "이름 다시 보이기" : "이름 숨기기";
     menu.hidden = false;
-    menu.style.left = Math.min(r.left, window.innerWidth - menu.offsetWidth - 8) + "px";
-    menu.style.top = (r.bottom + 2) + "px";
+    menu.style.left = Math.max(8, Math.min(clientX, window.innerWidth - menu.offsetWidth - 8)) + "px";
+    menu.style.top = Math.max(8, Math.min(clientY, window.innerHeight - menu.offsetHeight - 8)) + "px";
     // 다음 pointerdown이 메뉴 밖이면 닫기
+    document.removeEventListener("pointerdown", outsideClose, true);
     setTimeout(function () {
       document.addEventListener("pointerdown", outsideClose, true);
     }, 0);
@@ -4097,8 +5413,10 @@ WE.app = (function () {
     });
     var pn = document.getElementById("projName");
     pn.value = WE.model.project.meta.name || "";
+    제목폭맞추기();
     pn.addEventListener("input", function (e) {
       WE.model.project.meta.name = e.target.value;
+      제목폭맞추기();   // 글자를 치는 대로 칸이 따라 늘어난다
     });
 
     // 도면 작성일 — PDF 우측 상단에 나가는 값. 비우면 최종 수정일을 자동으로 쓴다.
@@ -4281,6 +5599,11 @@ WE.app = (function () {
     document.getElementById("propName").addEventListener("input", function (e) {
       applyProp(function (c) { c.name = e.target.value; }, true);
     });
+    // 입력을 마친 시점에만 개인 사본을 만든다. 키를 누를 때마다 라이브러리를 저장하지 않는다.
+    document.getElementById("propName").addEventListener("change", function () {
+      var c = WE.model.getSelectedComponent();
+      if (c) makeComponentIndependent(c, true);
+    });
     ["propX", "propY"].forEach(function (id) {
       document.getElementById(id).addEventListener("input", function (e) {
         var v = parseFloat(e.target.value);
@@ -4375,6 +5698,10 @@ WE.app = (function () {
     powerPanel.hidden = true;   // 전력 요약은 기본(무선택) 상태에서만 표시
     var empty = document.getElementById("propEmpty");
     var body = document.getElementById("propBody");
+    /* 라벨 모드 안내는 선택과 무관하게 늘 맨 위에 둔다 — 라벨을 붙이는 동안에는
+       배선이 선택되기도 하고 안 되기도 하는데, 칸이 사라졌다 나타나면 쓸 수가 없다. */
+    var lmp = document.getElementById("labelModeProps");
+    if (lmp) lmp.hidden = (WE.model.ui.mode !== "label");
     var wp = document.getElementById("wireProps");
     var al = document.getElementById("alignProps");
     var ap = document.getElementById("annoProps");
@@ -4408,13 +5735,25 @@ WE.app = (function () {
       // 연결 설명 문구는 단일 선택에선 표시하지 않음(불필요) — 다중 선택 개수만 안내
       // 선택 개수 표시는 없앴다 — 정렬 구획이 나타나는 것으로 충분하다 (2026-08-18)
       document.getElementById("wireAlign").hidden = !(mw && mw.length >= 2);
-      document.getElementById("wireAllowOverlap").checked = !!wire.allowOverlap;
+      /* 여러 배선을 함께 골랐을 때 값이 서로 다르면 **칸을 비운다** (2026-09-09 고원빈).
+         팔레트 스와치는 이미 그렇게 하고 있었다 — 나머지 칸도 같은 규칙으로 맞춘다. */
+      var ws = 고른배선들();
+      var 겹침 = 공통값(ws, function (w) { return !!w.allowOverlap; });
+      var ov = document.getElementById("wireAllowOverlap");
+      ov.indeterminate = (겹침 == null);        // 섞임 = 켜짐도 꺼짐도 아닌 상태
+      ov.checked = !!겹침;
+      // 색 칸(운영체제 색 고르개)은 비울 수가 없다 — 섞였다는 건 아래 팔레트가 알려 준다
       setIfNotFocused("wireColor", wire.color);
-      setIfNotFocused("wireDash", wire.dash || "");   // 필드가 없으면 실선
+      var 종류 = 공통값(ws, function (w) { return w.dash || ""; });
+      var ds = document.getElementById("wireDash");
+      if (document.activeElement !== ds) {
+        if (종류 == null) ds.selectedIndex = -1;   // 섞임 = 아무것도 안 고른 상태
+        else ds.value = 종류;
+      }
       renderWirePalette();
-      setIfNotFocused("wireWidth", wire.width);
-      setIfNotFocused("wireLabelText", wire.labelText || "");
-      setIfNotFocused("wireCurrent", wire.current > 0 ? wire.current : "");
+      값칸("wireWidth", 공통값(ws, function (w) { return w.width; }));
+      값칸("wireLabelText", 공통값(ws, function (w) { return w.labelText || ""; }));
+      값칸("wireCurrent", 공통값(ws, function (w) { return w.current > 0 ? w.current : ""; }));
       updateWireAwgOut(wire);
       renderWireLoadList();
       return;
@@ -4423,7 +5762,8 @@ WE.app = (function () {
 
     var c = WE.model.getSelectedComponent();
     if (!c) {
-      empty.hidden = false; body.hidden = true;
+      // 라벨 모드에서는 위 안내가 이미 무엇을 하라고 말해 준다 — "선택된 대상이 없습니다" 는 군더더기
+      empty.hidden = (WE.model.ui.mode === "label"); body.hidden = true;
       if (SHOW_POWER_SUMMARY) { powerPanel.hidden = false; renderPowerSummary(); }   // 무선택 = 전력 요약 표시
       return;
     }
@@ -4443,7 +5783,7 @@ WE.app = (function () {
   // 선택 부품의 전기 정보(라이브러리 값)를 속성 하단에 읽기전용 표시
   function renderCompElec(c) {
     var box = document.getElementById("compElec");
-    var lib = c.libraryId ? WE.library.get(c.libraryId) : null;
+    var lib = componentPart(c);
     if (!lib) { box.hidden = true; return; }
     var roleMap = { battery: WE.i18n.t("배터리(소스)"), load: WE.i18n.t("부하"), converter: WE.i18n.t("변환기") };
     var role = lib.role || "load";
@@ -4459,6 +5799,31 @@ WE.app = (function () {
     document.getElementById("compElecBody").innerHTML = hasVal ? html
       : WE.i18n.t("<span class='muted'>전기값 미입력 — ⚙ 부품 정보에서 입력</span>");
     box.hidden = false;
+  }
+
+  /* 프로젝트 이름 칸을 글자 길이에 맞춘다 (2026-09-09 고원빈: "창이 너무 작은데").
+
+     ⚠ input 은 글자 수에 맞춰 저절로 늘어나지 않는다. 눈에 안 보이는 쌍둥이 글자에
+        같은 글꼴을 입혀 폭을 재고, 그 값을 칸에 준다.
+     ⚠ 한계는 CSS(min/max-width)가 진다 — 여기서 숫자를 두 벌 관리하지 않는다. */
+  var _제목자 = null;
+  function 제목폭맞추기() {
+    var el = document.getElementById("projName");
+    if (!el) return;
+    if (!_제목자) {
+      _제목자 = document.createElement("span");
+      _제목자.setAttribute("aria-hidden", "true");
+      _제목자.style.cssText = "position:absolute;left:-9999px;top:-9999px;white-space:pre;";
+      document.body.appendChild(_제목자);
+    }
+    var cs = getComputedStyle(el);
+    _제목자.style.fontFamily = cs.fontFamily;
+    _제목자.style.fontSize = cs.fontSize;
+    _제목자.style.fontWeight = cs.fontWeight;
+    _제목자.style.letterSpacing = cs.letterSpacing;
+    _제목자.textContent = el.value || el.placeholder || "";
+    // 좌우 안여백 + 테두리 + 커서 자리
+    el.style.width = (_제목자.offsetWidth + 24) + "px";
   }
 
   function setIfNotFocused(id, value) {
@@ -4478,6 +5843,13 @@ WE.app = (function () {
     m.hidden = false;
     var ok = document.getElementById("noticeOk");
     if (ok) ok.focus();
+  }
+  /* 안내 모달이 지금 떠 있는가.
+     한도 안내처럼 '막힐 때마다 알려야 하는' 쪽에서, 이미 떠 있는 모달을
+     또 열지 않으려고 쓴다. (겹치는 것만 막고, 닫은 뒤에는 다시 뜬다) */
+  function isNoticeOpen() {
+    var m = document.getElementById("noticeModal");
+    return !!(m && !m.hidden);
   }
   function bindNotice() {
     var m = document.getElementById("noticeModal"); if (!m) return;
@@ -4506,12 +5878,25 @@ WE.app = (function () {
   // 배치된 부품의 libraryId가 라이브러리에서 사라진 경우(다른 브라우저에서 만든 파일,
   // 예전 버전의 라이브러리 불러오기로 id가 재발급된 경우 등) 같은 이름의 부품으로 다시 연결.
   // 연결이 끊기면 BOM의 스펙·가격·구매링크·데이터시트가 전부 빈칸으로 보이므로 열 때마다 복구 시도.
+  /* ⚠ 배치된 부품에는 모델명(spec)이 없다(instanceOpts 가 안 옮긴다). 그래서 여기서는
+        findSame 을 그대로 못 쓴다. 대신 이렇게 가른다:
+          · publicId 가 있으면 그것으로 찾는다 — 공용 카탈로그 신원이라 확실하다
+          · 없으면 **그 이름을 가진 부품이 딱 하나일 때만** 잇는다
+        이름이 같은 부품이 둘 이상이면 어느 쪽인지 알 길이 없으므로 잇지 않고 둔다.
+        BOM 칸이 비는 편이, 엉뚱한 스펙·가격이 채워지는 것보다 낫다. (2026-09-03) */
   function relinkOrphanComponents() {
     var fixed = 0;
     WE.model.allComponents().forEach(function (c) {   // 전체 시트 — 끊긴 라이브러리 연결 점검
       if (!c.libraryId || WE.library.get(c.libraryId)) return;   // 정상 연결이면 통과
-      var byName = WE.library.findByName(c.name);
-      if (byName) { c.libraryId = byName.id; fixed++; }
+      var 후보 = null;
+      if (c.publicId) {
+        후보 = WE.library.getAll().filter(function (p) { return p.publicId === c.publicId; })[0] || null;
+      }
+      if (!후보) {
+        var 같은이름 = WE.library.getAll().filter(function (p) { return p.name === c.name; });
+        if (같은이름.length === 1) 후보 = 같은이름[0];
+      }
+      if (후보) { c.libraryId = 후보.id; fixed++; }
     });
     return fixed;
   }
@@ -4520,11 +5905,14 @@ WE.app = (function () {
     var snap = WE.model.project.meta.canvas.snap !== false;
     document.getElementById("chkSnap").checked = snap;
     document.getElementById("projName").value = WE.model.project.meta.name || "";
+    제목폭맞추기();
     syncProjDate();
     syncProjNote();
     document.getElementById("wireWidthSel").value = String(WE.model.ui.wireWidth);
     syncWireRoutingBtns();
     relinkOrphanComponents();
+    applyCanvasSize();          // 연 파일·바뀐 시트의 용지 크기 반영
+    syncPageSizeBtn();
     renderPalette();
     renderSheetTabs();          // 연 파일의 시트 구성으로 탭 줄을 다시 그린다
     WE.render.renderAll();
@@ -4533,27 +5921,39 @@ WE.app = (function () {
 
   return {
     copySelection: copySelection, pasteClipboard: pasteClipboard,
-    init: init, refreshProps: refreshProps, setHint: setHint, notice: notice, setSavedHint: setSavedHint, reloadUI: reloadUI,
+    init: init, refreshProps: refreshProps, setHint: setHint, notice: notice, isNoticeOpen: isNoticeOpen, setSavedHint: setSavedHint, reloadUI: reloadUI,
     renderLibrary: renderLibrary,
     toggleAllFolders: toggleAllFolders,
     openComponentMenu: openComponentMenu,
+    openComponentMenuAt: openComponentMenuAt,
     openPresetModal: openPresetModal,
     focusAnnoText: focusAnnoText,
-    afterTerminalEdit: afterTerminalEdit,
+    afterTerminalEdit: afterTerminalEdit, makeComponentIndependent: makeComponentIndependent,
     buildBOM: buildBOM,
     bomData: bomData,
     bomColumns: visibleCols,
     linkLabel: linkLabel,
     renderBOMView: renderBOMView,
-    wireListData: function () { return SHOW_WIRE_LIST ? wireListData() : []; },   // 숨김 시 인쇄 섹션도 빠진다
+    netListData: function () { return SHOW_WIRE_LIST ? netListData() : []; },
+    // 검사가 '표에 보이는 것' 과 '내보내는 것' 이 같은지 맞춰 볼 때 쓴다
+    wireListExportRows: wireListExportRows,
+    // 인쇄용 결선표(js/pdf.js)도 화면과 **같은 비고**를 찍어야 한다
+    wireNoteOf: function (net) { return 비고읽기(비고키(net)); },
+    renderWireListView: renderWireListView,
+    netListByComponent: function () { return SHOW_WIRE_LIST ? netListByComponent() : []; },   // 숨김 시 인쇄 섹션도 빠진다
     legendItems: legendItems,
     syncProjNote: syncProjNote,
     syncNoteWidth: syncNoteWidth,
     afterModelRender: afterModelRender,
     powerSummaryRows: powerSummaryRows,
     handleShortcut: handleShortcut,
+    fitZoom: fitZoom,          // 화면 맞춤 — 배율 숫자 클릭과 가운데 버튼 더블클릭이 같이 쓴다
+    // 여러 장 인쇄가 시트를 바꿔 가며 부른다 — 시트마다 용지가 다를 수 있어서(2026-09-08)
+    applyCanvasSize: applyCanvasSize,
     setMode: setMode,
     nextWireLabel: nextWireLabel,
+    // 라벨 모드에서 배선을 클릭할 때 interactions.js 가 쓴다
+    붙일라벨: 붙일라벨, 라벨칸올리기: 라벨칸올리기,
     track: track, trackOnce: trackOnce,
     // '새 배선도로 시작'. 검사가 이 이름으로 부르고 있었는데 노출이 안 돼 있어서
     // WE.app.newProject ? ... : 1 이 조용히 지나갔다 (2026-08-18).

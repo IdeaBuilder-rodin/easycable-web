@@ -5,13 +5,38 @@
 # static.cloudflareinsights.com(비콘) · cloudflareinsights.com(수집) 을 넣었다.
 # ⚠ 이걸 안 넣으면 대시보드에서 Web Analytics 를 켜도 CSP 가 비콘을 막아 통계가 0 이다.
 #
-# ⚠ 결제(토스페이먼츠)를 붙이면 결제 페이지에만 CSP 를 따로 완화해야 한다.
-#    js.tosspayments.com 외에 카드사·간편결제 도메인이 여럿 필요하고,
-#    Permissions-Policy 의 payment=() 와 form-action 'self' 도 걸린다.
-#    전역을 풀지 말고 /pay* 경로 규칙을 따로 두는 방식으로 간다.
+# 2026-08-24 결제(토스페이먼츠)를 붙이면서 /checkout.html 규칙을 아래에 따로 두었다.
+#    전역은 그대로 조여 두고 결제 페이지 한 장만 푼다 —
+#    전역을 풀면 에디터까지 외부 스크립트를 받을 수 있게 된다.
 /*
   X-Content-Type-Options: nosniff
   Referrer-Policy: strict-origin-when-cross-origin
   Permissions-Policy: geolocation=(), microphone=(), camera=(), payment=(), usb=()
   Cross-Origin-Opener-Policy: same-origin
   Content-Security-Policy: default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self' 'unsafe-inline' https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' https://ukttsmkenaappsazervx.supabase.co https://api.web3forms.com https://cloudflareinsights.com; frame-src blob:
+
+# ─────────────────────────────────────────────────────────────────────
+#  결제 페이지만 완화 (2026-08-24)
+#
+#  ⚠ 여기서 한 번 틀렸다 — Cloudflare 는 "아래 규칙이 이기는" 방식이 **아니다.**
+#     여러 규칙이 맞으면 헤더를 **쉼표로 합친다.** CSP 가 두 개 오면 브라우저는
+#     둘 다 지키려고 더 좁은 쪽(교집합)을 쓰므로, 여기서 아무리 열어 줘도
+#     위 /* 의 default-src 'self' 가 남아 토스 SDK 가 계속 막힌다.
+#     그래서 ! 로 먼저 지우고 새로 넣는다. (X-Content-Type-Options 같은
+#     그대로 물려받아도 되는 것은 다시 적지 않는다 — 적으면 값이 두 번 붙는다)
+#
+#  ⚠ 카드사·간편결제 도메인은 아직 다 모른다.
+#     토스 문서에 목록이 없어서, 테스트 결제를 돌리며 콘솔의
+#     "Refused to frame ... violates CSP" 로그를 보고 하나씩 채워야 한다.
+#     한 번에 안 끝나고 몇 번 왕복한다. 지금은 토스 도메인만 열어 둔 상태다.
+#
+#  왜 *.tosspayments.com 인가 — 결제창이 js.tosspayments.com 이 아니라
+#  event.tosspayments.com · pay.tosspayments.com 등 여러 하위 도메인을 쓴다.
+# ─────────────────────────────────────────────────────────────────────
+/checkout.html
+  ! Content-Security-Policy
+  ! Permissions-Policy
+  ! Cross-Origin-Opener-Policy
+  Permissions-Policy: geolocation=(), microphone=(), camera=(), payment=(self), usb=()
+  Cross-Origin-Opener-Policy: same-origin-allow-popups
+  Content-Security-Policy: default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self' https://*.tosspayments.com; script-src 'self' 'unsafe-inline' https://static.cloudflareinsights.com https://js.tosspayments.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://*.tosspayments.com; font-src 'self' data:; connect-src 'self' https://ukttsmkenaappsazervx.supabase.co https://cloudflareinsights.com https://api.tosspayments.com https://*.tosspayments.com; frame-src blob: https://*.tosspayments.com

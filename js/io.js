@@ -54,6 +54,7 @@ WE.io = (function () {
     document.getElementById("fileOpen").addEventListener("change", onOpenFileInput);
     // 파일로 저장 안 한 변경이 있을 때만 닫기 확인 (문구는 브라우저 고정 문구가 뜸 — 커스텀 불가)
     window.addEventListener("beforeunload", function (e) {
+      if (_leaving) return;   // 로그인처럼 '우리가 일부러 보내는' 이동은 묻지 않는다
       if (!isDirty()) return;
       e.preventDefault();
       e.returnValue = "";   // 구형 Chrome 호환
@@ -109,6 +110,12 @@ WE.io = (function () {
   }
 
   // 새 프로젝트 시작 시 호출 — 이전 파일과의 연결을 끊음(다음 저장은 "다른 이름으로" 새로 지정)
+  /* 로그인처럼 우리가 일부러 페이지를 떠나보낼 때 닫기 확인을 건너뛴다.
+     안 그러면 로그인 버튼을 눌렀는데 "이 사이트를 나가시겠습니까?"가 먼저 뜬다.
+     자동저장은 store.js 의 beforeunload/pagehide 가 따로 하므로 작업은 안 잃는다. */
+  var _leaving = false;
+  function allowLeave() { _leaving = true; }
+
   function clearFileHandle() { _fileHandle = null; syncSaveTitle(); }
 
   // 툴바 [저장]이 '어느 파일'을 덮어쓸지 툴팁에 밝혀 둔다.
@@ -319,21 +326,28 @@ WE.io = (function () {
     }
   }
 
-  // 공유 파일의 부품을 라이브러리에 병합: 같은 이름이 이미 있으면 건너뜀(내 서랍 보존).
-  // 반환: { added, idMap } — idMap은 원본 libraryId → 받는 쪽 실제 부품 id (프로젝트 재연결용)
+  /* 공유 파일의 부품을 라이브러리에 병합: 이미 있는 것은 건너뛴다(내 서랍 보존).
+     반환: { added, idMap } — idMap은 원본 libraryId → 받는 쪽 실제 부품 id (프로젝트 재연결용)
+
+     ⚠ '이미 있는가'는 이름이 아니라 WE.library.findSame 이 정한다 —
+        이름만 같고 모델명이 다른 부품에 파일 속 부품을 붙여 버리면, 도면에 엉뚱한
+        스펙·이미지가 앉는다(2026-09-03 고원빈 제보). 모델명이 비어 있으면 다른 부품으로 본다.
+     ⚠ 새로 넣을 때 원본 id 를 살린다. 안 그러면 **같은 파일을 열 때마다 복사본이 쌓인다** —
+        모델명이 없는 부품은 findSame 이 매번 '다른 부품'으로 보기 때문이다.
+        (library._importJson 이 쓰는 것과 같은 방식) */
   function mergeLibraryParts(list) {
     var idMap = {}, added = 0, filled = 0;
     list.forEach(function (p) {
       if (!p || !p.name) return;
-      var existing = WE.library.findByName(p.name);
+      var existing = WE.library.findSame(p);
       if (existing) {
-        idMap[p.id] = existing.id;                 // 이름 중복 → 기존 부품에 연결
-        // 같은 이름이 있어도, 기존 부품에 '비어 있는' 항목(스펙·가격·링크·데이터시트·전기정보)은
-        // 공유파일 데이터로 채움 → 받는 쪽에 껍데기 부품만 있어도 BOM/데이터시트가 살아남.
-        // (받는 쪽이 직접 입력해 둔 값은 덮지 않음)
+        idMap[p.id] = existing.id;                 // 같은 부품 → 기존 것에 연결
+        // 기존 부품에 '비어 있는' 항목(스펙·가격·링크·데이터시트·전기정보)만 공유파일 데이터로 채움
+        // → 받는 쪽에 껍데기 부품만 있어도 BOM/데이터시트가 살아남. (직접 입력해 둔 값은 안 덮음)
         if (fillMissingFields(existing, p)) filled++;
       } else {
         var np = WE.library.addPart(p);            // 새로 추가(새 id 발급)
+        if (p.id && !WE.library.get(p.id)) np.id = p.id;   // 안 쓰이는 원본 id 면 되살린다
         idMap[p.id] = np.id;
         added++;
       }
@@ -354,11 +368,23 @@ WE.io = (function () {
     if ((!existing.datasheets || !existing.datasheets.length) && src.datasheets && src.datasheets.length) {
       patch.datasheets = src.datasheets; changed = true;
     }
-    if (changed) WE.library.updatePart(existing.id, patch);
+    if (!existing.nameLabelPos && src.nameLabelPos) {
+      patch.nameLabelPos = { x: src.nameLabelPos.x, y: src.nameLabelPos.y };
+      changed = true;
+    }
+    if ((!existing.terminalPlacementQueue || !existing.terminalPlacementQueue.length) && src.terminalPlacementQueue && src.terminalPlacementQueue.length) {
+      patch.terminalPlacementQueue = src.terminalPlacementQueue;
+      patch.terminalPlacementQueueVersion = src.terminalPlacementQueueVersion;
+      changed = true;
+    }
+    // 공유 파일에서 같은 부품의 빈 정보를 보충하는 것은 사용자의 부품 편집이 아니다.
+    // 공용 출처가 있는 항목이라면 그 신원을 그대로 보존한다.
+    if (changed) WE.library.updatePart(existing.id, patch, { preservePublicLink: true });
     return changed;
   }
 
   return {
+    allowLeave: allowLeave,
     init: init, save: save, saveAs: saveAs, clearFileHandle: clearFileHandle,
     currentFileName: currentFileName,
     loadProjectText: loadProjectText, loadProjectBuffer: loadProjectBuffer,

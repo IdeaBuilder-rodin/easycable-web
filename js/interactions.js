@@ -20,10 +20,20 @@ WE.interactions = (function () {
     window.addEventListener("pointerup", onPointerUp);
     window.addEventListener("keydown", onKeyDown);
     window.addEventListener("keyup", onKeyUp);
-    // 우클릭 = 그리던 배선 버리기. 배선을 그리는 중일 때만 기본 메뉴를 막는다
-    // (평소 우클릭은 브라우저 메뉴 그대로 — 개발자도구·이미지 저장 등을 쓸 수 있어야 한다)
+    window.addEventListener("blur", function () { document.body.classList.remove("label-move-ready"); });
+    // 배선 작성 중 우클릭은 취소. 그 외에는 부품에서만 ⋯와 같은 메뉴를 열고,
+    // 빈 캔버스는 브라우저 기본 메뉴를 그대로 둔다.
     svg.addEventListener("contextmenu", function (e) {
-      if (cancelWireDraw()) e.preventDefault();
+      if (cancelWireDraw()) { e.preventDefault(); return; }
+      var componentEl = e.target.closest(".component");
+      if (!componentEl) return;
+      var cmp = WE.model.getComponent(componentEl.getAttribute("data-id"));
+      if (!cmp) return;
+      WE.model.select("component", cmp.id);
+      WE.render.renderOverlay();
+      WE.app.refreshProps();
+      WE.app.openComponentMenuAt(e.clientX, e.clientY, cmp);
+      e.preventDefault();
     });
     svg.addEventListener("pointerover", onNetHover);
     svg.addEventListener("pointerout", onNetHoverOut);
@@ -31,22 +41,28 @@ WE.interactions = (function () {
     svg.addEventListener("pointerleave", function () { _hoverLabelId = null; WE.render.setWireLabelHover(null); });
     svg.addEventListener("pointermove", onTermTooltipMove);
     svg.addEventListener("pointerleave", hideTermTooltip);
-    svg.addEventListener("pointerleave", function () { WE.render.setLabelPreview(null); });
+    svg.addEventListener("pointerleave", function () {
+      WE.render.setLabelPreview(null);
+      WE.render.setTextPreview(null);      // 캔버스 밖으로 나가면 들고 있던 미리보기도 내린다
+    });
   }
 
   // 배선 번호 라벨 위에 마우스를 올리면 강조(드래그 가능함을 명확히 표시)
-  var _hoverLabelId = null;
+  var _hoverLabelId = null, _hoverLabelEnd = null;
   function onWireLabelHover(e) {
     if (drag) return;
     if (WE.model.ui.mode !== "select") {   // 선택 모드에서만(드래그 가능한 상태만 강조)
-      if (_hoverLabelId) { _hoverLabelId = null; WE.render.setWireLabelHover(null); }
+      if (_hoverLabelId) { _hoverLabelId = null; _hoverLabelEnd = null; WE.render.setWireLabelHover(null); }
       return;
     }
     var lblEl = e.target.closest("[data-wire-label-for]");
     var id = lblEl ? lblEl.getAttribute("data-wire-label-for") : null;
-    if (id === _hoverLabelId) return;
-    _hoverLabelId = id;
-    WE.render.setWireLabelHover(id);
+    // ⚠ 배선 하나에 라벨이 둘이라 '어느 끝'까지 봐야 한다. id 만 보면 반대쪽 끝으로
+    //    마우스를 옮겨도 같은 id 라 강조가 안 따라온다.
+    var end = lblEl ? lblEl.getAttribute("data-wire-label-end") : null;
+    if (id === _hoverLabelId && end === _hoverLabelEnd) return;
+    _hoverLabelId = id; _hoverLabelEnd = end;
+    WE.render.setWireLabelHover(id, end);
   }
 
   function getLastPointer() { return { x: lastX, y: lastY }; }
@@ -129,6 +145,7 @@ WE.interactions = (function () {
 
   function onKeyUp(e) {
     if (e.code === "Space") { spaceDown = false; document.body.classList.remove("pan-ready"); }
+    if (e.key === "Alt") document.body.classList.remove("label-move-ready");
   }
 
   function snapVal(v) {
@@ -136,15 +153,101 @@ WE.interactions = (function () {
     return m.snap ? WE.geometry.snap(v, m.grid) : v;
   }
 
+  function beginAltLabelDrag(e) {
+    var lblEl = dblTarget(e, "[data-label-tid]");
+    if (lblEl) {
+      var lCmpId = lblEl.getAttribute("data-cmp-id");
+      WE.model.select("component", lCmpId);
+      WE.render.renderOverlay();
+      WE.app.refreshProps();
+      drag = { mode: "tlabel", cmpId: lCmpId, tid: lblEl.getAttribute("data-label-tid") };
+      svg.setPointerCapture(e.pointerId);
+      return true;
+    }
+
+    var cmpLblEl = e.target.closest("[data-label-for],[data-label-bg-for]");
+    if (!cmpLblEl) return false;
+    var clCmpId = cmpLblEl.getAttribute("data-label-for") || cmpLblEl.getAttribute("data-label-bg-for");
+    WE.model.select("component", clCmpId);
+    WE.render.renderOverlay();
+    WE.app.refreshProps();
+    drag = { mode: "clabel", cmpId: clCmpId };
+    svg.setPointerCapture(e.pointerId);
+    return true;
+  }
+
+  function snapComponentLabel(cmp, p) {
+    var canvas = WE.model.project.meta.canvas;
+    var grid = canvas.grid || 10;
+    var x = WE.geometry.snap(p.x, grid);
+    var y = WE.geometry.snap(p.y, grid);
+    var box = WE.render.componentBBox(cmp);
+    var xs = [box.x, (box.x + box.x2) / 2, box.x2];
+    var ys = [box.y, (box.y + box.y2) / 2, box.y2];
+    var tol = 6;
+    var xGuide = null, yGuide = null;
+
+    xs.forEach(function (target) {
+      if (Math.abs(p.x - target) <= tol && (xGuide === null || Math.abs(p.x - target) < Math.abs(p.x - xGuide))) {
+        xGuide = target;
+      }
+    });
+    ys.forEach(function (target) {
+      if (Math.abs(p.y - target) <= tol && (yGuide === null || Math.abs(p.y - target) < Math.abs(p.y - yGuide))) {
+        yGuide = target;
+      }
+    });
+
+    if (xGuide !== null) x = xGuide;
+    if (yGuide !== null) y = yGuide;
+    var guides = [];
+    if (xGuide !== null) guides.push({ axis: "x", value: xGuide,
+      from: Math.min(box.y, y), to: Math.max(box.y2, y), kind: "label" });
+    if (yGuide !== null) guides.push({ axis: "y", value: yGuide,
+      from: Math.min(box.x, x), to: Math.max(box.x2, x), kind: "label" });
+    return { x: x, y: y, guides: guides };
+  }
+
+  // 가운데 버튼 더블클릭 판정용 (아래 onPointerDown 참고)
+  var middleClickAt = 0, middleClickX = 0, middleClickY = 0;
+
   function onPointerDown(e) {
     // 드래그/클릭 시작 시 넷 하이라이트 해제
     if (_netKey) { _netKey = null; WE.render.setNetHighlight(null); }
     WE.model.ui.selectedWireLabel = null;   // 라벨 단독 선택은 라벨을 직접 클릭했을 때만 유지
+    /* 가운데(휠) 버튼을 같은 자리에서 빠르게 두 번 = 화면 맞춤.
+       단자 배치 편집기(termeditor.js onDown)와 **같은 규칙·같은 값**을 쓴다 —
+       두 화면에서 손에 익는 동작이 달라지면 안 된다.
+       ⚠ dblclick 이벤트를 안 쓰는 이유: 가운데 버튼은 브라우저가 dblclick 을 주지 않는다.
+          그래서 시간(350ms)과 거리(8px)로 직접 판정한다. */
+    if (e.button === 1) {
+      var 지금 = Date.now();
+      var 두번 = 지금 - middleClickAt <= 350 &&
+        Math.abs(e.clientX - middleClickX) <= 8 && Math.abs(e.clientY - middleClickY) <= 8;
+      middleClickAt = 두번 ? 0 : 지금;      // 세 번째 누름이 또 맞춤이 되지 않게 초기화
+      middleClickX = e.clientX; middleClickY = e.clientY;
+      if (두번) {
+        drag = null;
+        document.body.classList.remove("panning");
+        if (WE.app && WE.app.fitZoom) WE.app.fitZoom();
+        e.preventDefault();
+        return;
+      }
+    }
+
     // 팬: 스페이스 드래그 또는 휠(가운데) 버튼 드래그
     if (spaceDown || e.button === 1) {
       drag = { mode: "pan", startX: e.clientX, startY: e.clientY, sl: wrap.scrollLeft, st: wrap.scrollTop };
       document.body.classList.add("panning");
       try { svg.setPointerCapture(e.pointerId); } catch (_) {}
+      e.preventDefault();
+      return;
+    }
+
+    // Alt is reserved for moving terminal/component names. Clicking anywhere
+    // else while it is held must not select or move wires and components.
+    if (e.altKey) {
+      if (WE.model.ui.mode === "select") beginAltLabelDrag(e);
       e.preventDefault();
       return;
     }
@@ -158,32 +261,29 @@ WE.interactions = (function () {
     var annoEl0 = e.target.closest("[data-anno-id]");
     if (annoEl0) {
       var aid0 = annoEl0.getAttribute("data-anno-id");
+      // Ctrl/⌘ + 클릭 → 다중 선택 토글. 부품·배선과 같은 규칙이라 섞어서 고를 수 있다.
+      if (e.ctrlKey || e.metaKey) {
+        WE.model.toggleMultiAnno(aid0);
+        WE.render.renderOverlay();
+        WE.app.refreshProps();
+        return;
+      }
       var tot0 = WE.model.getMulti().length + WE.model.getMultiAnno().length;
       if (tot0 > 1 && WE.model.getMultiAnno().indexOf(aid0) >= 0) { startGroupMove(e); return; }
       selectAnnoAndDrag(annoEl0, e); return;
-    }
-
-    // 단자 라벨 클릭 → 라벨만 드래그로 위치 이동
-    var lblEl = dblTarget(e, "[data-label-tid]");
-    if (lblEl) {
-      var lCmpId = lblEl.getAttribute("data-cmp-id");
-      WE.model.select("component", lCmpId);
-      WE.render.renderOverlay();
-      WE.app.refreshProps();
-      drag = { mode: "tlabel", cmpId: lCmpId, tid: lblEl.getAttribute("data-label-tid") };
-      svg.setPointerCapture(e.pointerId);
-      return;
     }
 
     // 배선 번호 라벨 클릭 → 라벨만 드래그로 위치 이동
     var wlblEl = e.target.closest("[data-wire-label-for]");
     if (wlblEl) {
       var wlWireId = wlblEl.getAttribute("data-wire-label-for");
+      var wlEnd = wlblEl.getAttribute("data-wire-label-end") || "from";
       WE.model.ui.selectedWireLabel = wlWireId;   // 라벨 자체를 선택 → Delete 시 라벨만 삭제
+      WE.model.ui.selectedWireLabelEnd = wlEnd;   // 그중에서도 **이쪽 끝** 하나
       WE.model.select("wire", wlWireId);
       WE.render.renderOverlay();
       WE.app.refreshProps();
-      drag = { mode: "wlabel", wireId: wlWireId };
+      drag = { mode: "wlabel", wireId: wlWireId, end: wlEnd };
       svg.setPointerCapture(e.pointerId);
       return;
     }
@@ -292,6 +392,8 @@ WE.interactions = (function () {
         mode: "move", id: id,
         startX: e.clientX, startY: e.clientY,
         orig: { x: c.x, y: c.y },
+        // 캔버스 여유는 **시작할 때 한 번만** 잰다 (geometry.deltaRange 주석 참고)
+        limit: WE.geometry.deltaRange([c]),
         follow: beginWireFollow([id]),
         branchFollow: beginBranchFollow([id])
       };
@@ -314,6 +416,9 @@ WE.interactions = (function () {
     comps.forEach(function (id) { var c = WE.model.getComponent(id); if (c) origs["c" + id] = { x: c.x, y: c.y }; });
     annos.forEach(function (id) { var a = WE.model.getAnnotation(id); if (a) origs["a" + id] = { x: a.x, y: a.y }; });
     drag = { mode: "move-group", comps: comps, annos: annos, origs: origs, startX: e.clientX, startY: e.clientY,
+             // 여유는 시작할 때 한 번만 — 무리 전체를 한 범위로 묶는다
+             limit: WE.geometry.deltaRange(comps.map(function (cid) { return WE.model.getComponent(cid); })
+                                                .filter(function (c) { return !!c; })),
              follow: beginWireFollow(comps), branchFollow: beginBranchFollow(comps) };
     svg.setPointerCapture(e.pointerId);
   }
@@ -421,12 +526,16 @@ WE.interactions = (function () {
   }
 
   var SNAP_DIST = 22; // 단자 스냅 반경(캔버스 px)
+  // 단자 라벨을 끌 때 '자기 배선 경로'에 붙는 반경. 단자 스냅(22)보다 좁게 둔다 —
+  // 라벨은 배선 밖 임의 위치에도 놓을 수 있어야 하므로 너무 넓으면 손을 탄다.
+  var TLABEL_WIRE_SNAP = 12;
 
   // 모든 단자의 절대좌표
   function allTerminals() {
     var list = [];
     WE.model.project.components.forEach(function (c) {
       c.terminals.forEach(function (t) {
+        if (t.visible === false) return;
         list.push({ cmpId: c.id, tid: t.id, pos: WE.geometry.terminalAbs(c, t) });
       });
     });
@@ -493,6 +602,7 @@ WE.interactions = (function () {
     }
     WE.model.project.components.forEach(function (c) {
       (c.terminals || []).forEach(function (t) {
+        if (t.visible === false) return;
         consider(WE.geometry.wireEndpoint({ componentId: c.id, terminalId: t.id }));
       });
     });
@@ -794,6 +904,12 @@ WE.interactions = (function () {
     if (sel.type === "annotation" && annos.indexOf(sel.id) < 0) annos.push(sel.id);
     if (!comps.length && !annos.length) return false;
 
+    // ⚠ 드래그와 같은 규칙으로 가둔다 — 방향키로는 빠져나갈 수 있으면 안 된다.
+    var nCs = comps.map(function (id) { return WE.model.getComponent(id); })
+                   .filter(function (c) { return !!c; });
+    if (nCs.length) { var nmv = WE.geometry.clampDelta(nCs, dx, dy); dx = nmv.dx; dy = nmv.dy; }
+    if (!dx && !dy && !annos.length) return true;   // 더 못 가는 방향이면 조용히 무시
+
     var follow = beginWireFollow(comps);
     var bFollow = beginBranchFollow(comps);
     comps.forEach(function (id) {
@@ -1036,16 +1152,31 @@ WE.interactions = (function () {
       }
     });
   }
+  /* 단자가 움직이는 변경을 '시작'/'끝' 둘로 나눠 잡는다.
+
+     ⚠ 왜 나눠 두나 — withTermFollow 는 mutate 를 그 자리에서 부르는 **동기 작업용**이다.
+        단자 편집기처럼 창을 열었다 닫는 사이에 값이 바뀌는 경우에는 쓸 수 없어서,
+        열 때 찍고 닫을 때 반영하도록 짝을 밖으로 낸다(2026-09-08). */
+  function termFollowBegin(cmpIds) {
+    return {
+      term:   beginTermFollow(cmpIds),
+      branch: beginBranchFollow(cmpIds),
+      rot:    beginRotFollow(cmpIds)
+    };
+  }
+  function termFollowEnd(snap) {
+    if (!snap) return;
+    // 회전을 먼저 본다 — 여기서 통째로 돌린 배선은 applyTermFollow 가 다시 건드리면 안 된다
+    var 회전됨 = applyRotFollow(snap.rot);
+    applyTermFollow(snap.term, 회전됨);
+    applyBranchFollow(snap.branch);
+  }
+
   // 단자가 움직이는 변경을 감싸 실행한다 (크기·배율·회전 공용)
   function withTermFollow(cmpIds, mutate) {
-    var snap = beginTermFollow(cmpIds);
-    var bSnap = beginBranchFollow(cmpIds);
-    var rSnap = beginRotFollow(cmpIds);
+    var snap = termFollowBegin(cmpIds);
     mutate();
-    // 회전을 먼저 본다 — 여기서 통째로 돌린 배선은 applyTermFollow 가 다시 건드리면 안 된다
-    var 회전됨 = applyRotFollow(rSnap);
-    applyTermFollow(snap, 회전됨);
-    applyBranchFollow(bSnap);
+    termFollowEnd(snap);
   }
 
   function followEnd(wpPt, origPt, term0, dx, dy) {
@@ -1179,6 +1310,21 @@ WE.interactions = (function () {
     WE.render.setLabelPreview({ x: at.x, y: at.y, text: text, angle: snap ? ang : 0, snapped: !!snap });
   }
 
+  /* 텍스트 모드: 마우스가 가리키는 자리에 '이렇게 생긴다' 를 미리 보여 준다.
+     ⚠ onTextDown 과 **똑같이 스냅**을 먹인다. 여기서 안 맞추면 보이는 자리와
+        실제로 놓이는 자리가 어긋나 미리보기가 거짓말이 된다. */
+  function updateTextPreview(e) {
+    // 이미 있는 주석 위에서는 '옮기기' 라서 새로 만들지 않는다 — 미리보기도 끈다
+    if (e.target.closest("[data-anno-id]")) { WE.render.setTextPreview(null); return; }
+    var p = WE.geometry.clientToCanvas(svg, e.clientX, e.clientY);
+    WE.render.setTextPreview({
+      x: snapVal(p.x), y: snapVal(p.y),
+      text: WE.i18n.t("텍스트"),          // addAnnotation 의 기본 문구와 같아야 한다
+      color: WE.model.ui.wireColor,
+      fontSize: 18                        // addAnnotation 의 기본 크기
+    });
+  }
+
   // 라벨 모드: 배선을 클릭하면 그 지점에 수축튜브 라벨 부착 (이미 있으면 클릭 지점으로 이동)
   function onLabelDown(e) {
     var wireEl = e.target.closest("[data-wire-id]");
@@ -1187,11 +1333,34 @@ WE.interactions = (function () {
     if (!wid) return;
     var w = WE.model.getWire(wid);
     if (!w) return;
+    /* 처음 붙일 때는 **양 끝에 자동으로** 놓는다 — 실물처럼 한 가닥의 두 끝에 같은 번호.
+
+       ⚠ 이미 번호가 있으면 예전에는 그냥 무시했다. 그런데 반대쪽 끝에 붙어 있는 경우
+          그게 화면 밖이라, 눌러도 아무 일이 없는 것처럼 보인다 (2026-09-09 고원빈 신고:
+          "라벨 누르고 배선 눌렀는데 배치가 안 되네"). 이제 **누른 자리로 가까운 쪽 마커를
+          옮기고** 상태줄로 이미 붙어 있다는 사실을 알린다. */
     var pt = WE.geometry.clientToCanvas(svg, e.clientX, e.clientY);
     var pts = WE.geometry.wireRoutePoints(w);
-    w.labelT = pts ? WE.geometry.polylineRatioOf(pts, pt) : 0.5;   // 경로 비율로 저장(이동해도 따라옴)
-    delete w.labelPos;
-    if (!(w.labelText || "").trim()) w.labelText = WE.app.nextWireLabel();
+    var 이미 = (w.labelText || "").trim();
+    if (이미) {
+      if (!pts || pts.length < 2) return;
+      var 앞 = WE.geometry.polylineOffsetFromEnd(pts, "from", pt).d;
+      var 뒤 = WE.geometry.polylineOffsetFromEnd(pts, "to", pt).d;
+      var 가까운끝 = 앞 <= 뒤 ? "from" : "to";
+      if (w.labelSkip === 가까운끝) delete w.labelSkip;   // 지웠던 쪽을 다시 부른 것이다
+      w.labelAt = w.labelAt || {};
+      w.labelAt[가까운끝] = { d: 가까운끝 === "from" ? 앞 : 뒤 };
+      delete w.labelPos; delete w.labelT;
+      if (WE.app.setHint) {
+        WE.app.setHint(WE.i18n.t("이미 ") + 이미 + WE.i18n.t(" 입니다 — 양 끝에 같은 번호가 붙습니다. 누른 자리로 옮겼습니다."));
+      }
+    } else {
+      // 툴바의 '다음에 붙일 글자' 칸을 그대로 쓴다 — 도면 중간에 W→Q 로 바꾸거나
+      // 숫자 없는 글자를 쓰는 것도 여기로 다 들어온다
+      w.labelText = WE.app.붙일라벨 ? WE.app.붙일라벨() : WE.app.nextWireLabel();
+      if (WE.app.라벨칸올리기) WE.app.라벨칸올리기();
+      delete w.labelPos; delete w.labelT; delete w.labelAt; delete w.labelSkip;
+    }
     WE.render.setLabelPreview(null);   // 부착 직후 미리보기 지움(다음 마우스 이동에 새 번호로 재표시)
     WE.render.renderWires();
     WE.history.commit();
@@ -1208,6 +1377,7 @@ WE.interactions = (function () {
       color: WE.model.ui.wireColor
     });
     WE.model.select("annotation", a.id);
+    WE.render.setTextPreview(null);   // 진짜 글자가 생겼으니 미리보기는 내린다
     WE.render.renderAnnotations();
     WE.render.renderOverlay();
     WE.app.refreshProps();
@@ -1227,14 +1397,19 @@ WE.interactions = (function () {
     svg.setPointerCapture(e.pointerId);
   }
 
-  // 부품의 단자 이름 라벨을 자동 배치로 되돌린다. 하나라도 되돌렸으면 true.
-  // 손으로 옮긴 위치(labelPos)와 손으로 고정한 변(labelSide)을 함께 푼다 —
-  // 사용자에게 '원래대로'는 하나지, 둘로 나뉘어 있지 않다.
+  /* 부품의 단자 이름 라벨을 자동 배치로 되돌린다. 하나라도 되돌렸으면 true.
+     더블클릭 → 손으로 끌어 옮긴 위치(labelPos)만 되돌린다.
+     ⚠ labelSide(라벨 방향)는 **건드리지 않는다.** 그건 캔버스에서 만든 값이 아니라
+        단자 배치 편집기의 '라벨 방향' 으로 정해 라이브러리 부품에 저장되는 설정이다
+        (termeditor.js setLabelSide · library.js). 여기서 같이 지웠더니,
+        좌우로 맞춰 둔 DC-DC 모듈 이름이 캔버스에서 더블클릭 한 번에 위아래로 튀었다.
+        자동 판정은 가로로 넓고 낮은 부품에서 '가까운 변' 차이가 1~5px 수준이라
+        방향이 쉽게 뒤집힌다 — 그래서 방향은 사람이 정해 두면 그대로 둬야 한다.
+        방향을 자동으로 되돌리려면 편집기에서 '자동' 을 고르면 된다. (2026-09-03 고원빈 발견) */
   function resetTermLabels(cmp) {
     var changed = false;
     (cmp.terminals || []).forEach(function (t) {
       if (t.labelPos) { delete t.labelPos; changed = true; }
-      if (t.labelSide) { delete t.labelSide; changed = true; }
     });
     return changed;
   }
@@ -1261,7 +1436,11 @@ WE.interactions = (function () {
         var tv = prompt(WE.i18n.t("라벨 문구 (비우면 라벨 삭제)"), tw.labelText || "");
         if (tv !== null) {
           tv = tv.trim();
-          if (tv) tw.labelText = tv; else { delete tw.labelText; delete tw.labelPos; delete tw.labelT; }
+          if (tv) tw.labelText = tv;
+          else {
+            delete tw.labelText; delete tw.labelPos; delete tw.labelT;
+            delete tw.labelAt; delete tw.labelSkip;
+          }
           WE.render.renderWires();
           WE.render.renderOverlay();
           WE.history.commit();
@@ -1272,10 +1451,22 @@ WE.interactions = (function () {
     }
     // 단자 라벨 더블클릭 → 자동 위치로 초기화
     var lblEl = e.target.closest("[data-label-tid]");
-    if (lblEl) {
+    if (lblEl && e.altKey) {
       var lc = WE.model.getComponent(lblEl.getAttribute("data-cmp-id"));
       var lt = lc && WE.model.getTerminal(lc, lblEl.getAttribute("data-label-tid"));
       if (lt) { delete lt.labelPos; WE.render.renderTermLabels(); WE.render.renderOverlay(); }
+      return;
+    }
+    var cmpLbl = e.target.closest("[data-label-for],[data-label-bg-for]");
+    if (cmpLbl && e.altKey) {
+      var cid = cmpLbl.getAttribute("data-label-for") || cmpLbl.getAttribute("data-label-bg-for");
+      var cc = WE.model.getComponent(cid);
+      if (cc) {
+        delete cc.nameLabelPos;
+        WE.render.updateComponent(cc);
+        WE.render.renderOverlay();
+        if (WE.history) WE.history.commit();
+      }
       return;
     }
     // 배선 더블클릭은 일부러 두지 않는다.
@@ -1325,16 +1516,43 @@ WE.interactions = (function () {
       return;
     }
 
+    // 텍스트 모드: 놓기 전에 '어디에 어떻게 생기는지' 를 마우스에 들려 보여 준다.
+    // ⚠ drag 중(방금 놓은 것을 끌고 있는 중)에는 아래 이동 처리로 내려가야 한다.
+    if (WE.model.ui.mode === "text" && !drag) {
+      updateTextPreview(e);
+      return;
+    }
+
     if (!drag) return;
 
     // 단자 라벨 이동 (로컬 좌표로 저장 → 회전/이동에 따라옴)
+    /* 아무 데나 놓을 수 있되, **자기 배선 가까이 가면 그 경로에 붙는다** —
+       배선 번호 라벨(wlabel)이 쓰는 것과 같은 방식이다. 손으로 눈대중해 맞출 필요가 없다.
+       ⚠ 붙이지 않으려면 Shift 를 같이 누른다. Alt 로 두면 안 된다 —
+          이 드래그 자체가 Alt 를 누른 채 시작하므로(위 onPointerDown) 늘 꺼져 버린다. (2026-09-03) */
     if (drag.mode === "tlabel") {
       var lc = WE.model.getComponent(drag.cmpId); if (!lc) return;
       var lt = WE.model.getTerminal(lc, drag.tid); if (!lt) return;
       var lp = WE.geometry.clientToCanvas(svg, e.clientX, e.clientY);
+      if (!e.shiftKey) {
+        var onWire = WE.geometry.nearestOnTerminalWires(drag.cmpId, drag.tid, lp);
+        if (onWire && onWire.dist <= TLABEL_WIRE_SNAP) lp = { x: onWire.x, y: onWire.y };
+      }
       var lrc = WE.geometry.absToTerminal(lc, lp);
       lt.labelPos = { x: lrc.rx * lc.width, y: lrc.ry * lc.height };
       WE.render.renderTermLabels();
+      WE.render.renderOverlay();
+      return;
+    }
+
+    if (drag.mode === "clabel") {
+      var nlc = WE.model.getComponent(drag.cmpId); if (!nlc) return;
+      var nlp = WE.geometry.clientToCanvas(svg, e.clientX, e.clientY);
+      var snappedLabel = snapComponentLabel(nlc, nlp);
+      var nll = WE.geometry.absToTerminal(nlc, snappedLabel);
+      nlc.nameLabelPos = { x: nll.rx * nlc.width, y: nll.ry * nlc.height };
+      WE.render.updateComponent(nlc);
+      WE.render.setAlignGuides(snappedLabel.guides);
       WE.render.renderOverlay();
       return;
     }
@@ -1385,8 +1603,14 @@ WE.interactions = (function () {
           }
         }
       }
-      wl.labelT = WE.geometry.polylineRatioOf(wlPts, finalPt);   // 경로 비율로 저장
-      delete wl.labelPos;
+      /* 그 끝에서 경로를 따라 잰 거리(d)로만 저장한다.
+         ⚠ 경로를 벗어난 자리는 쓰지 않는다 (2026-09-09 고원빈: "라벨은 무조건 배선 경로에").
+            선에서 떨어진 마커는 어느 선의 번호인지 알 수 없다. finalPt 는 이미 경로 위로
+            투영된 점이라, 옆으로 끌어도 선을 따라 미끄러진다. */
+      var wlEnd = drag.end || "from";
+      wl.labelAt = wl.labelAt || {};
+      wl.labelAt[wlEnd] = { d: WE.geometry.polylineOffsetFromEnd(wlPts, wlEnd, finalPt).d };
+      delete wl.labelPos; delete wl.labelT;
       WE.render.setWireLabelGuide(guide);
       WE.render.renderWires();
       WE.render.renderOverlay();
@@ -1448,6 +1672,10 @@ WE.interactions = (function () {
       var gp0 = WE.geometry.clientToCanvas(svg, drag.startX, drag.startY);
       var gp1 = WE.geometry.clientToCanvas(svg, e.clientX, e.clientY);
       var gdx = gp1.x - gp0.x, gdy = gp1.y - gp0.y;
+      /* ⚠ 무리 전체를 한 이동량으로 가둔다. 부품마다 따로 가두면 서로 간격이 무너진다.
+         ⚠ 여유는 drag.limit — 시작할 때 재 둔 것. 매 프레임 다시 재면 중간에 멈춘다. */
+      var gmv = WE.geometry.applyRange(drag.limit, snapVal(gdx), snapVal(gdy));
+      gdx = gmv.dx; gdy = gmv.dy;
       drag.comps.forEach(function (mid) {
         var mc = WE.model.getComponent(mid); if (!mc) return;
         var o = drag.origs["c" + mid];
@@ -1565,8 +1793,16 @@ WE.interactions = (function () {
     }
 
     if (drag.mode === "move") {
-      cmp.x = snapVal(drag.orig.x + dx);
-      cmp.y = snapVal(drag.orig.y + dy);
+      /* ⚠ 캔버스 밖으로 못 나가게 이동량을 줄인다.
+         밖으로 나간 부품은 화면에서 사라지는데(overflow:hidden) 데이터에는 남아
+         "부품이 없어졌다"가 된다. 위치가 아니라 **이동량**을 줄여야
+         아래 applyWireFollow 에 넘기는 값과 어긋나지 않는다.
+         ⚠ 여유는 drag.limit — **시작할 때 재 둔 것**을 쓴다. 여기서 다시 재면
+            이동량은 시작 기준인데 여유는 지금 기준이라 기준이 갈려 부품이 중간에 멈춘다. */
+      var mv = WE.geometry.applyRange(drag.limit,
+        snapVal(drag.orig.x + dx) - drag.orig.x, snapVal(drag.orig.y + dy) - drag.orig.y);
+      cmp.x = drag.orig.x + mv.dx;
+      cmp.y = drag.orig.y + mv.dy;
       applyAlignSnap(cmp);   // 다른 부품의 변/중심과 정렬되면 착 붙이고 파란 가이드선 표시
       applyWireFollow(drag.follow, cmp.x - drag.orig.x, cmp.y - drag.orig.y);
       applyBranchFollow(drag.branchFollow, cmp.x - drag.orig.x, cmp.y - drag.orig.y);
@@ -1574,14 +1810,19 @@ WE.interactions = (function () {
       // 회전된 부품도 올바르게 리사이즈되도록 이동량을 로컬 좌표로 변환
       var rad = cmp.rotation * Math.PI / 180, cos = Math.cos(rad), sin = Math.sin(rad);
       var ldx = dx * cos + dy * sin, ldy = -dx * sin + dy * cos;
-      var nw = Math.max(10, snapVal(drag.orig.width + ldx));
+      /* ⚠ 캔버스보다 크게는 못 키운다. 그렇게 되면 어디에 두어도 밖으로 삐져나가
+         "가두기"가 성립하지 않는다. (2026-09-02 고원빈 결정) */
+      var lim = WE.geometry.maxSize(cmp);
+      var nw = Math.max(10, Math.min(lim.width, snapVal(drag.orig.width + ldx)));
       if (WE.model.ui.lockAspect) {
         var ratio = drag.orig.width / drag.orig.height;
+        var nh = Math.max(10, Math.round(nw / ratio));
+        if (nh > lim.height) { nh = lim.height; nw = Math.max(10, Math.round(nh * ratio)); }
         cmp.width = nw;
-        cmp.height = Math.max(10, Math.round(nw / ratio));
+        cmp.height = nh;
       } else {
         cmp.width = nw;
-        cmp.height = Math.max(10, snapVal(drag.orig.height + ldy));
+        cmp.height = Math.max(10, Math.min(lim.height, snapVal(drag.orig.height + ldy)));
       }
     }
 
@@ -1655,7 +1896,7 @@ WE.interactions = (function () {
       });
     }
     // 부품 이동 종료 → 정렬 가이드선 정리
-    if (drag.mode === "move") WE.render.setAlignGuides(null);
+    if (drag.mode === "move" || drag.mode === "clabel") WE.render.setAlignGuides(null);
 
     // 방금 배치한 텍스트 주석 → 마우스를 뗀 즉시 입력 모드로 (별도 클릭 없이 바로 타이핑)
     if (drag.mode === "anno" && drag.fresh && WE.app.focusAnnoText) {
@@ -1669,6 +1910,10 @@ WE.interactions = (function () {
   function isBusy() { return !!drag; }
 
   function onKeyDown(e) {
+    if (e.key === "Alt") {
+      if (WE.model.ui.mode === "select") document.body.classList.add("label-move-ready");
+      e.preventDefault();
+    }
     // Ctrl/⌘+S → 실제 파일에 저장(Chrome/Edge는 이미 연결된 파일에 조용히 덮어씀, 그 외엔 새로 저장창).
     // 브라우저 임시저장도 함께 갱신. 입력창·모달 상관없이 항상 동작
     // Ctrl/⌘+Shift+S → 다른 이름으로 저장. 반드시 아래 Ctrl+S보다 먼저 볼 것 —
@@ -1717,14 +1962,19 @@ WE.interactions = (function () {
       e.preventDefault(); return;
     }
 
-    // 방향키로 선택한 부품·주석 미세 이동.
-    //   그냥      → 그리드 한 칸 (스냅이 꺼져 있으면 1px)
-    //   Shift 함께 → 1px — 그리드에서 살짝 벗어나게 두고 싶을 때
-    // 드래그와 같은 경로를 타야 수동배선이 함께 따라온다(applyWireFollow).
-    if (!e.ctrlKey && !e.metaKey && !e.altKey && ARROW_DELTA[e.key]) {
+    /* 방향키로 선택한 부품·주석 옮기기. 세 단계로 점점 잘게 (2026-09-08 고원빈).
+         그냥       → 그리드 한 칸 (스냅이 꺼져 있으면 1px)
+         Shift 함께 → 1px    — 그리드에서 살짝 벗어나게 두고 싶을 때
+         Ctrl  함께 → 0.5px  — 눈으로 맞추는 마지막 미세 조정
+
+       ⚠ 예전에는 Ctrl 을 아예 막아 놔서(!e.ctrlKey) 아무 일도 안 일어났다.
+       ⚠ Alt 는 계속 뺀다 — 브라우저·OS 단축키와 겹친다.
+       드래그와 같은 경로를 타야 수동배선이 함께 따라온다(applyWireFollow). */
+    if (!e.altKey && ARROW_DELTA[e.key]) {
       var d = ARROW_DELTA[e.key];
       var cv = WE.model.project.meta.canvas;
-      var step = e.shiftKey ? 1 : (cv.snap ? (cv.grid || 10) : 1);
+      var 잘게 = e.ctrlKey || e.metaKey;
+      var step = 잘게 ? 0.5 : (e.shiftKey ? 1 : (cv.snap ? (cv.grid || 10) : 1));
       if (nudgeSelection(d[0] * step, d[1] * step)) { e.preventDefault(); return; }
     }
 
@@ -1793,8 +2043,33 @@ WE.interactions = (function () {
     if (selWire && (e.key === "Delete" || e.key === "Backspace")) {
       // 라벨을 직접 클릭해 선택한 상태면 라벨만 삭제 (배선은 유지)
       if (WE.model.ui.selectedWireLabel === selWire.id && (selWire.labelText || "").trim()) {
+        var 번호 = (selWire.labelText || "").trim();
+        var 끝 = WE.model.ui.selectedWireLabelEnd;
+        /* Shift+Delete → **고른 끝 하나만** 감춘다. 분기점이 좁아 한쪽만 치우고 싶을 때.
+           번호는 남으므로 다음 자동 번호도 이 번호를 건너뛴다 — 그래서 상태줄로 분명히 알린다. */
+        if (e.shiftKey && (끝 === "from" || 끝 === "to") && !selWire.labelSkip) {
+          selWire.labelSkip = 끝;
+          if (selWire.labelAt) delete selWire.labelAt[끝];
+          WE.model.ui.selectedWireLabel = null;
+          WE.model.ui.selectedWireLabelEnd = null;
+          WE.render.renderWires(); WE.render.renderOverlay(); WE.app.refreshProps();
+          WE.history.commit();
+          if (WE.app.setHint) {
+            WE.app.setHint(번호 + WE.i18n.t(" 의 한쪽 끝만 감췄습니다 — 번호는 반대쪽 끝에 남아 있습니다."));
+          }
+          e.preventDefault(); return;
+        }
+        /* 그냥 Delete → **번호를 통째로** 지운다.
+           ⚠ 예전에는 한쪽 끝만 지웠는데, 남은 끝이 화면 밖이면 지운 줄 알지만 번호는 살아 있어
+              다음 자동 번호가 그걸 건너뛰었다 (2026-09-09 고원빈: "w5 지웠는데 w6 이 되네").
+              반쪽만 남는 상태를 기본으로 두면 안 된다. */
         delete selWire.labelText; delete selWire.labelPos; delete selWire.labelT;
+        delete selWire.labelAt; delete selWire.labelSkip;
         WE.model.ui.selectedWireLabel = null;
+        WE.model.ui.selectedWireLabelEnd = null;
+        if (WE.app.setHint) {
+          WE.app.setHint(번호 + WE.i18n.t(" 라벨을 지웠습니다 (양 끝 모두). 한쪽만 감추려면 Shift+Delete."));
+        }
         WE.render.renderWires(); WE.render.renderOverlay(); WE.app.refreshProps();
         WE.history.commit();
         e.preventDefault(); return;
@@ -1852,5 +2127,10 @@ WE.interactions = (function () {
   }
 
   return { init: init, resetWire: resetWire, isBusy: isBusy, getLastPointer: getLastPointer,
-           withTermFollow: withTermFollow, resetTermLabels: resetTermLabels };
+           withTermFollow: withTermFollow, resetTermLabels: resetTermLabels,
+           // 창을 열었다 닫는 동안 단자가 움직이는 경우용 (단자 편집기). 2026-09-08
+           termFollowBegin: termFollowBegin, termFollowEnd: termFollowEnd,
+           // 시험 통로 — 방향키 미세 이동을 키보드 없이 부른다.
+           // 캔버스 가두기가 방향키에도 걸리는지 재려면 이 경로가 필요하다.
+           _테스트_밀기: nudgeSelection };
 })();

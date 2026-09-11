@@ -314,8 +314,20 @@ WE.geometry = (function () {
     // 꺾임 방향: 탈출 축의 수직 축에서 상대 끝점이 어느 쪽인가
     var sign = (horizExit ? (far0.y - myPos.y) : (far0.x - myPos.x)) >= 0 ? 1 : -1;
     var members = [];
+    /* 수동 배선도 센다. (2026-09-02)
+
+       예전에는 `if (w.waypoints && w.waypoints.length) return;` 으로 수동 배선을 건너뛰었다.
+       그런데 레인은 **같은 면에서 같은 방향으로 나가는 배선들이 서로 안 겹치게** 15px 씩
+       벌려 주는 장치다. 수동이든 자동이든 그 자리를 차지하는 건 똑같다.
+
+       빼 놓으니 두 가지가 터졌다 —
+         · 사람이 손으로 그려 둔 줄에 자동 배선이 그대로 얹혔다.
+         · 배선 몇 개를 정렬하면 그것들이 수동으로 바뀌면서 레인 셈에서 빠지고,
+           **고르지도 않은 나머지 자동 배선이 다른 레인으로 튀었다.**
+           실제로 레벨시프터 A1~A4 → ESP32 GPIO4~7 에서, A2·A3·A4 만 정렬했는데
+           선택도 안 한 A1 의 위쪽 가로줄이 y=72 에서 102 로 뛰어 다른 배선에 겹쳤다.
+           (고원빈 보고) 세로 정렬은 x 만 건드리는데 엉뚱한 가로줄이 움직인 것이다. */
     WE.model.project.wires.forEach(function (w) {
-      if (w.waypoints && w.waypoints.length) return;
       [w.from, w.to].forEach(function (r) {
         if (r.componentId !== cmp.id) return;
         var ot = WE.model.getTerminal(cmp, r.terminalId);
@@ -341,7 +353,7 @@ WE.geometry = (function () {
   // 매니폴드 직각 라우팅: 한 단자에 여러 선이면 탈출 방향으로 바를 만들어 탭마다 분기
   // 규칙(확정 기준): 첫 구간은 단자가 붙은 부품 외곽면의 바깥 방향으로 — 부품을 벗어난 뒤(+여유) 꺾는다.
   // 여러 개 공유 시 +LANE_STEP(10px)씩 차등.
-  var STUB_BASE = 20, LANE_STEP = 10;
+  var STUB_BASE = 35, LANE_STEP = 15;
   // 자동 경로의 '통로(채널)' 좌표를 캔버스 안으로 가둔다. 채널은 세로/가로 통로의 x/y일 뿐이라
   // 어떤 값이어도 직각이 유지됨 → 안쪽으로 당겨도 모양만 접힐 뿐 연결은 그대로. (단자 스텁은
   // 단자 탈출 규칙상 못 막으므로 가장자리 부품은 짧게 삐질 수 있으나 긴 통로는 확실히 안에 든다)
@@ -352,6 +364,100 @@ WE.geometry = (function () {
     var max = (axis === "x" ? m.width : m.height) - CANVAS_MARGIN;
     return Math.max(CANVAS_MARGIN, Math.min(max, v));
   }
+  /* ── 캔버스 안에 가두기 ────────────────────────────────────────────
+     왜 필요한가 (2026-09-02):
+       캔버스(1600x900)는 크기가 고정인데 부품 위치에는 아무 제한이 없었다.
+       그런데 #canvas 는 viewBox 가 고정이고 overflow:hidden 이라,
+       밖으로 나간 부품은 **데이터에는 남아 있는데 화면에서 사라진다.**
+       클릭도 못 하고 PDF 에도 안 나오는데 BOM 에는 잡힌다 — 잃어버린 부품이 된다.
+
+     ⚠ 위치가 아니라 **이동량(delta)** 을 가둔다.
+        위치를 각자 가두면 여러 개를 함께 끌 때 서로 간격이 무너지고,
+        배선 추종(applyWireFollow)에 넘기는 이동량과도 어긋난다. */
+  /* 지금 보고 있는 페이지의 용지 크기.
+
+     ⚠ 페이지마다 다를 수 있다(2026-09-08). 시트에 size 가 있으면 그것이 먼저고,
+        없으면 예전처럼 project.meta.canvas 를 쓴다 —
+        **예전 파일에는 size 가 없으므로 모습이 하나도 안 바뀐다.** */
+  function canvasSize() {
+    var sz = WE.model.sheetSize && WE.model.sheetSize();
+    if (sz && sz.width > 0 && sz.height > 0) return sz;
+    var m = WE.model.project.meta && WE.model.project.meta.canvas;
+    return { width: (m && m.width) || 1600, height: (m && m.height) || 900 };
+  }
+
+  // 부품이 화면에서 차지하는 사각형 (회전·배율 반영). render.componentBBox 가 이걸 쓴다.
+  function componentBox(cmp) {
+    var W = cmp.width, H = cmp.height;
+    var cs = [localToAbs(cmp, 0, 0), localToAbs(cmp, W, 0),
+              localToAbs(cmp, W, H), localToAbs(cmp, 0, H)];
+    var xs = cs.map(function (p) { return p.x; }), ys = cs.map(function (p) { return p.y; });
+    return { x: Math.min.apply(null, xs), y: Math.min.apply(null, ys),
+             x2: Math.max.apply(null, xs), y2: Math.max.apply(null, ys) };
+  }
+
+  /* 부품들을 통째로 (dx,dy) 옮길 때, 캔버스를 벗어나지 않는 최대 이동량으로 줄인다.
+     ⚠ 캔버스보다 큰 부품은 어느 쪽으로도 다 못 넣는다(허용 범위가 비어 버린다).
+        그때는 그 축을 **막지 않는다** — 막으면 그 부품을 아예 못 움직이게 된다.
+        새로 그렇게 커지는 것은 크기 변경 쪽에서 막는다. */
+  /* 지금 자리에서 얼마나 더 갈 수 있는가 (축마다 [최소, 최대]).
+     ⚠⚠ 드래그처럼 **시작 위치 기준의 누적 이동량**을 다루는 곳은
+        이 범위를 **드래그를 시작할 때 한 번만** 재서 들고 있어야 한다.
+        매 프레임 다시 재면 기준이 둘로 갈린다 —
+        여유는 '지금 위치'로 재는데 이동량은 '시작 위치' 기준이라,
+        부품이 갈수록 여유가 줄어 같은 자리로 수렴해 버린다.
+        실제로 x=200 에서 시작한 부품이 1400 까지 못 가고 **800 에서 멈췄다.**
+        (2026-09-02 — 빠르게 끌수록 심했던 이유가 이것이다) */
+  function deltaRange(cmps) {
+    var cv = canvasSize();
+    var r = { loX: -Infinity, hiX: Infinity, loY: -Infinity, hiY: Infinity };
+    for (var i = 0; i < cmps.length; i++) {
+      var b = componentBox(cmps[i]);
+      if (b.x2 - b.x <= cv.width)  { r.loX = Math.max(r.loX, -b.x); r.hiX = Math.min(r.hiX, cv.width  - b.x2); }
+      if (b.y2 - b.y <= cv.height) { r.loY = Math.max(r.loY, -b.y); r.hiY = Math.min(r.hiY, cv.height - b.y2); }
+    }
+    return r;
+  }
+
+  // 미리 재 둔 범위 안으로 이동량을 줄인다. 범위가 비어 있으면(캔버스보다 큰 부품) 그냥 둔다.
+  function applyRange(r, dx, dy) {
+    if (!r) return { dx: dx, dy: dy };
+    if (r.loX <= r.hiX) dx = Math.max(r.loX, Math.min(r.hiX, dx));
+    if (r.loY <= r.hiY) dy = Math.max(r.loY, Math.min(r.hiY, dy));
+    return { dx: dx, dy: dy };
+  }
+
+  /* 지금 자리 기준으로 한 번에 줄인다.
+     ⚠ **이동량이 '지금 위치'에서의 증분일 때만** 쓴다(방향키 미세 이동이 그렇다).
+        누적 이동량을 다루는 드래그에서는 deltaRange + applyRange 를 써야 한다. */
+  function clampDelta(cmps, dx, dy) {
+    return applyRange(deltaRange(cmps), dx, dy);
+  }
+
+  /* 이미 밖에 있는 부품을 **가장 가까운 안쪽 자리**로 당긴다.
+     옮겼으면 {dx,dy} 를, 그대로면 null 을 돌려준다. */
+  /* ⚠ cv(용지 크기)를 반드시 넘겨야 하는 경우가 있다.
+        canvasSize() 는 **지금 보고 있는 페이지**의 크기다(2026-09-08 페이지별 용지 이후).
+        다른 페이지의 부품을 이걸로 가두면, 세로 페이지 부품이 가로 페이지 높이로 눌려
+        위치가 통째로 무너진다 — 실제로 파일을 열 때마다 그렇게 됐다. */
+  function pullInside(cmp, cv) {
+    cv = cv || canvasSize();
+    var b = componentBox(cmp), dx = 0, dy = 0;
+    if (b.x2 - b.x <= cv.width)  { if (b.x < 0) dx = -b.x; else if (b.x2 > cv.width)  dx = cv.width  - b.x2; }
+    if (b.y2 - b.y <= cv.height) { if (b.y < 0) dy = -b.y; else if (b.y2 > cv.height) dy = cv.height - b.y2; }
+    if (!dx && !dy) return null;
+    cmp.x += dx; cmp.y += dy;
+    return { dx: dx, dy: dy };
+  }
+
+  /* 크기를 바꿀 때 캔버스보다 커지지 않게 상한을 준다(배율 반영).
+     ⚠ 회전은 여기서 보지 않는다 — 회전된 사각형까지 맞추려 들면 손잡이를 끌 때
+        폭이 들쭉날쭉해져 조작이 어려워진다. 회전으로 삐져나간 만큼은 이동 쪽이 당겨 준다. */
+  function maxSize(cmp) {
+    var cv = canvasSize(), s = cmp.scale || 1;
+    return { width: cv.width / s, height: cv.height / s };
+  }
+
   function orthoStub(A, B, wire) {
     var a0 = A.pos, b0 = B.pos;
     var ea = exitInfo(A.cmp, A.t), eb = exitInfo(B.cmp, B.t);
@@ -378,9 +484,45 @@ WE.geometry = (function () {
     var pts;
     if (horizExit) {
       if (aH && bH && da.x * db.x < 0) {
-        // 좌/우 반대 방향 탈출: 중간 y에 가로 통로 — 양쪽 스텁(최초 탈출 구간) 모두 보존
-        var my = clampChan((pa.y + pb.y) / 2, "y");
-        pts = [a0, pa, { x: pa.x, y: my }, { x: pb.x, y: my }, pb, b0];
+        /* 좌/우 반대 방향 탈출 — 바로 아래 세로 경우와 **완전히 같은 문제**다(x 와 y 만 뒤바뀜).
+           예전에는 무조건 중간 y 에 가로 통로를 세워서 「세로 → 가로 → 세로」가 되었고,
+           굳이 필요 없을 때도 꺾임이 두 번 더 생겼다.
+
+           A 의 스텁 끝(pa)에서 곧장 세로로 내려간 뒤 가로로 가도 되는 경우가 있다.
+           조건은 하나 — **가로 구간에서 b0 까지 가는 길에 pb 가 놓여 있어야** 한다.
+
+               (pa.x - pb.x) * db.x >= 0
+
+           깨지는 배치(등지고 있거나 스텁이 서로를 지나칠 만큼 가까운 경우)에는
+           단순 경로가 부품을 관통하므로 예전처럼 중간 통로를 쓴다. */
+        if ((pa.x - pb.x) * db.x >= 0) {
+          pts = [a0, pa, { x: pa.x, y: pb.y }, pb, b0];
+        } else {
+          var my = clampChan((pa.y + pb.y) / 2, "y");
+          pts = [a0, pa, { x: pa.x, y: my }, { x: pb.x, y: my }, pb, b0];
+          /* 스텁이 서로를 **살짝** 지나쳤을 뿐인데도 통로가 서던 것을 막는다. (2026-09-02)
+
+             위 조건은 지나친 '양'을 안 본다. 8px만 어긋나도 탈락해서 중간 통로가 섰고,
+             그 통로가 만드는 곁길이 정작 8px짜리라 꺾임만 둘 늘었다.
+             더 심한 것도 있었다 — 통로 y가 두 단자 사이 한가운데라
+             **4px 폭 안에서 꺾임 넷**이 나서 선이 뭉개져 보였다.
+                 위 세로 쪽과 같은 구조다 (x 와 y 만 뒤바뀜)
+
+             두 스텁 '사이' 위치로 한 줄에 이으면 꺾임 둘로 끝난다.
+             그래도 되는 조건은 하나 — **그 위치가 양쪽 부품 몸통 바깥일 것.**
+             살짝 지나친 상황에서는 사이가 늘 두 몸통 밖이라 그냥 통과하고,
+             많이 지나쳐 몸통에 걸리면 조건이 막아 예전대로 통로를 세운다.
+
+             ⚠ 몸통 검사를 **양쪽 다** 하는 게 핵심이다.
+                한쪽만 보던 「섞인 탈출」 수정은 부품관통이 54 → 75건으로 늘어 되돌렸다.
+                이 규칙은 무작위 도면 40장(배선 444개)에서 관통 250건 그대로,
+                꺾임 1199 → 1187, 겹침 468 → 467건이었다. */
+          var cxM = clampChan((pa.x + pb.x) / 2, "x");
+          var hbA = componentBox(A.cmp), hbB = componentBox(B.cmp);
+          if ((da.x < 0 ? (cxM <= hbA.x) : (cxM >= hbA.x2)) &&
+              (db.x < 0 ? (cxM <= hbB.x) : (cxM >= hbB.x2)))
+            pts = [a0, { x: cxM, y: a0.y }, { x: cxM, y: b0.y }, b0];
+        }
       } else {
         var cx;
         if (aH && bH && da.x * db.x > 0) cx = da.x > 0 ? Math.max(pa.x, pb.x) : Math.min(pa.x, pb.x);
@@ -390,9 +532,48 @@ WE.geometry = (function () {
       }
     } else {
       if (!aH && !bH && da.y * db.y < 0) {
-        // 위/아래 반대 방향 탈출: 중간 x에 세로 통로 — 양쪽 스텁 모두 보존
-        var mx = clampChan((pa.x + pb.x) / 2, "x");
-        pts = [a0, pa, { x: mx, y: pa.y }, { x: mx, y: pb.y }, pb, b0];
+        /* 위/아래 반대 방향 탈출.
+
+           예전에는 **무조건** 중간 x에 세로 통로를 세웠다. 그러면 양쪽 스텁은 확실히
+           보존되지만, 굳이 필요 없을 때도 「가로 → 세로 → 가로」가 되어 꺾임이 두 번 더 생긴다.
+           실제로 "부품 아랫변 → 보드 윗줄" 배선이 전부 4번 꺾였다(2026-09-02 고원빈 지적).
+
+           그런데 A 의 스텁 끝(pa)에서 곧장 가로로 가서 B 쪽으로 내려가도 되는 경우가 있다.
+           조건은 하나 — **가로 구간에서 b0 까지 내려가는 길에 pb 가 놓여 있어야** 한다.
+           그래야 B 의 탈출 구간이 그 세로선 안에 그대로 살아 있고, 되돌아가는 구간도 안 생긴다.
+
+               (pa.y - pb.y) * db.y >= 0
+
+           이 조건이 깨지는 배치(등지고 있거나, 스텁이 서로를 지나칠 만큼 가까운 경우)에는
+           단순 경로가 **부품을 관통한다.** 그때는 예전처럼 중간 통로를 쓴다. */
+        if ((pa.y - pb.y) * db.y >= 0) {
+          pts = [a0, pa, { x: pb.x, y: pa.y }, pb, b0];
+        } else {
+          var mx = clampChan((pa.x + pb.x) / 2, "x");
+          pts = [a0, pa, { x: mx, y: pa.y }, { x: mx, y: pb.y }, pb, b0];
+          /* 스텁이 서로를 **살짝** 지나쳤을 뿐인데도 통로가 서던 것을 막는다. (2026-09-02)
+
+             위 조건은 지나친 '양'을 안 본다. 8px만 어긋나도 탈락해서 중간 통로가 섰고,
+             그 통로가 만드는 곁길이 정작 8px짜리라 꺾임만 둘 늘었다.
+             더 심한 것도 있었다 — 통로 x가 두 단자 사이 한가운데라
+             **4px 폭 안에서 꺾임 넷**이 나서 선이 뭉개져 보였다.
+                 921,731 → 921,695 → 923,695 → 923,706 → 925,706 → 925,542
+
+             두 스텁 '사이' 높이로 한 줄에 이으면 꺾임 둘로 끝난다.
+             그래도 되는 조건은 하나 — **그 높이가 양쪽 부품 몸통 바깥일 것.**
+             살짝 지나친 상황에서는 사이가 늘 두 몸통 밖이라 그냥 통과하고,
+             많이 지나쳐 몸통에 걸리면 조건이 막아 예전대로 통로를 세운다.
+
+             ⚠ 몸통 검사를 **양쪽 다** 하는 게 핵심이다.
+                한쪽만 보던 「섞인 탈출」 수정은 부품관통이 54 → 75건으로 늘어 되돌렸다.
+                이 규칙은 무작위 도면 40장(배선 444개)에서 관통 250건 그대로,
+                꺾임 1199 → 1187, 겹침 468 → 467건이었다. */
+          var cyM = clampChan((pa.y + pb.y) / 2, "y");
+          var bxA = componentBox(A.cmp), bxB = componentBox(B.cmp);
+          if ((da.y < 0 ? (cyM <= bxA.y) : (cyM >= bxA.y2)) &&
+              (db.y < 0 ? (cyM <= bxB.y) : (cyM >= bxB.y2)))
+            pts = [a0, { x: a0.x, y: cyM }, { x: b0.x, y: cyM }, b0];
+        }
       } else {
         var cy;
         if (!aH && !bH && da.y * db.y > 0) cy = da.y > 0 ? Math.max(pa.y, pb.y) : Math.min(pa.y, pb.y);
@@ -673,6 +854,84 @@ WE.geometry = (function () {
     }
     return { x: pts[pts.length - 1].x, y: pts[pts.length - 1].y, seg: pts.length - 2 };
   }
+  /* ---- 라벨 자리: '한쪽 끝에서 경로를 따라 잰 거리' ----
+     배선 라벨(마킹 튜브)은 **단자 옆**에 있어야 뜻이 있다. 비율(polylineRatioOf)로 잡으면
+     경로 전체 기준이라, 짧은 배선에서 0.08 은 단자 코앞이지만 긴 배선에서는 한참 떨어진
+     자리가 된다. 그래서 끝에서 잰 거리(px)로 다룬다. (2026-09-09) */
+  function polylineLength(pts) {
+    var L = 0;
+    for (var i = 0; i < ((pts || []).length - 1); i++) {
+      L += Math.hypot(pts[i + 1].x - pts[i].x, pts[i + 1].y - pts[i].y);
+    }
+    return L;
+  }
+
+  /* end("from"|"to") 쪽 끝에서 경로를 따라 dist(px) 들어간 지점.
+     반환 { x, y, seg, ux, uy, segIn, segLen }
+       ux,uy  그 지점이 놓인 구간의 단위 방향. **항상 from→to 방향**이다
+              (끝에 따라 뒤집으면 라벨 각도와 수직 방향의 부호가 끝마다 달라져
+               같은 n 값이 위/아래로 엇갈린다).
+       segIn  그 구간의 시작점에서 얼마나 들어왔나
+       segLen 그 구간의 길이 — 튜브가 모서리에 걸치는지 판단하는 데 쓴다 */
+  function polylinePointFromEnd(pts, end, dist) {
+    if (!pts || pts.length < 2) return null;
+    var L = polylineLength(pts);
+    var target = (end === "to") ? (L - dist) : dist;
+    /* dist 가 음수면 경로 **바깥**(끝을 지나 부품 쪽)이다. 배선 라벨의 기본 자리가
+       거기다 — 단자점에서 부품 쪽으로 물려야 단자 이름과 안 겹친다.
+       끝 구간의 방향을 그대로 늘여서 잰다. */
+    if (target < 0 || target > L) {
+      var a0, b0, over;
+      if (target < 0) { a0 = pts[0]; b0 = pts[1]; over = target; }
+      else { a0 = pts[pts.length - 2]; b0 = pts[pts.length - 1]; over = target - L; }
+      var l0 = Math.hypot(b0.x - a0.x, b0.y - a0.y) || 1;
+      var ux0 = (b0.x - a0.x) / l0, uy0 = (b0.y - a0.y) / l0;
+      var 기준 = (target < 0) ? a0 : b0;
+      return { x: 기준.x + ux0 * over, y: 기준.y + uy0 * over,
+               seg: (target < 0) ? 0 : (pts.length - 2),
+               ux: ux0, uy: uy0,
+               // 경로 밖이라 '구간 안에 들어가는가' 는 따질 게 없다 — 늘 통과시킨다
+               segIn: 1e9, segLen: 2e9, 바깥: true };
+    }
+    var acc = 0;
+    for (var i = 0; i < pts.length - 1; i++) {
+      var a = pts[i], b = pts[i + 1];
+      var l = Math.hypot(b.x - a.x, b.y - a.y);
+      if (acc + l >= target || i === pts.length - 2) {
+        var f = l > 0 ? Math.max(0, Math.min(1, (target - acc) / l)) : 0;
+        return { x: a.x + (b.x - a.x) * f, y: a.y + (b.y - a.y) * f, seg: i,
+                 ux: l > 0 ? (b.x - a.x) / l : 1, uy: l > 0 ? (b.y - a.y) / l : 0,
+                 segIn: l * f, segLen: l };
+      }
+      acc += l;
+    }
+    return null;
+  }
+
+  /* 위의 역함수 — 경로 근처의 점 pt 가 end 쪽 끝에서 얼마나 들어와 있고(d),
+     경로에서 수직으로 얼마나 벗어나 있나(n). n 은 from→to 진행 방향의 왼쪽이 양수.
+     라벨을 끌어 놓을 때 이걸로 자리를 기록한다. */
+  function polylineOffsetFromEnd(pts, end, pt) {
+    if (!pts || pts.length < 2) return { d: 0, n: 0 };
+    var L = polylineLength(pts);
+    var acc = 0, bestD = 0, bestN = 0, bd = Infinity;
+    for (var i = 0; i < pts.length - 1; i++) {
+      var a = pts[i], b = pts[i + 1];
+      var vx = b.x - a.x, vy = b.y - a.y, l2 = vx * vx + vy * vy, l = Math.sqrt(l2);
+      var t = l2 > 0 ? ((pt.x - a.x) * vx + (pt.y - a.y) * vy) / l2 : 0;
+      t = Math.max(0, Math.min(1, t));
+      var px = a.x + vx * t, py = a.y + vy * t;
+      var dd = Math.hypot(px - pt.x, py - pt.y);
+      if (dd < bd) {
+        bd = dd;
+        bestD = acc + l * t;
+        bestN = l > 0 ? ((pt.x - px) * (-vy / l) + (pt.y - py) * (vx / l)) : 0;
+      }
+      acc += l;
+    }
+    return { d: (end === "to") ? (L - bestD) : bestD, n: bestN };
+  }
+
   function polylineRatioOf(pts, pt) {
     if (!pts || pts.length < 2) return 0;
     var lens = [], L = 0, i, l;
@@ -800,6 +1059,57 @@ WE.geometry = (function () {
     return { wireIds: Object.keys(wires), terms: terms };
   }
 
+  /* ---- 단자 라벨을 '자기 배선 위'에 얹기 위한 좌표 ----
+     라벨은 단자 점에서 조금 떨어진 자리에 놓이는데, 그 자리에서 배선이 지나는 높이와
+     라벨 높이가 어긋나면 **옆 배선에 붙은 이름처럼 보인다.** 단자가 늘수록 심해진다.
+     그래서 '라벨이 놓일 x 에서 그 단자의 배선이 지나는 y' 를 찾아 라벨을 거기에 맞춘다.
+     ⚠ 점(단자)은 옮기지 않는다 — 점은 실물 핀 자리를 뜻하므로 그대로 둔다. (2026-09-03) */
+  function wirePointsForTerminal(cmpId, terminalId) {
+    var found = null;
+    (WE.model.project.wires || []).forEach(function (w) {
+      if (found) return;
+      var isFrom = w.from && w.from.componentId === cmpId && w.from.terminalId === terminalId;
+      var isTo = w.to && w.to.componentId === cmpId && w.to.terminalId === terminalId;
+      if (!isFrom && !isTo) return;
+      var pts = wireRoutePoints(w);
+      if (!pts || pts.length < 2) return;
+      // 이 단자가 늘 pts[0] 이 되게 맞춘다 — 단자에서 바깥으로 걸어가며 찾기 위해
+      found = isFrom ? pts : pts.slice().reverse();
+    });
+    return found;
+  }
+  /* 단자에서 배선이 처음 나가는 구간(스텁)이 x=X 를 지날 때의 y. 안 지나면 null(= 점 높이 유지).
+     ⚠ **첫 꺾임을 넘어가면 안 된다.** 예전에는 경로 전체를 훑어서 x 만 맞으면 아무 구간이나
+        집었다 — 배선이 [오른쪽 → 아래 → 오른쪽] 으로 갈 때 라벨 자리가 세 번째 구간에 걸려
+        **한참 아래로 내려간 y** 를 돌려줬고, 릴레이 모듈 NO2 라벨이 부품에서 뚝 떨어진 곳에
+        찍혔다(2026-09-03 고원빈 발견). 라벨이 따라갈 만한 배선은 '단자에서 곧장 나오는 그 구간'
+        뿐이다. 그 밖은 이미 딴 데로 꺾인 선이라 따라가면 오히려 남의 배선처럼 보인다. */
+  function wireYAtXForTerminal(cmpId, terminalId, X) {
+    var pts = wirePointsForTerminal(cmpId, terminalId);
+    if (!pts) return null;
+    var a = pts[0], b = pts[1];
+    if (X < Math.min(a.x, b.x) - 0.01 || X > Math.max(a.x, b.x) + 0.01) return null;
+    if (Math.abs(b.x - a.x) < 0.01) return a.y;   // 세로 스텁: 그 x 에서 y 는 구간 전체 → 단자 쪽 끝
+    return a.y + (b.y - a.y) * ((X - a.x) / (b.x - a.x));
+  }
+
+  /* 이 단자에 물린 배선들 중 점 p 에 가장 가까운 '경로 위' 지점. { x, y, dist } 또는 null.
+     라벨을 손으로 끌 때 배선 근처에서 경로에 붙여 주기 위한 것 — 배선 번호 라벨이 쓰는
+     nearestPointOnPolyline 과 같은 방식이다. 단자에 배선이 여럿이면 가장 가까운 것을 고른다. */
+  function nearestOnTerminalWires(cmpId, terminalId, p) {
+    var best = null;
+    (WE.model.project.wires || []).forEach(function (w) {
+      var f = w.from && w.from.componentId === cmpId && w.from.terminalId === terminalId;
+      var t = w.to && w.to.componentId === cmpId && w.to.terminalId === terminalId;
+      if (!f && !t) return;
+      var pts = wireRoutePoints(w); if (!pts || pts.length < 2) return;
+      var q = nearestPointOnPolyline(pts, p); if (!q) return;
+      var d = Math.hypot(q.x - p.x, q.y - p.y);
+      if (!best || d < best.dist) best = { x: q.x, y: q.y, dist: d };
+    });
+    return best;
+  }
+
   // 단자 라벨 자동배치(충돌회피 공용 로직) — 배선도 캔버스·단자배치 모달이 동일한 결과를 내도록 공유
   // terminals: t.labelPos(수동 위치)가 없는 단자만 넘길 것. cmpW/cmpH: 회전 무관 원본 폭/높이(분류 기준)
   // box: {x,y,x2,y2} 라벨을 붙일 기준 사각형(호출측 좌표계). dotOf(t): 해당 좌표계의 단자 점 위치 반환
@@ -807,7 +1117,13 @@ WE.geometry = (function () {
   function layoutTermLabels(terminals, cmpW, cmpH, box, dotOf, opts) {
     opts = opts || {};
     var offset = opts.offset != null ? opts.offset : 10;
-    var minGapLR = opts.minGapLR != null ? opts.minGapLR : 15;
+    /* 좌·우 이름의 최소 세로 간격. 이 값보다 촘촘하면 바깥 열로 보낸다(지그재그).
+       ⚠ 글자(.term-label)는 11px 이다. 재면 14.2px 이 나오지만 그건 흰 테두리(2.5px)까지
+          포함한 값이라, 그 숫자로 잣대를 잡으면 **안 겹치는 이름까지 열을 가른다.**
+          실제로 단자가 14px 간격인 릴레이 모듈에서 COM1·NO1 이 쓸데없이 갈렸다
+          (2026-09-09 고원빈: "한줄로 배치했을때도 겹치지 않고 문제없거든").
+          11px 글자 + 여유 2px = 13. */
+    var minGapLR = opts.minGapLR != null ? opts.minGapLR : 13;
     var minGapTB = opts.minGapTB != null ? opts.minGapTB : 26;
     var groups = { L: [], R: [], T: [], B: [] };
     terminals.forEach(function (t) {
@@ -827,16 +1143,50 @@ WE.geometry = (function () {
       groups[side].push({ t: t, dot: dot });
     });
     var out = [];
+    /* 좌·우 라벨: '자기 배선이 지나는 높이'에 맞추고, 겹치면 **아래로 밀지 말고 바깥 열로 보낸다**(지그재그).
+       예전에는 겹칠 때마다 아래로 밀었는데, 밀린 라벨이 아래 배선 옆에 가서 붙어
+       "이 이름이 저 배선 것인가?" 하는 착각을 만들었다 — 단자가 늘수록 어긋남이 쌓였다.
+       열을 하나 더 쓰면 각 라벨이 자기 높이를 지킬 수 있다. (2026-09-03)
+       ⚠ 위/아래(T·B) 면은 손대지 않았다 — 촘촘한 핀헤더의 세로쓰기 규칙이 따로 있어 별건이다. */
+    var maxCols = opts.maxCols != null ? opts.maxCols : 2;      // 지그재그로 쓸 열 수
+    var maxPull = opts.maxPull != null ? opts.maxPull : 60;     // 라벨이 제 점에서 벗어날 수 있는 한계(px)
     ["L", "R"].forEach(function (side) {
       var arr = groups[side];
-      arr.sort(function (a, b) { return a.dot.y - b.dot.y; });
-      var lastY = -Infinity;
-      var lx = side === "L" ? box.x - offset : box.x2 + offset;
+      if (!arr.length) return;
+      var dir = side === "L" ? -1 : 1;
+      var baseX = side === "L" ? box.x - offset : box.x2 + offset;
+      // 열 간격 = 이 면에서 가장 긴 이름 폭 + 여유. 열이 겹쳐 글자가 포개지면 안 된다.
+      var longest = 0;
+      arr.forEach(function (o) { longest = Math.max(longest, String(o.t.name || "").length); });
+      var colStep = longest * (opts.charW != null ? opts.charW : 6.5) + 12;
+      // 그 열의 x 에서 이 단자의 배선이 지나는 높이(없으면 제 점 높이). 점에서 너무 멀어지지 않게 묶는다.
+      function wantAt(o, x) {
+        if (!opts.wireYAt) return o.dot.y;
+        var wy = opts.wireYAt(o.t, x);
+        if (wy == null) return o.dot.y;
+        return Math.max(o.dot.y - maxPull, Math.min(o.dot.y + maxPull, wy));
+      }
+      arr.forEach(function (o) { o._want0 = wantAt(o, baseX); });
+      arr.sort(function (a, b) { return a._want0 - b._want0; });
+      var lastY = [];   // 열별 '마지막으로 놓은 라벨의 y'
       arr.forEach(function (o) {
-        var ly = o.dot.y;
-        if (ly < lastY + minGapLR) ly = lastY + minGapLR;
-        lastY = ly;
-        out.push({ t: o.t, dot: o.dot, lx: lx, ly: ly, anchor: side === "L" ? "end" : "start", side: side });
+        var col = -1, ly = 0, x = baseX;
+        for (var c = 0; c < maxCols; c++) {
+          var cx = baseX + dir * c * colStep;
+          var w = c === 0 ? o._want0 : wantAt(o, cx);
+          if (lastY[c] == null || w >= lastY[c] + minGapLR) { col = c; ly = w; x = cx; break; }
+        }
+        if (col < 0) {
+          // 모든 열이 막혔다 — 가장 적게 밀어도 되는 열에 놓는다(예전 동작이 여기 안전망으로 남는다)
+          col = 0;
+          for (var c2 = 1; c2 < maxCols; c2++) if (lastY[c2] < lastY[col]) col = c2;
+          ly = lastY[col] + minGapLR; x = baseX + dir * col * colStep;
+        }
+        lastY[col] = ly;
+        // col: 지그재그로 쓴 열 번호. 줄 맞춤은 **열마다 따로** 해야 한다 —
+        //      바깥 열과 안쪽 열을 같이 맞추면 안쪽 열이 부품을 파고든다.
+        out.push({ t: o.t, dot: o.dot, lx: x, ly: ly, col: col,
+                   anchor: side === "L" ? "end" : "start", side: side });
       });
     });
     var charW = opts.charW != null ? opts.charW : 6.5;       // 라벨 폭 추정용 글자 폭
@@ -882,6 +1232,14 @@ WE.geometry = (function () {
 
   return {
     snap: snap,
+    // 캔버스 안에 가두기 (2026-09-02)
+    componentBox: componentBox,
+    canvasSize: canvasSize,
+    clampDelta: clampDelta,
+    deltaRange: deltaRange,
+    applyRange: applyRange,
+    pullInside: pullInside,
+    maxSize: maxSize,
     clientToCanvas: clientToCanvas,
     localToAbs: localToAbs,
     terminalAbs: terminalAbs,
@@ -899,12 +1257,17 @@ WE.geometry = (function () {
     nearestPointOnPolyline: nearestPointOnPolyline,
     polylinePointAt: polylinePointAt,
     polylineRatioOf: polylineRatioOf,
+    polylineLength: polylineLength,
+    polylinePointFromEnd: polylinePointFromEnd,
+    polylineOffsetFromEnd: polylineOffsetFromEnd,
     simplify: simplify,
     dissolveWaypoint: dissolveWaypoint,
     avoidOverlapCoord: avoidOverlapCoord,
     netFrom: netFrom,
     wirePath: wirePath,
     layoutTermLabels: layoutTermLabels,
+    wireYAtXForTerminal: wireYAtXForTerminal,
+    nearestOnTerminalWires: nearestOnTerminalWires,
     termSideScreen: termSideScreen,
     termSideOf: function (terminals, W, H, t) { return termSideInfo(terminals, W, H, t).side; }
   };

@@ -1,0 +1,752 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>이지케이블 — 쉬운 배선도 에디터 (EasyCable)</title>
+  <meta name="description" content="부품 사진을 올리고 단자를 이으면 배선도가 됩니다. 아두이노·ESP32 프로젝트 배선을 실물 사진 그대로. 설치 없이 브라우저에서, 부품 목록과 PDF는 자동으로." />
+  <!-- 링크 공유 미리보기 (Open Graph / Twitter) -->
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="EasyCable" />
+  <meta property="og:title" content="이지케이블 — 쉬운 배선도 에디터 (EasyCable)" />
+  <meta property="og:description" content="부품 사진을 올리고 단자를 이으면 배선도가 됩니다. 아두이노·ESP32 프로젝트 배선을 실물 사진 그대로. 설치 없이 브라우저에서." />
+  <meta property="og:url" content="https://easycable.co.kr/welcome.html" />
+  <meta property="og:image" content="https://easycable.co.kr/assets/shot-editor.jpg" />
+  <meta property="og:locale" content="ko_KR" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <link rel="canonical" href="https://easycable.co.kr/welcome.html" />
+  <!-- 파비콘·앱 아이콘. 원본은 _로고/icon.svg 이고 assets/ 의 것은 거기서 뽑았다.
+       예전에는 🔌 이모지를 그려 넣었는데, 이모지는 OS 마다 그림이 달라
+       브라우저 탭에서 브랜드가 일정하지 않았다. (2026-08-24 교체) -->
+  <link rel="icon" href="assets/favicon.svg" type="image/svg+xml" />
+  <link rel="apple-touch-icon" href="assets/icon-180.png" />
+  <link rel="stylesheet" href="landing.css" />
+<!-- 로그인 창의 겉모습. 에디터와 **같은 파일**을 읽는다(복사본 없음). -->
+<link rel="stylesheet" href="auth.css" />
+  <!-- 「로그인 확인 중」 표시를 첫 페인트 전에 건다. (2026-09-10)
+       겉모습은 auth.css 의 html[data-auth="pending"] 규칙에 있다.
+       자세한 이유는 pricing.html 의 같은 자리에 적어 두었다. 요점만:
+
+       ⚠ 로그인 여부를 **추측하지 않는다** — 판정은 auth.js 한 곳에만 둔다.
+       ⚠ auth.js 는 로그인을 못 쓰는 환경(js/auth.js:317)이나 SDK 내려받기
+          실패(js/auth.js:320)에서 ready() 를 영원히 세우지 않는다. 그때 이 표시가
+          남으면 로그인 버튼이 아예 사라지므로, 2초 뒤에는 스스로 걷는다. -->
+  <script>
+    (function () {
+      var h = document.documentElement;
+      h.setAttribute("data-auth", "pending");
+      setTimeout(function () { h.removeAttribute("data-auth"); }, 2000);
+    })();
+  </script>
+  <!-- 방문 통계는 Cloudflare Web Analytics 를 쓴다 (Pages 대시보드에서 켜면 비콘이 자동 주입된다).
+       GA4 를 걷어낸 이유: 동의 화면보다 먼저 실행돼 브라우저 식별자가 미국으로 나갔다
+       (개인정보보호법 제28조의8 국외이전). CF 는 쿠키를 안 써서 동의가 필요 없다. -->
+</head>
+<body>
+
+<!-- ⚠⚠ 이 페이지에 이모지를 쓰지 않는다 (2026-08-31 확정).
+     이모지는 OS 마다 그림이 달라 브랜드가 흔들리고, 무엇보다 'AI 가 만든 페이지' 로 읽힌다.
+     아이콘이 꼭 필요하면 SVG 로 직접 그린다. 그것도 웬만하면 안 넣는다 —
+     이 랜딩에서 설득하는 것은 아이콘이 아니라 **실제 화면**이다. -->
+
+<header class="top">
+  <div class="wrap">
+    <a class="logo" href="welcome.html"><img class="brand-mark" src="assets/logo.svg" alt="" />이지케이블</a>
+    <!-- ⚠ 네비는 '목적지' 의 이름이어야 한다. '무엇을 만드나 / 쓰는 순서' 처럼
+         페이지 안 내용을 설명하면 그건 네비가 아니라 **목차**다.
+         목차를 위에 달아 두면 사이트가 얇아 보인다. (2026-08-31 교체)
+         ⚠ 없는 페이지를 지어내지 않는다 — 여기 있는 넷은 전부 실제로 간다. -->
+    <nav>
+      <a href="#outputs" class="hide-sm">기능</a>
+      <a href="pricing.html" class="hide-sm">요금제</a>
+      <a href="#faq" class="hide-sm">자주 묻는 질문</a>
+      <a href="mailto:easycableinfo@gmail.com" class="hide-sm">문의</a>
+      <a class="btn btn-main btn-sm" href="index.html">배선 그리기</a>
+      <!-- 로그인·회원가입 — 맨 오른쪽. 랜딩에는 로그인할 데가 아예 없었다(2026-09-02 고원빈 지적).
+           **이 자리에서 바로 창이 뜬다** — 에디터로 넘기지 않는다.
+           창의 마크업(js/authmodal.js)과 겉모습(auth.css)은 에디터와 한 벌을 같이 쓴다.
+           href 를 그대로 둔 이유: 자바스크립트가 못 뜨면 링크로라도 로그인은 되어야 한다. -->
+      <span class="top-auth">
+        <a href="index.html?auth=login" class="nav-auth" data-auth="login">로그인</a>
+        <a href="index.html?auth=signup" class="nav-auth hide-sm" data-auth="signup">회원가입</a>
+        <!-- 로그인하면 여기에 동그란 아바타가 들어오고 위 두 링크는 사라진다.
+             마크업은 js/authmodal.js — 에디터 툴바와 한 벌을 같이 쓴다. -->
+        <span id="acctSlot"></span>
+      </span>
+    </nav>
+  </div>
+</header>
+
+
+<!-- ══ 덩어리 1 「보여준다」 — 흰 바탕 ════════════════════════════════
+     방문자가 5초 안에 "내 일에 쓰는 건가" 를 판단하는 구간이다.
+     여기서는 설명하지 않고 **보여준다.** -->
+
+<!-- ── 1. 히어로 ────────────────────────────────── -->
+<section class="hero">
+  <div class="wrap">
+    <h1>부품 사진을 올리고 단자를 이으면,<br /><span class="hl">그게 배선도가 됩니다</span></h1>
+    <p class="lead">
+      회로 기호를 몰라도 됩니다. 아두이노·ESP32 프로젝트의 배선을 실물 사진 그대로 그리고,
+      부품 목록은 자동으로 만들어집니다.
+    </p>
+    <!-- ⚠ 버튼은 **하나만** 둔다.
+         옆에 다른 버튼을 나란히 두면 시선이 갈려서 둘 다 안 눌린다.
+         '어떻게 쓰나요' 는 아래 안내줄의 작은 링크로 내렸다. (2026-08-31)
+         ⚠ '무료로' 를 버튼 안에 넣는다 — 누르기 전에 돈이 드는지 알아야 누른다. -->
+    <div class="cta">
+      <a class="btn btn-main btn-hero" href="index.html">무료로 시작하기</a>
+    </div>
+    <!-- 「가입도 설치도 없이…」와 「작업물은 브라우저에 자동 저장…」 두 줄이 있던 자리.
+         2026-09-02 고원빈 판단으로 뺐다 — 버튼 바로 밑이 붐벼 정작 영상으로 눈이 안 갔다.
+         같은 내용은 아래 섹션과 자주 묻는 질문에 남아 있다. -->
+
+    <!-- ── 히어로 영상 자리 ─────────────────────────────────────────
+         고원빈이 실제로 배선도를 그리는 화면을 녹화해 넣는다.
+         이 랜딩에서 **가장 중요한 요소**다 — 방문자가 "그릴 수 있겠다" 를
+         판단하는 곳이 여기고, 글 열 줄보다 10초 영상이 빠르다.
+
+         【영상을 넣는 법 — 한 줄만 고치면 된다】
+           1) 파일을 assets/hero.mp4 (와 있으면 hero.webm) 로 넣는다
+           2) 아래 <video> 의 data-mp4 / data-webm 에 경로를 적는다
+           3) 끝. 지금처럼 비어 있으면 아래 스크립트가 아무것도 하지 않고
+              poster(정지 화면)만 보인다 — 요청도 안 나간다.
+
+         【렉이 안 걸리게 하는 장치】 — 아래 스크립트가 처리한다
+           · 좁은 화면·데이터 절약·느린 회선에서는 **한 바이트도 안 받는다**
+             (poster 만 보이고, 누르면 그때 받는 '재생' 단추를 준다)
+           · 화면 밖으로 스크롤되면 재생을 멈춘다 (디코딩이 계속되면 발열한다)
+           · 자리를 CSS 로 미리 잡아 둬서 영상이 늦게 떠도 **아래 내용이 안 밀린다**
+
+         【녹화·인코딩 규격】
+           · 무음 · 10~20초 · 되도록 3MB 이하 · 1600×813 근처 (poster 와 같은 비율)
+           · ffmpeg -i 원본.mp4 -an -vf "scale=1600:-2,fps=24" \
+                    -c:v libx264 -profile:v main -crf 28 \
+                    -movflags +faststart assets/hero.mp4
+             ⚠ -an  = 소리 제거 (용량·자동재생 정책 둘 다에 유리)
+             ⚠ +faststart = 다 안 받아도 재생이 시작된다. 체감 속도가 크게 다르다
+           · 비율이 다르게 찍혔으면 landing.css 의 --shot-ar 만 바꾸면 된다
+
+         ⚠ 자동재생하려면 muted 가 반드시 있어야 한다 (브라우저 정책).
+         ⚠ playsinline 이 없으면 아이폰에서 전체화면으로 튄다. -->
+    <div class="shot">
+      <video id="heroVideo" class="hero-video"
+             poster="assets/shot-editor.jpg"
+             muted loop playsinline preload="none"
+             data-webm="" data-mp4=""
+             aria-label="이지케이블로 배선도를 그리는 화면"></video>
+      <button id="heroPlay" class="hero-play" type="button" hidden>
+        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M8 5v14l11-7z" /></svg>
+        <span>재생</span>
+      </button>
+    </div>
+  </div>
+</section>
+
+<!-- ── 2. 무엇을 만드나 ─────────────────────────── -->
+<section class="uses" id="uses">
+  <div class="wrap">
+    <h2>보드에 물린 선을, 남이 알아볼 수 있게</h2>
+    <p class="section-sub">사진 한 장으로는 이 선이 어느 핀에서 나왔는지 알 수 없습니다.</p>
+
+    <div class="grid">
+      <div class="card">
+        <h3>프로젝트 배선도</h3>
+        <p>아두이노·ESP32·라즈베리파이에 센서·모터·릴레이를 어떻게 물렸는지 그립니다.
+           단자 위치를 사진 위에 직접 찍기 때문에 핀 번호까지 그대로 남습니다.</p>
+      </div>
+      <div class="card">
+        <h3>부품 목록</h3>
+        <p>어떤 부품을 몇 개 썼는지, 어디서 얼마에 샀는지가 표로 정리됩니다.
+           도면을 보고 표에 옮겨 적는 작업이 없어집니다.</p>
+      </div>
+      <div class="card">
+        <h3>넘겨줄 수 있는 문서</h3>
+        <p>블로그·깃허브·과제 제출·팀 인수인계.
+           PDF와 이미지로 뽑아 그대로 넘기면, 받는 사람이 같은 것을 만들 수 있습니다.</p>
+      </div>
+    </div>
+
+    <!-- 「이건 아닙니다」 상자(PCB 설계는 KiCad, 시뮬레이션은 Wokwi)가 있던 자리.
+         2026-09-02 고원빈 판단으로 뺐다.
+
+         ⚠ 원래 넣었던 이유는 남겨 둔다 — 메이커 손님은 Fritzing·Wokwi 를 이미 알고 들어오는데,
+            "이걸로 PCB 도 되나?" 를 스스로 판단하게 두면 아니라는 걸 나중에 알았을 때
+            실망이 아니라 배신이 된다는 것이었다.
+            다시 필요해지면 자주 묻는 질문 쪽에 한 줄로 넣는 편이 낫다. -->
+  </div>
+</section>
+
+
+<!-- ══ 덩어리 2 「설명한다」 — 회색 바탕에 흰 카드 ══════════════════
+     남은 사람에게 방법과 결과물을 보여 준다.
+     세 섹션이 배경을 공유해 하나의 덩어리로 읽힌다. -->
+<div class="band">
+
+  <!-- ── 3. 쓰는 순서 ───────────────────────────── -->
+  <!-- ⚠ 일부러 '가로 한 줄' 로 압축해 두었다.
+       히어로 영상이 들어오면 이 섹션은 보조가 된다. 그때 크면 자리를 다툰다.
+       영상이 없는 동안에는 이게 유일한 설명이라 없애지는 않는다. -->
+  <section class="steps" id="steps">
+    <div class="wrap">
+      <h2>쓰는 순서</h2>
+      <p class="section-sub">처음 도면 하나를 끝내는 데 오래 걸리지 않습니다.</p>
+      <ol class="steprow">
+        <li>
+          <h3>부품을 올립니다</h3>
+          <p>사진을 끌어다 놓고 단자 위치를 찍습니다.
+             한 번 만든 부품은 저장해 두고 계속 씁니다.</p>
+        </li>
+        <li>
+          <h3>단자를 잇습니다</h3>
+          <p>단자에서 단자로 끌면 선이 됩니다.
+             경로는 알아서 정리된 모양으로 지나갑니다.</p>
+        </li>
+        <li>
+          <h3>번호를 붙입니다</h3>
+          <p>전선 번호·색·굵기(AWG)를 적어 둡니다.
+             수축튜브 번호를 그대로 쓰면 실물과 도면이 이어집니다.</p>
+        </li>
+        <li>
+          <h3>내보냅니다</h3>
+          <p>PDF·이미지로 뽑습니다.
+             작업 파일은 따로 저장해 다음에 이어서 씁니다.</p>
+        </li>
+      </ol>
+    </div>
+  </section>
+
+  <!-- ── 4. 나오는 것 ───────────────────────────── -->
+  <!-- ⚠ 여기 쓰는 것은 **지금 실제로 되는 것만**이다.
+       배선 리스트(와이어 리스트)는 코드에 있지만 app.js 의 SHOW_WIRE_LIST 가 false 라
+       화면·인쇄·CSV 어디에도 안 나온다. 그래서 랜딩에서도 말하지 않는다.
+       (예전 랜딩은 네 군데서 광고하고 있었다 — 2026-08-31 제거)
+       다시 켜면 여기에 카드를 하나 더 넣는다. -->
+  <section class="outputs" id="outputs">
+    <div class="wrap">
+      <!-- ⚠ 「그리면 이게 같이 나옵니다」였다. 「이게」가 무엇인지 제목만 봐서는 알 수 없었고
+           구어체라 다른 섹션과 톤이 어긋났다. 조사한 6곳 어디도 지시대명사를 안 쓴다.
+           스티비의 「~하면 / ~가」 두 줄 패턴을 따랐다. (2026-09-11) -->
+      <h2>그리기만 하면,<br />도면과 부품 목록이 함께</h2>
+      <p class="section-sub">따로 정리하는 시간이 없어집니다.</p>
+
+      <!-- ⚠ 한 줄에 **하나씩** 놓는다. 예전에는 2단이라 그림 폭이 508px 밖에 안 됐고,
+           도면 선도 표 글자도 안 읽혀 "이미지가 안 보인다" 는 신고가 나왔다. (2026-09-11)
+           국내 SaaS 랜딩 6곳(스티비·잔디·미리캔버스·모두싸인·채널톡·아임웹)을 실측한 결과
+           5곳이 제품 스크린샷을 **한 줄에 하나**로 놓는다. 2단으로 쪼갠 곳은 없었다.
+           ⚠ 이미지는 앱 전체가 아니라 **도면·표만 잘라낸 것**이다.
+              앱 좌우 패널이 폭의 45%를 먹어서, 전체를 넣으면 정작 결과물이 절반으로 줄어든다.
+              이 섹션 제목이 「~가 함께 나옵니다」이므로 나오는 것을 보여주는 것이 맞다. -->
+      <div class="out-grid">
+        <figure class="out">
+          <div class="out-shot"><img src="assets/shot-editor.jpg" alt="이지케이블 배선도 — 실물 사진 부품에 단자와 배선이 그려져 있다" loading="lazy" width="1400" height="772" /></div>
+          <figcaption>
+            <h3>단자까지 그려진 배선도</h3>
+            <p>어느 핀에서 어느 핀으로 이었는지가 그림만 보고 읽힙니다.
+               전선 번호와 색도 도면 위에 그대로 남습니다.</p>
+          </figcaption>
+        </figure>
+
+        <figure class="out">
+          <div class="out-shot"><img src="assets/shot-bom.jpg" alt="이지케이블 부품 목록 — 부품명·수량·단가·구매 링크와 합계" loading="lazy" width="1400" height="681" /></div>
+          <figcaption>
+            <h3>그대로 발주하는 부품 목록</h3>
+            <p>부품·수량·단가·구매 링크가 자동으로 모입니다.
+               합계까지 나오므로 따로 정리할 것이 없습니다.</p>
+          </figcaption>
+        </figure>
+      </div>
+
+      <div class="out-note">
+        <h3>PDF·이미지로 내보내기</h3>
+        <p>종이로 뽑아도, 태블릿으로 봐도 단자 번호가 읽히도록 만들어집니다.
+           작업 파일(<code>.ezc</code>)로 저장해 두면 나중에 이어서 고칠 수 있습니다.</p>
+      </div>
+
+      <!-- 【예제 PDF 자리】
+           방문자가 가장 의심하는 것은 "출력물이 정말 쓸 만한가" 다.
+           완성된 PDF 를 직접 열어 보게 하는 것이 그 의심을 없애는 가장 빠른 방법이다.
+           준비되면 assets/example.pdf 로 넣고 아래 주석을 푼다.
+           ⚠ 실제 프로젝트 도면은 쓰지 말 것 — 누구나 내려받는다.
+      <p class="out-cta">
+        <a class="btn btn-sub" href="assets/example.pdf" target="_blank" rel="noopener">예제 PDF 열어 보기</a>
+      </p>
+      -->
+    </div>
+  </section>
+
+  <!-- ── 5. 뭐가 다른가 ─────────────────────────── -->
+  <!-- ⚠ 마지막 줄에서 우리가 '안 됨' 인 것을 그대로 적는다.
+       비교표에서 자기가 전부 이기면 아무도 안 믿는다. -->
+  <section class="compare">
+    <div class="wrap">
+      <!-- ⚠ 「지금 쓰던 방법과 뭐가 다른가」였다. 길고 구어체 의문형이라 다른 섹션과 톤이 어긋났다.
+           조사한 국내 SaaS 6곳 어디도 이런 제목을 쓰지 않는다. (2026-09-11 고원빈) -->
+      <h2>무엇이 다른가요?</h2>
+      <p class="section-sub">손으로 그리던 방식과 견주어 봅니다.</p>
+
+      <div class="table-scroll">
+        <table class="cmp">
+          <thead>
+            <tr>
+              <th scope="col"><span class="vh">항목</span></th>
+              <th scope="col">손으로 그리기<br /><span class="th-sub">파워포인트·그림판</span></th>
+              <th scope="col" class="mine">이지케이블</th>
+            </tr>
+          </thead>
+          <tbody>
+            <!-- ⚠ 「됨」이라고만 적힌 칸이 있었다. 표 안에서 정보량이 0 이다. (2026-09-11 고원빈)
+                 이제 **○ / ✕ 표시 + 짧은 말**로 적는다. 표시는 CSS 가 그린다(landing.css .cmp .mk).
+                 ⚠ 이모지를 쓰지 않는다 — 이 파일 맨 위 규칙. -->
+            <tr>
+              <th scope="row">부품 모양</th>
+              <td data-label="손으로 그리기"><i class="mk no"></i>직접 그려야 함</td>
+              <td class="mine" data-label="이지케이블"><i class="mk yes"></i><b>내가 올린 실물 사진</b></td>
+            </tr>
+            <tr>
+              <th scope="row">부품 목록·단가</th>
+              <td data-label="손으로 그리기"><i class="mk no"></i>직접 정리</td>
+              <td class="mine" data-label="이지케이블"><i class="mk yes"></i><b>자동 · 구매 링크까지</b></td>
+            </tr>
+            <tr>
+              <th scope="row">고쳐 쓰기</th>
+              <td data-label="손으로 그리기"><i class="mk no"></i>대개 처음부터 다시</td>
+              <td class="mine" data-label="이지케이블"><i class="mk yes"></i><b>언제든 고칠 수 있음</b></td>
+            </tr>
+            <tr>
+              <th scope="row">설치</th>
+              <td data-label="손으로 그리기"><i class="mk no"></i>프로그램이 필요함</td>
+              <td class="mine" data-label="이지케이블"><i class="mk yes"></i><b>브라우저에서 바로</b></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+</div><!-- /.band -->
+
+
+<!-- ══ 덩어리 3 「정한다」 — 흰 바탕 ═══════════════════════════════
+     여기까지 읽은 사람은 이미 관심이 있다. 남은 것은 결정을 막는 걱정을 치우는 일이다. -->
+
+<!-- ── 6. 요금 ──────────────────────────────────── -->
+<section class="price" id="price">
+  <div class="wrap">
+    <h2>무료로 시작해서, 필요할 때만</h2>
+    <p class="section-sub">구독이 아니라 이용권입니다.</p>
+
+    <!-- ⚠ 이 카드 세 장은 **pricing.html 의 카드와 같은 내용**이다. (2026-09-11 고원빈 지시)
+         값·소개줄·기능 목록을 요금제 페이지에서 그대로 가져왔다.
+
+         왜 이렇게 했나 — 예전에는 랜딩이 자기만의 짧은 설명을 따로 갖고 있었다.
+         그래서 2026-09-08 에 「첫 결제 시 1개월 더」 혜택을 폐지하며 7개 파일을 고칠 때
+         **이 파일만 빠져서, 랜딩이 없는 혜택을 계속 약속하고 있었다.**
+         같은 내용을 두 벌로 적어 두면 한쪽만 고쳐지는 사고가 반드시 난다.
+
+         ⚠ 요금제를 고칠 때는 **pricing.html 과 이 자리를 함께** 고친다.
+         ⚠ 여기 숫자(부품 10 · 배선 30 · 페이지 1)는 js/pro.js 의 한도와 같아야 한다.
+            한쪽만 고치면 "30개라더니 25개에서 막힌다" 가 된다.
+         ⚠ 결제 버튼은 두지 않는다 — 여기는 고르는 자리가 아니라 **알리는 자리**다.
+            누르는 것은 아래 「요금제 자세히 보기」 하나로 모은다. -->
+    <!-- ⚠ 여기는 **차이 나는 것만** 적는다. 전체 기능 목록은 pricing.html 이 맡는다.
+         한때 요금제 페이지의 9~10 줄을 통째로 옮겨 왔는데, 세 카드가 거의 같은 줄로 채워져
+         정작 "무엇이 다른지" 가 안 보였다. (2026-09-11 고원빈: "간단하게만 구성하자")
+
+         ⚠ 값과 문구는 pricing.html 과 **같은 뜻이어야 한다.** 요금제를 고칠 때 두 곳을 함께 고친다.
+            2026-09-08 에 「첫 결제 시 1개월 더」를 폐지하며 이 파일만 빠뜨려,
+            랜딩이 없는 혜택을 계속 약속한 사고가 있었다.
+         ⚠ 숫자(부품 10 · 배선 30 · 페이지 1)는 js/pro.js 의 한도와 같아야 한다. -->
+    <!-- ⚠ 이 카드 세 장은 **pricing.html 의 것을 그대로 가져온 것**이다. (2026-09-11 고원빈)
+         클래스 이름·마크업·CSS 가 전부 같다 — 그래야 두 화면이 어긋나지 않는다.
+
+         왜 이렇게 됐나 — 처음에는 랜딩이 자기만의 .lp-* 클래스로 따로 만들어 두었다.
+         값만 손으로 옮기다가 **정렬 규칙(.plan-sub 의 min-height, .plan-desc 의 min-height)을
+         빠뜨려 세 카드의 기능 목록 시작 줄이 서로 어긋났다.**
+         그 전에는 「첫 결제 시 1개월 더」 폐지를 이 파일만 빠뜨려 없는 혜택을 약속하기도 했다.
+         같은 것을 두 벌로 적어 두면 반드시 어긋난다.
+
+         ⚠ 요금제를 고칠 때는 pricing.html 을 고치고 **이 블록을 다시 복사**한다.
+         ⚠ 랜딩에서만 다른 것은 하나다 — 무료 카드의 「기본 제공」(비활성)을
+            「무료로 시작하기」(에디터로 가는 링크)로 바꿨다. 랜딩에서 비활성 버튼은 뜻이 없다.
+         ⚠ 요금제 페이지의 '이미 이용 중이면 잠근다' 스크립트는 여기 없다.
+            랜딩은 알리는 자리이고, 실제 판정은 결제 화면과 서버가 한다. -->
+    <div class="plan-grid">
+
+      <article class="plan">
+        <p class="plan-name">무료</p>
+        <p class="plan-price"><span class="num">₩0</span></p>
+        <!-- ⚠ 비워 두되 요소는 남긴다. .plan-sub 의 min-height 가 세 카드의
+             버튼 높이를 맞추는 역할을 하는데, 지우면 이 카드만 버튼이 위로 올라간다. -->
+        <p class="plan-sub"></p>
+        <p class="plan-desc">간단한 작업은 무료로도 이용 가능합니다.</p>
+        <!-- ⚠ 무료는 **결제할 것이 없다.** 여기에 누를 수 있는 버튼을 두면
+             세 카드가 다 '고르는 것' 처럼 보이는데, 실제로 고르는 것은 유료 둘뿐이다.
+             자리는 남긴다 — 지우면 이 카드만 아래 내용이 위로 올라가 높이가 어긋난다.
+             (에디터로 가는 길은 상단 '배선 그리기' 버튼이 이미 맡고 있다)
+             ⚠ <a> 가 아니라 <span> 이다. href 없는 <a> 는 키보드로 가 닿지도 않고
+                누를 수도 없어서, '눌리는 것' 처럼 보이기만 한다. -->
+        <a class="btn btn-sub" href="index.html">무료로 시작하기</a>
+
+        <div class="plan-feats">
+          <b>계속 무료</b>
+          <!-- ⚠ 순서 규칙 (2026-09-07 고원빈): **바뀌는 것을 위로, 같은 것을 아래로.**
+                 위 묶음 = 무료↔Pro 가 다른 항목 (개수 → 페이지 → 워터마크 → 엑셀·CSV)
+                 아래 묶음 = 양쪽이 같은 항목
+               손님이 보는 첫 줄이 "무엇이 달라지는가" 여야 카드 셋을 비교할 수 있다.
+               항목을 새로 더할 때 아무 데나 끼우지 말고 이 두 묶음 중 맞는 쪽에 넣는다.
+               ⚠ 세 카드는 **같은 항목을 같은 순서로** 적는다. 값만 다르다.
+               무료에 있는 줄을 Pro 에서 빼면 "Pro 가 오히려 적네?" 로 읽힌다(2026-09-07 고원빈).
+               무료가 못 쓰는 것은 지우지 말고 li.off 로 같은 자리에 남긴다.
+               ⚠ 여기 숫자는 js/pro.js 의 LIMIT · COMP_LIMIT · SHEET_LIMIT 과 **같아야 한다.**
+               한쪽만 고치면 "30개라더니 25개에서 막힌다" 가 된다. verify_plan.mjs 가 지킨다. -->
+          <ul>
+            <li><span>도면 하나에 <b>부품 10개 · 배선 30개</b></span></li>
+            <li><span>도면 페이지 <b>1장</b></span></li>
+            <li><span>PNG · PDF 내보내기 (<b>워터마크 포함</b>)</span></li>
+            <li><span>BOM · 결선표 <b>엑셀 · CSV 내보내기</b></span></li>
+            <li><span>부품 사진 올리기 · 배경 자동 제거</span></li>
+            <li><span>단자 배치 · 배선 그리기 · 구간 정렬 · 분기</span></li>
+            <li><span>내 부품 라이브러리 무제한 · 공용 부품 이용</span></li>
+            <li><span>BOM · 결선표 인쇄 · PDF 출력</span></li>
+            <li><span>파일 저장 / 열기</span></li>
+          </ul>
+        </div>
+      </article>
+
+      <!-- 1개월권
+           ⚠ 여기에 '월 3,450원' 같은 월 환산을 쓰지 않는다.
+              1년권의 '월 3,900원' 과 나란히 놓이면 1개월권이 더 싸 보여서
+              1년권 앵커가 깨진다. 월 환산은 1년권에만 쓴다. -->
+      <article class="plan is-paid">
+        <p class="plan-name">Pro · 1개월</p>
+        <p class="plan-price">
+          <span class="num">₩6,900</span>
+          <span class="per">/ 1개월</span>
+        </p>
+        <!-- ⚠ 비워 두되 요소는 남긴다. .plan-sub 의 min-height 가 세 카드의
+             가격줄 아래 높이를 맞춘다 — 지우면 이 카드만 버튼이 올라간다. -->
+        <p class="plan-sub"></p>
+        <p class="plan-desc">짧은 기간에 많은 배선도 작업이 필요한 경우에 유용합니다.</p>
+        <a class="btn btn-main" href="checkout.html?plan=month">Pro 시작하기</a>
+
+        <div class="plan-feats">
+          <b>1개월 동안</b>
+          <!-- ⚠ 무료 카드와 **같은 항목·같은 순서**. 값만 다르다(위 무료 카드 주석 참고).
+               ⚠ 여기는 '실제로 구현된 것'만 적는다. 구현 안 된 것을 적으면 거짓 광고이고
+               PG 심사에서도 걸린다. 아래 셋은 모두 코드에 게이트가 있다 —
+                 개수·페이지 무제한   js/pro.js  canAddBundle · canAddSheet
+                 워터마크 없음        js/pro.js  watermark() → render.js · app.js · styles.css
+                 엑셀·CSV 내보내기    js/app.js  내보내기막힘()
+               '회사 양식 표제란 · 이전 버전 복구' 는 아직 없어서 안 적는다. -->
+          <ul>
+            <li><span>부품 · 배선 <b>무제한</b></span></li>
+            <li><span>도면 페이지 <b>무제한</b></span></li>
+            <li><span>PNG · PDF 내보내기 (<b>워터마크 없음</b>)</span></li>
+            <li><span>BOM · 결선표 <b>엑셀 · CSV 내보내기</b></span></li>
+            <li><span>부품 사진 올리기 · 배경 자동 제거</span></li>
+            <li><span>단자 배치 · 배선 그리기 · 구간 정렬 · 분기</span></li>
+            <li><span>내 부품 라이브러리 무제한 · 공용 부품 이용</span></li>
+            <li><span>BOM · 결선표 인쇄 · PDF 출력</span></li>
+            <li><span>파일 저장 / 열기</span></li>
+          </ul>
+        </div>
+      </article>
+
+      <!-- 1년권 — 월 환산은 여기에만 쓴다.
+           ⚠ 파란 강조(.is-pick)가 여기 있다. 예전에는 1개월권에 있었는데,
+              그건 「첫 결제 시 1개월 더」 리본이 붙는 자리였기 때문이다.
+              그 혜택을 없앤 뒤로는(2026-09-08) 1개월권을 들어올릴 이유가 남지 않아,
+              이미 '추천' 인 1년권으로 옮겼다. 안 옮기면 파란 테두리는 1개월권을,
+              '추천' 표는 1년권을 가리켜 화면이 서로 다른 말을 한다. -->
+      <article class="plan is-paid is-pick">
+        <span class="plan-tag">추천</span>
+        <p class="plan-name">Pro · 1년</p>
+        <p class="plan-price">
+          <span class="num">₩46,800</span>
+          <span class="per">/ 1년</span>
+        </p>
+        <!-- 이 카드에서 손님을 멈춰 세우는 것은 '월 3,900원' 하나다.
+             ₩46,800 은 얼핏 큰 돈으로 보이지만, 월로 나누면 1개월권(6,900원)의 절반이다.
+             그 숫자만 키워서 눈이 먼저 닿게 한다. -->
+        <p class="plan-sub"><span class="strike">₩82,800</span><span class="save"><b>월 3,900원</b></span></p>
+        <p class="plan-desc">배선도 작업이 꾸준히 이어지는 경우에 가장 저렴합니다.</p>
+        <a class="btn btn-sub" href="checkout.html?plan=year">1년권 구매하기</a>
+
+        <div class="plan-feats">
+          <b>12개월 동안</b>
+          <!-- 1개월권과 받는 것은 같다. 그래서 목록도 같게 두고, 이 카드만의 값어치인
+               '싸다' 를 맨 위 한 줄로 올린다. 목록을 줄이면 또 "1년권이 더 적나?" 가 된다. -->
+          <ul>
+            <li><span>1개월권을 12번 사는 것보다 <b>36,000원</b> 저렴</span></li>
+            <li><span>부품 · 배선 <b>무제한</b></span></li>
+            <li><span>도면 페이지 <b>무제한</b></span></li>
+            <li><span>PNG · PDF 내보내기 (<b>워터마크 없음</b>)</span></li>
+            <li><span>BOM · 결선표 <b>엑셀 · CSV 내보내기</b></span></li>
+            <li><span>부품 사진 올리기 · 배경 자동 제거</span></li>
+            <li><span>단자 배치 · 배선 그리기 · 구간 정렬 · 분기</span></li>
+            <li><span>내 부품 라이브러리 무제한 · 공용 부품 이용</span></li>
+            <li><span>BOM · 결선표 인쇄 · PDF 출력</span></li>
+            <li><span>파일 저장 / 열기</span></li>
+          </ul>
+        </div>
+      </article>
+
+    </div>
+  </div>
+</section>
+
+<!-- ── 7. 자주 묻는 것 ──────────────────────────── -->
+<section class="faq" id="faq">
+  <div class="wrap">
+    <h2>자주 묻는 질문</h2>
+    <p class="faq-sub">가장 많이 물어보시는 것들입니다</p>
+
+    <!-- ⚠⚠ 이 네 문항은 pricing.html 의 것과 **글자 하나까지 같아야 한다.**
+         한쪽만 고치면 같은 질문에 두 가지 답이 있는 사이트가 된다.
+         한쪽을 고치면 반드시 다른 쪽도 같이 고칠 것. -->
+    <div class="faq-list">
+
+      <details>
+        <summary>자동으로 다시 결제되나요?
+          <svg class="chev" viewBox="0 0 20 20" aria-hidden="true"><path d="M5 8l5 5 5-5" /></svg></summary>
+        <p class="a">아닙니다. 구독이 아니라 <b>이용권</b>이라, 산 기간만큼만 쓰고 끝나면
+           자동으로 무료로 돌아갑니다. 해지할 것이 없고, 카드에서 다시 빠져나가는 돈도 없습니다.
+           계속 쓰시려면 그때 다시 결제하시면 됩니다.</p>
+      </details>
+
+      <details>
+        <summary>다른 컴퓨터에서도 쓸 수 있나요?
+          <svg class="chev" viewBox="0 0 20 20" aria-hidden="true"><path d="M5 8l5 5 5-5" /></svg></summary>
+        <p class="a"><b>이용권은</b> 계정을 따라가므로, 로그인하시면 어느 컴퓨터에서든 그대로 적용됩니다.
+           <br /><b>도면은</b> 쓰시던 브라우저에 저장되기 때문에 자동으로 옮겨지지 않습니다.
+           옮기시려면 도면을 파일(<code>.ezc</code>)로 내보낸 뒤 다른 컴퓨터에서 열면 됩니다.
+           부품과 사진까지 한 덩어리로 들어가므로 그대로 이어서 작업하실 수 있습니다.</p>
+      </details>
+
+      <details>
+        <summary>배선도면이 노출되지 않나요?
+          <svg class="chev" viewBox="0 0 20 20" aria-hidden="true"><path d="M5 8l5 5 5-5" /></svg></summary>
+        <p class="a">도면은 <b>저희 서버로 올라가지 않습니다.</b> 그릴 때도, 저장할 때도
+           여러분 브라우저 안에서만 처리됩니다. 그래서 저희도 여러분의 도면을 볼 수 없습니다.
+           <br />도면이 밖으로 나가는 것은 <b>직접 파일이나 PDF로 내보내 전달하실 때뿐</b>입니다.
+           올리신 부품 사진도 마찬가지로 브라우저에만 남습니다.</p>
+      </details>
+
+      <details>
+        <summary>데이터는 어디에 저장되나요?
+          <svg class="chev" viewBox="0 0 20 20" aria-hidden="true"><path d="M5 8l5 5 5-5" /></svg></summary>
+        <p class="a">도면·부품·사진은 모두 <b>쓰시는 브라우저 안</b>에 저장됩니다.
+           저희 서버에 있는 것은 <b>계정 정보와 결제 기록뿐</b>입니다.
+           <br />다만 그래서 브라우저 데이터를 지우시거나 다른 기기로 옮기시면 도면이 따라오지 않습니다.
+           중요한 도면은 <b>파일(<code>.ezc</code>)로 내보내 따로 보관</b>해 두시길 권합니다.</p>
+      </details>
+
+    </div>
+  </div>
+</section>
+
+<!-- ── 8. 마무리 ────────────────────────────────── -->
+<section class="closing">
+  <div class="wrap">
+    <h2>지금 바로 그려 보세요</h2>
+    <p>가입도, 설치도 필요 없습니다.</p>
+    <a class="btn btn-light btn-hero" href="index.html">무료로 시작하기</a>
+  </div>
+</section>
+
+<!-- ── 푸터 ─────────────────────────────────────── -->
+<!-- 통신판매업 신고 완료 — 제2026-영종구-0124호 (2026-08-27 발급, 인천 중구 영종출장소).
+     ※ 구매안전서비스 이용확인증은 필요 없다 — 전자상거래법 제24조제3항의
+       '정보통신망으로 전송되는 재화'에 해당해 비적용 대상이다. -->
+<!-- ⚠ 법적 필수 영역 (전자상거래법 제10조).
+     상호·대표자·주소·연락처·사업자등록번호·통신판매번호·이용약관을
+     초기화면에 표시해야 한다. 항목을 임의로 지우지 말 것. -->
+<footer>
+  <div class="wrap">
+    <div class="foot-top">
+      <div class="foot-brand">
+        <p class="biz-name">이지케이블</p>
+        <p class="foot-tag">부품 사진을 올리고 단자를 이으면,<br />그게 배선도가 됩니다.</p>
+      </div>
+      <!-- ⚠ 여기에 **없는 페이지를 만들어 넣지 않는다.** 링크가 많아 보이려고
+           '매뉴얼'·'블로그' 같은 걸 지어 넣으면 눌렀을 때 아무 데도 안 가고,
+           그건 심사에서 '깨진 링크' 로 잡힌다. 아래 여덟 개는 전부 실재한다. -->
+      <nav class="foot-cols">
+        <div>
+          <b>제품</b>
+          <a href="index.html">배선 그리기</a>
+          <a href="welcome.html#outputs">기능</a>
+          <a href="pricing.html">요금제</a>
+        </div>
+        <div>
+          <b>지원</b>
+          <a href="welcome.html#faq">자주 묻는 질문</a>
+          <a href="mailto:easycableinfo@gmail.com">이메일 문의</a>
+        </div>
+        <div>
+          <b>법적 고지</b>
+          <a href="terms.html">이용약관</a>
+          <a href="privacy.html">개인정보처리방침</a>
+          <a href="terms.html#refund">환불 정책</a>
+        </div>
+      </nav>
+    </div>
+
+    <p class="biz">
+      상호 아이비엑스(IBX)
+      <span class="sep">|</span>
+      대표 고원빈
+      <span class="sep">|</span>
+      사업자등록번호 497-25-02151
+      <span class="sep">|</span>
+      통신판매번호 제2026-영종구-0124호
+      <br />
+      주소 인천광역시 영종구 하늘별빛로 66 (중산동, 영종힐스테이트)
+      <br />
+      전화 010-2864-7171
+      <span class="sep">|</span>
+      이메일 easycableinfo@gmail.com
+    </p>
+
+    <p class="copy">© 2026 EasyCable. All rights reserved.</p>
+  </div>
+</footer>
+
+<!-- 로그인·회원가입을 이 화면에서 바로 처리한다. 순서가 중요하다 —
+     flags(동작 스위치) → authmodal(창 마크업) → auth(동작). -->
+<script src="js/flags.js"></script>
+<script src="js/authmodal.js"></script>
+<script src="js/auth.js"></script>
+<script>
+  /* 로그인·회원가입 — 이 화면에서 바로 연다.
+     실패하면 링크(href)가 그대로 살아 있어 에디터로 넘어가 거기서 열린다. */
+  /* 로그인 중이면 「로그인·회원가입」을 감추고 아바타를 보인다 — 에디터와 같은 모양이다.
+     그래야 '지금 로그인해 있다'가 보인다.
+
+     ⚠ 보이고 감추는 것은 **CSS 가 정한다**(.top-auth.is-in). auth.js 의 paint() 가
+        #acctWrap 의 hidden 을 직접 만지기 때문에, 여기서 hidden 을 같이 만지면
+        누가 나중에 실행되느냐에 따라 결과가 달라진다. 우리는 클래스만 붙였다 뗀다. */
+  /* 로그인 여부가 **확정**됐는가. 「확인 중」 표시를 걷어도 되는 시점이다.
+
+     ⚠ onChange 만 보고 걷으면 안 된다. auth.js 는 확정 전에도 _user=null 인 채로
+        여러 번 울린다(js/auth.js:507·795). 첫 울림에 걷으면 깜빡임이 그대로 돌아온다.
+     ⚠ 그렇다고 ready() 만 기다려도 안 된다. 로그인을 못 쓰는 환경에서는
+        init 이 그냥 반환해(js/auth.js:317) ready() 가 영원히 안 선다.
+        그 경우는 기다릴 것이 없으므로 곧바로 확정으로 본다. */
+  function 확정됐나() {
+    if (!(window.WE && WE.auth)) return false;          // auth.js 가 아직·영영 없다 → 2초 뒤 자동 해제
+    if (WE.auth._usable && !WE.auth._usable()) return true;
+    return !!(WE.auth.ready && WE.auth.ready());
+  }
+  function 계정표시() {
+    var box = document.querySelector(".top-auth");
+    if (!box) return;
+    box.classList.toggle("is-in", !!(window.WE && WE.auth && WE.auth.user && WE.auth.user()));
+    // 확정된 뒤에만 「확인 중」을 걷는다. 그전에는 회색 원을 그대로 둔다.
+    if (확정됐나()) document.documentElement.removeAttribute("data-auth");
+  }
+  if (window.WE && WE.auth && WE.auth.onChange) WE.auth.onChange(계정표시);
+  // 검사에서 로그인한 척하고 이 함수를 직접 부른다 — 화면 전환을 실제 코드로 확인하려고.
+  window.WE = window.WE || {}; WE.ui = WE.ui || {}; WE.ui.landingAccount = 계정표시;
+  계정표시();
+
+  document.querySelectorAll("a.nav-auth[data-auth]").forEach(function (a) {
+    a.addEventListener("click", function (e) {
+      if (!(window.WE && WE.auth && WE.auth.openAuth)) return;   // 못 열면 링크대로 간다
+      e.preventDefault();
+      WE.auth.openAuth(a.dataset.auth);
+    });
+  });
+
+/* 히어로 영상 — 받을지 말지를 우리가 정한다.
+   <video> 에 src 를 직접 박아 두면 브라우저가 알아서 받아 버리고, 그게 곧
+   첫 화면이 느려지는 원인이 된다. 그래서 경로를 data-* 에 넣어 두고
+   **조건이 맞을 때만** 붙인다. 조건이 안 맞으면 요청 자체가 안 나간다. */
+(function () {
+  var v = document.getElementById("heroVideo");
+  var btn = document.getElementById("heroPlay");
+  if (!v) return;
+
+  var 소스 = [
+    { src: v.getAttribute("data-webm") || "", type: "video/webm" },
+    { src: v.getAttribute("data-mp4") || "", type: "video/mp4" }
+  ].filter(function (s) { return s.src; });
+
+  // 아직 영상이 없다. poster 만 보이면 되고, 재생 단추도 띄우지 않는다.
+  if (!소스.length) return;
+
+  function 물어본다(q) {
+    try { return window.matchMedia(q).matches; } catch (e) { return false; }
+  }
+
+  var conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection || {};
+  // 데이터 절약 모드거나 회선이 느리면 몇 MB 가 그대로 체감 지연이 된다.
+  var 아낀다 = conn.saveData === true || /(^|-)([23]g)$/.test(conn.effectiveType || "");
+  // 좁은 화면 = 대개 휴대폰. 자동재생은 발열·배터리를 먹는데 얻는 건 적다.
+  var 좁다 = 물어본다("(max-width: 820px)");
+  // OS 의 '움직임 줄이기'. 자동으로 움직이는 화면은 어지럼증을 유발할 수 있다.
+  var 줄인다 = 물어본다("(prefers-reduced-motion: reduce)");
+
+  var 붙였나 = false;
+  function 붙인다() {
+    if (붙였나) return;
+    붙였나 = true;
+    소스.forEach(function (s) {
+      var el = document.createElement("source");
+      el.src = s.src; el.type = s.type;
+      v.appendChild(el);
+    });
+    v.preload = "auto";
+    v.load();
+  }
+
+  function 단추보이기(보일까) {
+    if (btn) btn.hidden = !보일까;
+  }
+
+  // 자동재생은 거절될 수 있다 (iOS 저전력 모드 등). 거절되면 단추로 넘긴다.
+  function 재생시도() {
+    붙인다();
+    var p = v.play();
+    if (p && p.catch) p.catch(function () { 단추보이기(true); });
+  }
+
+  if (아낀다 || 좁다 || 줄인다) {
+    // 받지 않는다. 보고 싶으면 눌러서 그때 받는다.
+    단추보이기(true);
+  } else {
+    재생시도();
+  }
+
+  if (btn) {
+    btn.addEventListener("click", function () {
+      단추보이기(false);
+      v.controls = 줄인다;   // 움직임을 줄이는 사용자에겐 조작 막대를 준다
+      if (줄인다) v.loop = false;
+      재생시도();
+    });
+  }
+
+  /* 화면 밖으로 나가면 멈춘다.
+     안 멈추면 랜딩 아래쪽을 읽는 내내 영상이 계속 디코딩된다 — 노트북에서 팬이 돈다.
+     ⚠ 되돌릴 때는 **우리가 멈춘 것만** 다시 튼다. 사용자가 직접 멈춘 것을
+        스크롤했다고 제멋대로 다시 틀면 안 된다. */
+  var 우리가멈췄다 = false;
+  if (window.IntersectionObserver) {
+    new IntersectionObserver(function (목록) {
+      if (!붙였나) return;
+      var 보인다 = 목록[0] && 목록[0].isIntersecting;
+      if (!보인다) {
+        if (!v.paused) { v.pause(); 우리가멈췄다 = true; }
+      } else if (우리가멈췄다) {
+        우리가멈췄다 = false;
+        var p = v.play();
+        if (p && p.catch) p.catch(function () { /* 못 틀면 그냥 둔다 */ });
+      }
+    }, { threshold: 0.15 }).observe(v);
+  }
+})();
+</script>
+</body>
+</html>

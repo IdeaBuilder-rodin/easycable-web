@@ -4,87 +4,276 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>개인정보처리방침 — 이지케이블</title>
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔌</text></svg>" />
+  <!-- 파비콘·앱 아이콘. 원본은 _로고/icon.svg 이고 assets/ 의 것은 거기서 뽑았다.
+       예전에는 🔌 이모지를 그려 넣었는데, 이모지는 OS 마다 그림이 달라
+       브라우저 탭에서 브랜드가 일정하지 않았다. (2026-08-24 교체)
+       경로는 상대경로다 — file:// 로 열어도 동작해야 한다. -->
+  <link rel="icon" href="assets/favicon.svg" type="image/svg+xml" />
+  <link rel="apple-touch-icon" href="assets/icon-180.png" />
   <style>
     :root {
       --tx: #333; --tx2: #555; --tx3: #888; --bd: #e3e8ee; --bg2: #f7f9fb; --primary: #1e88e5;
     }
+    /* ⚠ 폭 제한을 body 가 아니라 .doc 이 갖는다.
+       body 가 max-width 를 쥐고 있으면 푸터도 그 안에 갇혀서, 다른 페이지처럼
+       화면 끝까지 깔리는 어두운 푸터를 만들 수 없다. (2026-08-31) */
     body {
       font-family: "Malgun Gothic", "Apple SD Gothic Neo", sans-serif;
-      color: var(--tx); max-width: 760px; margin: 0 auto; padding: 40px 20px 80px;
+      color: var(--tx); margin: 0;
       line-height: 1.7; font-size: 15px;
     }
+    .doc { max-width: 760px; margin: 0 auto; padding: 40px 20px 72px; }
     a { color: var(--primary); }
-    .brand { display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 18px; margin-bottom: 4px; }
+    /* 로고는 홈으로 가는 링크다. 링크 기본색(파란 밑줄)이 나오지 않게 눌러 준다. */
+    .brand { display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 18px; margin-bottom: 4px;
+             color: inherit; text-decoration: none; width: fit-content; }
+    .brand:hover { opacity: .82; }
+    /* 브랜드 마크 — 글자 크기를 따라가도록 em 으로 잡는다 */
+    .brand-mark { width: 1.3em; height: 1.3em; }
     .updated { color: var(--tx3); font-size: 13px; margin-bottom: 32px; }
     h1 { font-size: 24px; margin: 0 0 4px; }
     h2 { font-size: 17px; margin: 36px 0 10px; padding-top: 8px; border-top: 1px solid var(--bd); }
+    h3 { font-size: 15px; margin: 22px 0 6px; color: var(--tx); }
+    /* 국가명처럼 짧은 값이 '미 국' 으로 쪼개지지 않게 */
+    .nw { white-space: nowrap; }
     p, li { color: var(--tx2); }
     ul { padding-left: 20px; margin: 8px 0; }
     table { width: 100%; border-collapse: collapse; margin: 10px 0; font-size: 14px; }
+    /* 국외 이전 표는 칸이 5개라 좁은 화면에서 본문을 밀어낸다.
+       표 안에서만 옆으로 스크롤되게 한다 — 넓은 화면에서는 원래대로 둔다. */
+    table { display: block; overflow-x: auto; }
+    @media (min-width: 700px) { table { display: table; } }
     th, td { border: 1px solid var(--bd); padding: 8px 10px; text-align: left; }
     th { background: var(--bg2); color: var(--tx); }
     .note { background: var(--bg2); border-radius: 8px; padding: 14px 16px; font-size: 13.5px; color: var(--tx2); margin: 10px 0; }
     .back { display: inline-block; margin-top: 40px; color: var(--tx3); font-size: 13px; }
+    /* 사업자정보 푸터 — 이 페이지는 landing.css 를 안 쓰므로 여기서 맞춘다.
+       글자·항목은 welcome.html 푸터와 같아야 한다(PG 심사가 대조한다). */
+    /* 푸터 — 다른 페이지(landing.css)와 같은 모양으로 맞춘다.
+       이 파일만 색이 다르면 같은 사이트로 안 보인다. */
+    .site-foot {
+      background: #1f2a36; color: #93a1b0;
+      border-top: 1px solid #2c3a4a;
+      padding: 44px 0 32px; font-size: 12.5px;
+    }
+    .site-foot .wrap { max-width: 1080px; margin: 0 auto; padding: 0 20px; }
+    .site-foot .biz-name { color: #fff; font-size: 15px; font-weight: 700; margin: 0 0 10px; }
+    .site-foot .foot-tag { margin: 0 0 26px; color: #93a1b0; font-size: 13px; line-height: 1.75; }
+    .site-foot .biz { margin: 0 0 12px; line-height: 1.9; color: #7d8b9a;
+                      padding-top: 24px; border-top: 1px solid #2c3a4a; }
+    .site-foot .sep { margin: 0 9px; color: #46566a; }
+    /* ⚠ 이 페이지는 전역 a 에 밑줄이 그대로 살아 있다(본문 링크는 그게 맞다).
+       푸터에서는 밑줄이 줄줄이 그어져 지저분해지므로 여기서만 끈다. */
+    .site-foot a { color: #93a1b0; text-decoration: none; }
+    .site-foot a:hover { color: #fff; text-decoration: underline; }
+    .site-foot .policies { display: flex; flex-wrap: wrap; gap: 0 18px; margin: 0 0 14px; }
+    .site-foot .policies a { font-size: 12.5px; }
+    .site-foot .copy { margin: 0; color: #6b7987; font-size: 12px; }
   </style>
 </head>
 <body>
-  <div class="brand">🔌 이지케이블 (EasyCable)</div>
+  <!-- ⚠ 이 페이지만 헤더 막대가 없다(자기 <style> 만 쓰는 독립 문서다).
+       그래서 최소한 로고라도 홈으로 가게 해 둔다 — 안 그러면 여기 들어온 사람이
+       푸터까지 내려가야 나갈 길을 찾는다. (2026-08-31) -->
+  <div class="doc">
+  <a class="brand" href="welcome.html"><img class="brand-mark" src="assets/logo.svg" alt="" /> 이지케이블 (EasyCable)</a>
   <h1>개인정보처리방침</h1>
-  <p class="updated">시행일자: 2026년 7월 14일 (최초 시행: 2026년 7월 9일)</p>
+  <p class="updated">시행일자: 2026년 9월 1일 (최초 시행: 2026년 7월 9일)</p>
 
   <p>이지케이블(이하 "서비스")을 운영하는 개인 운영자(이하 "운영자")는 이용자의 개인정보를 소중히 여기며, 「개인정보 보호법」 등 관련 법령을 준수합니다. 본 방침은 서비스 이용 시 어떤 정보가 어떻게 처리되는지 안내합니다.</p>
 
   <h2>1. 서비스의 데이터 처리 원칙</h2>
   <div class="note">
-    이지케이블에서 작성하는 <b>배선도 프로젝트·부품 라이브러리 데이터는 이용자의 브라우저(기기)에만 저장</b>되며, 운영자의 서버로 전송·수집되지 않습니다. 이용자가 직접 "저장" 기능으로 파일을 내려받거나, 이메일 등으로 타인에게 전달하는 경우를 제외하고는 운영자를 포함한 누구도 그 내용에 접근할 수 없습니다.
+    <b>이용자가 그린 배선도는 서버로 가지 않습니다.</b> 배선도 프로젝트와 부품 라이브러리는
+    이용자의 브라우저(기기)에만 저장되며, 이용자가 직접 "저장" 기능으로 파일을 내려받거나
+    타인에게 전달하는 경우를 제외하고는 운영자를 포함한 누구도 그 내용에 접근할 수 없습니다.
   </div>
+  <p>
+    다만 <b>회원가입·로그인을 이용하는 경우에 한하여</b> 계정을 식별하고 이용권을 관리하기 위한
+    최소한의 정보(이메일 주소 등)를 서버에 보관합니다. 자세한 항목은 제2조에 있습니다.
+    <b>회원가입은 선택입니다</b> — 가입하지 않아도 서비스의 기본 기능을 그대로 쓸 수 있으며,
+    이 경우 서버에 보관되는 개인정보는 없습니다.
+  </p>
 
   <h2>2. 수집하는 개인정보 항목 및 방법</h2>
   <table>
     <tr><th>항목</th><th>수집 방법</th><th>비고</th></tr>
-    <tr><td>이메일 주소</td><td>"출시 알림 받기" 신청 시 이용자가 직접 입력</td><td>선택 사항. 출시·주요 소식 안내에만 사용, 언제든 수신거부 가능</td></tr>
-    <tr><td>피드백 내용</td><td>"피드백" 기능으로 이용자가 작성·전송</td><td>전송 대행 서비스(Web3Forms)를 거쳐 운영자 메일함으로 전달되며, 서비스 자체 서버에 저장되지 않음</td></tr>
-    <tr><td>방문 통계(비식별)</td><td>Cloudflare Web Analytics(쿠키 미사용)</td><td>페이지 방문 수, 재방문 여부, 이용 시간, 유입 경로 등 통계 목적. 개인을 특정하지 않음</td></tr>
+    <tr><td>이메일 주소, 이름</td><td>회원가입 시 이용자가 직접 입력</td><td><b>필수</b>. 계정 식별과 이용권 관리에 사용</td></tr>
+    <tr><td>이메일 주소, 이름, 프로필 정보</td><td>소셜 로그인(Google·카카오) 이용 시 해당 사업자로부터 전달받음</td><td><b>필수</b>. 이용자가 소셜 로그인을 선택한 경우에만</td></tr>
+    <tr><td>비밀번호</td><td>이메일 회원가입 시 이용자가 직접 입력</td><td><b>필수</b>. 복원할 수 없는 형태로 암호화되어 보관되며 운영자도 열람할 수 없음</td></tr>
+    <tr><td>동의 기록<br />(동의 시각, 약관 버전, 마케팅 수신 동의 여부)</td><td>회원가입·최초 로그인 시 자동 기록</td><td><b>필수</b>. 법령상 동의를 받은 사실을 증명하기 위함</td></tr>
+    <tr><td>이용권 정보<br />(구분, 시작일, 만료일)</td><td>결제 시 자동 기록</td><td><b>필수</b>. 유료 기능 제공 범위를 정하기 위함</td></tr>
+    <tr><td>이메일 주소</td><td>"출시 알림 받기" 신청 시 이용자가 직접 입력</td><td>선택. 소식 안내에만 사용, 언제든 수신거부 가능</td></tr>
+    <tr><td>피드백 내용</td><td>"피드백" 기능으로 이용자가 작성·전송</td><td>선택. 전송 대행 서비스(Web3Forms)를 거쳐 운영자 메일함으로 전달</td></tr>
+    <tr><td>방문 통계(비식별)</td><td>Cloudflare Web Analytics(쿠키 미사용)</td><td>페이지 방문 수·재방문 여부·이용 시간·유입 경로 등 통계 목적. 개인을 특정하지 않음</td></tr>
   </table>
-  <p>현재 서비스는 회원가입·로그인 기능이 없으며, 위 항목은 모두 이용자가 직접 입력·신청하는 경우에만 수집되는 선택 사항입니다.</p>
+  <p>
+    <b>결제 수단 정보(카드번호 등)는 운영자가 수집·보관하지 않습니다.</b>
+    결제는 결제대행사가 처리하며, 운영자는 결제 성공 여부와 이용권 기간만 전달받습니다.
+  </p>
+  <p>회원가입은 <b>만 14세 이상</b>만 할 수 있습니다. 만 14세 미만의 가입은 받지 않습니다.</p>
 
   <h2>3. 개인정보의 수집 및 이용 목적</h2>
   <ul>
-    <li>서비스 정식 출시·주요 업데이트·정책 변경(무료/유료 전환 등) 안내</li>
+    <li>회원 식별 및 로그인 상태 유지</li>
+    <li>이용권(유료 서비스) 구매·기간 관리 및 유료 기능 제공</li>
+    <li>법령에 따라 동의를 받은 사실의 증명 및 분쟁 대응</li>
     <li>이용자 문의·피드백에 대한 응답</li>
+    <li>서비스 정식 출시·주요 업데이트·정책 변경 안내</li>
+    <li>마케팅 정보(서비스 소식·업데이트·이벤트) 안내 — <b>별도로 동의한 경우에만</b></li>
     <li>서비스 이용 현황 파악을 통한 품질 개선(비식별 통계)</li>
   </ul>
 
   <h2>4. 보유 및 이용 기간</h2>
-  <p>수집 목적 달성 시 또는 이용자가 삭제·수신거부를 요청할 때까지 보유하며, 이후 지체 없이 파기합니다.</p>
+  <p>
+    회원의 개인정보는 <b>회원 탈퇴 시 지체 없이 파기</b>합니다.
+    다만 다음의 경우에는 해당 기간 동안 보관합니다.
+  </p>
+  <table>
+    <tr><th>보관하는 것</th><th>기간</th><th>근거</th></tr>
+    <tr><td>계약 또는 청약철회 등에 관한 기록</td><td>5년</td><td>전자상거래 등에서의 소비자보호에 관한 법률</td></tr>
+    <tr><td>대금 결제 및 재화 등의 공급에 관한 기록</td><td>5년</td><td>전자상거래 등에서의 소비자보호에 관한 법률</td></tr>
+    <tr><td>소비자의 불만 또는 분쟁 처리에 관한 기록</td><td>3년</td><td>전자상거래 등에서의 소비자보호에 관한 법률</td></tr>
+  </table>
+  <p>회원가입을 하지 않은 이용자에 대해서는 서버에 보관하는 개인정보가 없습니다.</p>
 
   <h2>5. 개인정보의 제3자 제공</h2>
   <p>운영자는 이용자의 개인정보를 원칙적으로 외부에 제공하지 않습니다. 법령에 의거하거나 수사기관의 적법한 절차에 따른 요청이 있는 경우는 예외로 합니다.</p>
 
-  <h2>6. 개인정보 처리 위탁</h2>
-  <p>서비스는 <b>Cloudflare</b>(웹사이트 호스팅/보안)를 통해 운영되며, 접속 과정에서 통신을 위한 최소한의 기술적 정보(IP 등)가 Cloudflare의 인프라를 경유할 수 있습니다.</p>
-  <p>출시 알림 이메일 신청과 피드백 전송에는 폼 전송 대행 서비스인 <b>Web3Forms</b>를 이용합니다. 입력하신 내용(이메일 주소, 피드백 본문)은 Web3Forms 서버를 경유하여 운영자의 메일함으로 전달되며, Web3Forms의 개인정보처리방침은 <a href="https://web3forms.com/privacy" target="_blank" rel="noopener">web3forms.com/privacy</a>에서 확인할 수 있습니다.</p>
-  <p>또한 방문 통계 분석에는 <b>Cloudflare Web Analytics(Cloudflare, Inc.)</b>를 이용합니다. 쿠키나 브라우저 식별자를 사용하지 않으며, 방문한 페이지·유입 경로 등 개인을 특정할 수 없는 통계만 집계됩니다. Cloudflare의 개인정보처리방침은 <a href="https://www.cloudflare.com/privacypolicy/" target="_blank" rel="noopener">cloudflare.com/privacypolicy</a>에서 확인할 수 있습니다.</p>
+  <h2>6. 개인정보 처리 위탁 및 국외 이전</h2>
+  <p>서비스 운영을 위해 아래와 같이 개인정보 처리를 위탁하고 있습니다.</p>
+  <table>
+    <tr><th>수탁자</th><th>위탁 업무</th></tr>
+    <tr><td>Supabase, Inc.</td><td>회원 계정 정보 보관, 로그인 인증, 이용권 상태 관리</td></tr>
+    <tr><td>Cloudflare, Inc.</td><td>웹사이트 호스팅 및 보안, 방문 통계 분석(Cloudflare Web Analytics)</td></tr>
+    <tr><td>Web3Forms</td><td>문의·피드백 내용의 메일 전달</td></tr>
+    <tr><td>Google LLC</td><td>소셜 로그인(Google 계정)</td></tr>
+    <tr><td>주식회사 카카오</td><td>소셜 로그인(카카오 계정)</td></tr>
+    <tr><td>주식회사 코리아포트원</td><td>결제 요청·결제 결과 조회 중개(결제대행)</td></tr>
+    <tr><td>토스페이먼츠(주)</td><td>결제 처리 및 결제 수단 관리</td></tr>
+  </table>
+  <p>
+    결제 수단 정보(카드번호 등)는 토스페이먼츠가 직접 처리하며 회사는 수집·보관하지 않습니다.
+    회사가 전달받는 것은 결제 성공 여부와 이용권 기간뿐입니다.
+  </p>
+  <!-- ⚠ 결제대행사도 이 표에 들어간다. 포트원(주식회사 코리아포트원)은 결제 요청과
+       결과 조회를 **중개**하므로 수탁자다. 2026-09-02 까지 빠져 있었다 —
+       토스페이먼츠만 적혀 있어 우리가 카드사와 직접 계약한 것처럼 읽혔다.
+       결제 경로를 바꾸면(다른 PG·다른 채널) 이 줄부터 고칠 것.
+  ⚠ 소셜 로그인 수단을 켜고 끌 때 이 표를 반드시 같이 고칠 것.
+       index.html 의 login-btn 을 data-ready="1" 로 바꾸는 순간부터 실제 처리가 시작되므로,
+       그때 수탁자 한 줄 + 2장 수집 항목 + 아래 방침 링크가 함께 들어가야 한다.
+       네이버는 지금 hidden 이라 적지 않았다 (켜는 날 「네이버클라우드 주식회사」 추가).
+       카카오는 2026-08-19 에 켜졌는데 이 표에 없어 8/23 에 뒤늦게 채웠다. -->
+  <!-- ⚠ 이메일 발송 대행(Resend 등)을 붙이면 여기에 한 줄 추가할 것.
+       지금은 Supabase 기본 발송기를 쓰고 있어 Supabase 행에 포함된다. -->
+
+  <h3>국외 이전</h3>
+  <p>
+    위 수탁자 중 <b>주식회사 코리아포트원 · 토스페이먼츠(주) · 주식회사 카카오는 국내 사업자</b>이며,
+    나머지는 국외에 본사를 둔
+    사업자입니다. 회원 계정 정보가 보관되는 데이터베이스는
+    <b>대한민국(서울) 리전</b>에 위치하나, 운영·기술 지원 과정에서 국외에서 접근될 수 있으므로
+    아래와 같이 국외 이전 사항을 안내합니다.
+  </p>
+  <table>
+    <tr><th>이전받는 자</th><th class="nw">국가</th><th>이전 항목</th><th>이전 시기·방법</th><th>보유 기간</th></tr>
+    <tr><td>Supabase, Inc.</td><td class="nw">미국</td><td>이메일 주소, 이름, 소셜 로그인 식별자, 동의 기록, 이용권 정보</td><td>회원가입·로그인 시 정보통신망을 통해 전송</td><td>회원 탈퇴 시까지(제4조의 법정 보존기간 제외)</td></tr>
+    <tr><td>Cloudflare, Inc.</td><td class="nw">미국 등</td><td>접속 IP 등 통신에 필요한 최소 정보</td><td>사이트 접속 시 자동 경유</td><td>Cloudflare 정책에 따름</td></tr>
+    <tr><td>Google LLC</td><td class="nw">미국</td><td>소셜 로그인 시 이메일 주소, 이름, 프로필 정보</td><td>이용자가 소셜 로그인을 선택한 때에 정보통신망을 통해 전송</td><td>Google 정책에 따름</td></tr>
+    <tr><td>Web3Forms</td><td class="nw">미국 등</td><td>이용자가 입력한 이메일 주소, 문의·피드백 본문</td><td>문의·피드백 전송 시</td><td>전달 후 지체 없이 파기</td></tr>
+  </table>
+  <p>
+    이용자는 국외 이전을 거부할 수 있습니다. 다만 회원 계정 정보의 이전을 거부하는 경우
+    회원가입·로그인 및 유료 서비스 이용이 불가능하며, <b>회원가입 없이 서비스의 기본 기능은
+    그대로 이용할 수 있습니다.</b> 거부를 원하시면 제10조의 연락처로 알려주시기 바랍니다.
+  </p>
+  <p>각 사업자의 개인정보처리방침: <a href="https://supabase.com/privacy" target="_blank" rel="noopener">supabase.com/privacy</a> ·
+    <a href="https://www.cloudflare.com/privacypolicy/" target="_blank" rel="noopener">cloudflare.com/privacypolicy</a> ·
+    <a href="https://policies.google.com/privacy" target="_blank" rel="noopener">policies.google.com/privacy</a> ·
+    <a href="https://www.kakao.com/policy/privacy" target="_blank" rel="noopener">kakao.com/policy/privacy</a> ·
+    <a href="https://web3forms.com/privacy" target="_blank" rel="noopener">web3forms.com/privacy</a></p>
 
   <h2>7. 이용자의 권리</h2>
-  <p>이용자는 언제든지 자신의 개인정보(예: 소식 수신 이메일)에 대한 열람, 정정, 삭제, 수신거부를 요청할 수 있습니다. 아래 연락처로 문의해 주시면 지체 없이 조치합니다.</p>
+  <p>이용자는 언제든지 다음의 권리를 행사할 수 있습니다.</p>
+  <ul>
+    <li>자신의 개인정보에 대한 <b>열람·정정·삭제·처리정지</b> 요구</li>
+    <li><b>회원 탈퇴</b> — 탈퇴하면 계정 정보는 제4조에 따라 파기됩니다</li>
+    <li><b>마케팅 수신 동의 철회</b> — 동의는 선택이며, 철회해도 서비스 이용에 제한이 없습니다</li>
+    <li>국외 이전 거부(제6조)</li>
+  </ul>
+  <p>제10조의 연락처로 요청하시면 지체 없이 조치합니다.</p>
 
-  <h2>8. 쿠키(Cookie)</h2>
-  <p>서비스는 <b>쿠키를 사용하지 않습니다.</b> 로그인·세션 유지에도, 방문 통계 분석에도 쿠키를 쓰지 않습니다. 배선도·부품 라이브러리·설정은 이용자의 브라우저(localStorage·IndexedDB)에 저장되며 서버로 전송되지 않습니다.</p>
+  <h2>8. 쿠키 및 브라우저 저장소</h2>
+  <p>
+    로그인 상태 유지에는 쿠키가 아니라 <b>브라우저의 로컬 저장소(localStorage)</b>를 사용합니다.
+    로그아웃하거나 브라우저의 사이트 데이터를 지우면 함께 삭제됩니다.
+  </p>
+  <p>
+    배선도·부품 라이브러리·설정도 같은 방식으로 이용자의 브라우저(localStorage·IndexedDB)에
+    저장되며 서버로 전송되지 않습니다.
+  </p>
+  <p>
+    방문 통계 분석(Cloudflare Web Analytics)에도 쿠키를 사용하지 않습니다.
+    <b>서비스는 어떤 목적으로도 쿠키를 사용하지 않습니다.</b>
+  </p>
 
   <h2>9. 개인정보의 안전성 확보 조치</h2>
-  <p>운영자는 수집된 최소한의 정보(이메일 등)를 신뢰할 수 있는 서비스(이메일 제공업체 등)를 통해 관리하며, 목적 외 용도로 사용하지 않습니다.</p>
+  <ul>
+    <li><b>접근 통제</b> — 데이터베이스에 행 수준 보안(RLS)을 적용해, 로그인한 이용자는 자신의 정보만 읽을 수 있습니다.</li>
+    <li><b>암호화</b> — 비밀번호는 복원할 수 없는 형태로 저장되어 운영자도 열람할 수 없습니다. 모든 통신은 HTTPS로 암호화됩니다.</li>
+    <li><b>최소 수집</b> — 서비스 제공에 필요한 항목만 받습니다. 결제 수단 정보는 수집하지 않습니다.</li>
+    <li><b>취급자 최소화</b> — 개인정보를 다루는 사람은 보호책임자 1인으로 한정합니다.</li>
+  </ul>
 
   <h2>10. 개인정보 보호책임자 및 문의처</h2>
   <p>
-    이지케이블 운영자<br />
-    이메일: <a href="mailto:qksekftkd@gmail.com">qksekftkd@gmail.com</a>
+    아이비엑스(IBX)<br />
+    개인정보 보호책임자: 고원빈<br />
+    이메일: <a href="mailto:easycableinfo@gmail.com">easycableinfo@gmail.com</a><br />
+    전화: <a href="tel:01028647171">010-2864-7171</a>
+  </p>
+  <p>
+    개인정보 침해에 대한 신고·상담이 필요하시면 아래 기관에 문의하실 수 있습니다.<br />
+    개인정보침해신고센터(privacy.kisa.or.kr / 국번없이 118) ·
+    개인정보 분쟁조정위원회(kopico.go.kr / 1833-6972) ·
+    대검찰청 사이버수사과(1301) · 경찰청 사이버수사국(182)
   </p>
 
   <h2>11. 고지의 의무</h2>
   <p>본 방침의 내용이 변경되는 경우 시행 최소 7일 전(중대한 변경은 30일 전) 서비스 내 공지를 통해 안내합니다.</p>
 
-  <a class="back" href="/">← 이지케이블로 돌아가기</a>
+  <a class="back" href="welcome.html">← 이지케이블로 돌아가기</a>
+
+  <!-- ⚠ 법적 필수 영역 (전자상거래법 제10조). 항목을 임의로 지우지 말 것.
+       welcome.html 푸터와 글자 하나까지 같아야 한다 — PG 심사가 대조한다. -->
+  </div>
+
+  <footer class="site-foot">
+    <div class="wrap">
+      <p class="biz-name">이지케이블</p>
+      <p class="biz">
+        상호 아이비엑스(IBX)
+        <span class="sep">|</span>
+        대표 고원빈
+        <span class="sep">|</span>
+        사업자등록번호 497-25-02151
+        <span class="sep">|</span>
+        통신판매번호 제2026-영종구-0124호
+        <br />
+        주소 인천광역시 영종구 하늘별빛로 66 (중산동, 영종힐스테이트)
+        <br />
+        전화 010-2864-7171
+        <span class="sep">|</span>
+        이메일 easycableinfo@gmail.com
+      </p>
+      <div class="policies">
+        <a href="terms.html">이용약관</a>
+        <a href="privacy.html">개인정보처리방침</a>
+        <a href="terms.html#refund">환불정책</a>
+      </div>
+      <p class="copy">© 2026 EasyCable. All rights reserved.</p>
+    </div>
+  </footer>
 </body>
 </html>

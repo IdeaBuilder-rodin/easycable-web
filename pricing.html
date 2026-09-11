@@ -1,0 +1,638 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>요금 안내 — 이지케이블 (EasyCable)</title>
+  <meta name="description" content="이지케이블 요금 안내. 무료로 시작하고, 필요할 때만 이용권을 구매하세요. 1개월 6,900원 · 1년 46,800원(월 3,900원)." />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="EasyCable" />
+  <meta property="og:title" content="요금 안내 — 이지케이블 (EasyCable)" />
+  <meta property="og:description" content="무료로 시작하고, 필요할 때만 이용권을 구매하세요. 1개월 6,900원 · 1년 46,800원(월 3,900원)." />
+  <meta property="og:url" content="https://easycable.co.kr/pricing.html" />
+  <meta property="og:locale" content="ko_KR" />
+  <meta name="twitter:card" content="summary" />
+  <link rel="canonical" href="https://easycable.co.kr/pricing.html" />
+  <!-- 파비콘·앱 아이콘. 원본은 _로고/icon.svg 이고 assets/ 의 것은 거기서 뽑았다.
+       예전에는 🔌 이모지를 그려 넣었는데, 이모지는 OS 마다 그림이 달라
+       브라우저 탭에서 브랜드가 일정하지 않았다. (2026-08-24 교체) -->
+  <link rel="icon" href="assets/favicon.svg" type="image/svg+xml" />
+  <link rel="apple-touch-icon" href="assets/icon-180.png" />
+  <link rel="stylesheet" href="landing.css" />
+  <!-- 로그인 창의 겉모습. 에디터·랜딩과 **같은 파일**을 읽는다(복사본 없음).
+       landing.css 에는 .top-auth 의 자리만 있고, 아바타(.tb-account)와
+       로그인/아바타 전환(.is-in)은 여기 있다. 이게 없으면 아바타가 안 그려진다. -->
+  <link rel="stylesheet" href="auth.css" />
+
+  <!-- 「로그인 확인 중」 표시를 첫 페인트 전에 건다. (2026-09-10)
+       겉모습은 auth.css 의 html[data-auth="pending"] 규칙에 있다.
+
+       ⚠ 여기서 "로그인했을 것 같다"를 **추측하지 않는다.** localStorage 의
+          세션 열쇠만 보고 짐작하는 방법을 검토했다가 물렸다 — 방치 14일 규칙
+          (js/auth.js:157) · sessionStorage 대체 읽기(js/auth.js:207) ·
+          토큰 갱신 실패까지 맞혀야 하고, 틀리면 반대로 깜빡인다.
+
+       ⚠ 반드시 **스스로 풀리는 길**이 있어야 한다. auth.js 는 로그인을 못 쓰는
+          환경(js/auth.js:317)이나 SDK 내려받기 실패(js/auth.js:320)에서
+          ready() 를 **영원히 세우지 않고** 그냥 반환한다. 그때 이 표시가 남으면
+          로그인 버튼이 아예 사라져 원래 버그보다 나빠진다.
+          그래서 2초 뒤에는 무슨 일이 있어도 스스로 걷는다.
+          (정상 경로는 아래 계정표시() 가 그보다 훨씬 빨리 걷는다)
+
+       ⚠ 자바스크립트가 꺼져 있으면 이 스크립트도 안 돌아 표시가 안 붙는다 —
+          그때는 지금처럼 로그인·회원가입 링크가 그대로 보인다. 그게 맞다. -->
+  <script>
+    (function () {
+      var h = document.documentElement;
+      h.setAttribute("data-auth", "pending");
+      setTimeout(function () { h.removeAttribute("data-auth"); }, 2000);
+    })();
+  </script>
+
+  <!-- 요금 화면 전용 스타일.
+       landing.css 를 건드리지 않는다 — 랜딩(welcome.html)이 같은 파일을 쓰고 있어서,
+       공용 파일에 손대면 이 화면 때문에 랜딩이 깨질 수 있다. -->
+  <style>
+    .price-hero { text-align: center; padding: 72px 0 8px; }
+    .price-hero h1 { font-size: 34px; line-height: 1.35; margin: 0 0 14px; letter-spacing: -.02em; }
+    .price-hero .lead { color: #5f6771; font-size: 16px; line-height: 1.7; margin: 0; }
+
+    /* 카드 세 장을 나란히 둔다.
+       기간 토글(1개월↔1년)을 쓰지 않는 이유: 토글은 '같은 상품의 결제 주기'를 고르는 UI 인데
+       우리는 구독이 아니라 이용권이라 1개월권과 1년권이 서로 다른 상품이다.
+       그리고 토글은 한 번에 하나만 보여줘서 값을 머릿속으로 비교하게 만든다.
+       .wrap 이 1080px(안쪽 1040px)이라 minmax(280px,1fr) 이면 정확히 3열이 된다. */
+    /* VAT 안내까지 요금제 한 묶음이다. 다음 FAQ와 섹션 간격을 확보해
+       안내문과 FAQ 제목이 한 덩어리처럼 붙어 보이지 않게 한다. */
+    .plans { padding: 40px 0 72px; }
+    /* ⚠ align-items 를 start 로 두면 카드가 저마다 내용 높이만큼만 자라서
+       세 장의 아래끝이 들쭉날쭉해진다. stretch(기본값)로 두어 높이를 맞춘다.
+       내용이 적은 카드는 아래가 비는데, 그 자리는 아래 .plan-feats 가 채운다. */
+    .plan-grid {
+      display: grid; gap: 20px; align-items: stretch;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      max-width: 1040px; margin: 0 auto;
+    }
+    /* 카드 자신도 세로 flex 로 둬야 안쪽 요소가 남은 높이를 나눠 가질 수 있다 */
+    .plan {
+      position: relative; background: #fff; display: flex; flex-direction: column;
+      border: 1px solid #e3e7ec; border-radius: 16px; padding: 32px 26px;
+    }
+    /* 추천 요금제를 들어올린다 — 처음 오는 사람을 여기로 들인다 */
+    .plan.is-pick { border-color: #1e88e5; box-shadow: 0 6px 24px rgba(30,136,229,.13); }
+    .plan-name { font-size: 15px; font-weight: 600; color: #202124; margin: 0 0 14px; }
+    .plan.is-paid .plan-name::before { content: "✦ "; color: #1e88e5; }
+
+    .plan-price { display: flex; align-items: baseline; gap: 6px; margin: 0 0 6px; flex-wrap: wrap; }
+    .plan-price .num { font-size: 30px; font-weight: 700; letter-spacing: -.02em; color: #202124; }
+    .plan-price .per { font-size: 14px; color: #8a9098; }
+    /* 값 아래 한 줄. 높이를 고정해 세 카드의 버튼 높이가 어긋나지 않게 한다. */
+    /* ⚠ min-height 를 26px 로 둔 이유 — 아래 .save b 가 18px 로 커져서
+       그 줄의 높이가 늘었다. 세 카드가 같은 높이를 쓰지 않으면 버튼이 어긋난다. */
+    .plan-sub { min-height: 26px; margin: 0 0 18px; font-size: 13px; color: #6b7280;
+                display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; }
+    .plan-sub .strike { color: #aab0b8; text-decoration: line-through; }
+    .plan-sub .save { color: #1666b0; font-weight: 600; }
+    /* 값 자체만 키운다 — '꼴' 같은 조사까지 키우면 문장이 뭉툭해진다.
+       line-height:1 을 주는 이유 — 18px 글자가 줄 높이를 밀어올리면
+       그 카드만 4px 내려가서 세 카드의 버튼이 어긋난다. */
+    .plan-sub .save b { font-size: 18px; font-weight: 700; letter-spacing: -.01em;
+                        line-height: 1; }
+
+    /* word-break: keep-all — 한국어는 기본값이 아무 글자에서나 줄을 끊어서
+       「이용 가능합/니다」처럼 단어가 쪼개진다. 띄어쓰기에서만 끊기게 한다. */
+    .plan-desc { margin: 0 0 22px; font-size: 14px; line-height: 1.65; color: #5f6771;
+      min-height: 68px; word-break: keep-all; }
+    .plan .btn { display: block; width: 100%; text-align: center; box-sizing: border-box; }
+
+    /* flex:1 로 남은 높이를 이 영역이 가져간다 — 카드 높이를 맞추면 생기는
+       아래쪽 빈 공간이 기능 목록 뒤로 들어가, 테두리가 어색하게 끊기지 않는다. */
+    .plan-feats { margin: 24px 0 0; padding: 22px 0 0; border-top: 1px solid #f0f2f5;
+                  flex: 1 1 auto; }
+    .plan-feats > b { display: block; font-size: 13px; font-weight: 600; color: #202124; margin: 0 0 12px; }
+    .plan-feats ul { margin: 0; padding: 0; list-style: none; }
+    .plan-feats li {
+      display: flex; gap: 9px; align-items: flex-start;
+      padding: 6px 0; font-size: 13.5px; line-height: 1.55; color: #4b5563;
+    }
+    .plan-feats li::before { content: "✓"; flex: none; color: #1e88e5; font-weight: 600; }
+    /* 무료에 없는 항목 — 줄을 빼지 않고 ✕ 로 **같은 자리에** 남긴다.
+       빼 버리면 Pro 카드만 줄이 많아 보이는 게 아니라, 무료 카드를 보는 사람이
+       "이게 원래 있는 기능인지" 를 모른다. 자리를 맞춰야 두 카드를 비교할 수 있다. */
+    .plan-feats li.off { color: #9aa0a6; }
+    .plan-feats li.off::before { content: "✕"; color: #c9ced4; }
+    /* ⚠ li 가 flex 라서 안의 <b> 도 flex 항목이 되어 gap 이 글자 사이에 끼어든다.
+       글자를 span 으로 묶어 flex 항목을 '✓ + 글자' 둘로 고정한다. */
+    .plan-feats li > span { flex: 1; min-width: 0; }
+
+    /* ── 이미 이용 중인 요금제 ────────────────────────────────────────
+       ChatGPT 플랜 화면과 같은 방식이다 — 지금 쓰는 것은 아예 못 고르게 하고,
+       올라갈 수 있는 것만 활성으로 둔다. 손님이 결제 화면까지 헛걸음하지 않는다. */
+    .btn.is-current { background: #f3f4f6; color: #9ca3af; border-color: #e5e7eb;
+                      cursor: default; pointer-events: none; box-shadow: none; }
+    /* '추천' 표 — 카드 안 오른쪽 위. */
+    .plan-tag {
+      position: absolute; top: 30px; right: 26px;
+      padding: 4px 11px; border-radius: 999px;
+      background: #e8f1fc; color: #1565c0; font-size: 12px; font-weight: 700;
+    }
+
+    .vat { margin: 26px 0 0; text-align: center; font-size: 12px; color: #8a9098; }
+
+
+    /* 좁은 화면에서는 세로로 쌓인다. 이때 첫 카드가 가장 많이 보이므로
+       '무료'가 아니라 추천 요금제가 위로 오게 순서를 바꾼다. */
+    @media (max-width: 900px) {
+      .plan-desc { min-height: 0; }
+      .plan.is-pick { order: -1; }          /* 추천 요금제를 맨 위로 */
+      .plan:not(.is-paid) { order: 1; }     /* 무료는 맨 아래 — 유료 두 장이 붙어야 비교가 된다 */
+      .plan-grid { display: flex; flex-direction: column; max-width: 460px; }
+    }
+    @media (max-width: 640px) {
+      .price-hero { padding: 48px 0 4px; }
+      .price-hero h1 { font-size: 26px; }
+      .plan { padding: 26px 22px; }
+      .plans { padding-bottom: 56px; }
+    }
+  </style>
+
+  <!-- 방문 통계는 Cloudflare Web Analytics 를 쓴다 (Pages 대시보드에서 켜면 비콘이 자동 주입된다).
+       GA4 를 걷어낸 이유: 동의 화면보다 먼저 실행돼 브라우저 식별자가 미국으로 나갔다
+       (개인정보보호법 제28조의8 국외이전). CF 는 쿠키를 안 써서 동의가 필요 없다. -->
+</head>
+<body>
+
+<header class="top">
+  <div class="wrap">
+    <a class="logo" href="welcome.html"><img class="brand-mark" src="assets/logo.svg" alt="" />이지케이블</a>
+    <nav>
+      <a href="welcome.html#outputs" class="hide-sm">기능</a>
+      <a href="pricing.html" class="hide-sm">요금제</a>
+      <a href="welcome.html#faq" class="hide-sm">자주 묻는 질문</a>
+      <a href="mailto:easycableinfo@gmail.com" class="hide-sm">문의</a>
+      <a class="btn btn-main btn-sm" href="index.html">배선 그리기</a>
+      <!-- 로그인·회원가입 — 랜딩(welcome.html)과 **같은 모양**이다. (2026-09-08)
+           여기만 없으면 로그인해 둔 사람이 요금제로 넘어오는 순간 로그아웃된 것처럼 보인다.
+           href 를 그대로 둔 이유: 자바스크립트가 못 뜨면 링크로라도 로그인은 되어야 한다. -->
+      <span class="top-auth">
+        <a href="index.html?auth=login" class="nav-auth" data-auth="login">로그인</a>
+        <a href="index.html?auth=signup" class="nav-auth hide-sm" data-auth="signup">회원가입</a>
+        <!-- 로그인하면 여기에 동그란 아바타가 들어오고 위 두 링크는 사라진다.
+             마크업은 js/authmodal.js — 에디터 툴바·랜딩과 한 벌을 같이 쓴다. -->
+        <span id="acctSlot"></span>
+      </span>
+    </nav>
+  </div>
+</header>
+
+<!-- ── 머리말 ───────────────────────────────────── -->
+<section class="price-hero">
+  <div class="wrap">
+    <!-- ⚠ 제목은 '요금제' 한 낱말로 둔다. 여기서 설득하려 들면 카드가 밀린다 —
+         손님은 이미 가격을 보러 온 사람이고, 설득은 카드 안에서 한다.
+         아래 한 줄만 남긴다: 구독이 아니라는 것. 이게 제일 자주 걱정하는 것이다. -->
+    <h1>요금제</h1>
+    <p class="lead">구독이 아닙니다. 산 기간만 쓰고, 끝나면 자동으로 무료로 돌아갑니다.</p>
+  </div>
+</section>
+
+<!-- ── 요금 카드 ─────────────────────────────────── -->
+<section class="plans">
+  <div class="wrap">
+    <div class="plan-grid">
+
+      <article class="plan">
+        <p class="plan-name">무료</p>
+        <p class="plan-price"><span class="num">₩0</span></p>
+        <!-- ⚠ 비워 두되 요소는 남긴다. .plan-sub 의 min-height 가 세 카드의
+             버튼 높이를 맞추는 역할을 하는데, 지우면 이 카드만 버튼이 위로 올라간다. -->
+        <p class="plan-sub"></p>
+        <p class="plan-desc">간단한 작업은 무료로도 이용 가능합니다.</p>
+        <!-- ⚠ 무료는 **결제할 것이 없다.** 여기에 누를 수 있는 버튼을 두면
+             세 카드가 다 '고르는 것' 처럼 보이는데, 실제로 고르는 것은 유료 둘뿐이다.
+             자리는 남긴다 — 지우면 이 카드만 아래 내용이 위로 올라가 높이가 어긋난다.
+             (에디터로 가는 길은 상단 '배선 그리기' 버튼이 이미 맡고 있다)
+             ⚠ <a> 가 아니라 <span> 이다. href 없는 <a> 는 키보드로 가 닿지도 않고
+                누를 수도 없어서, '눌리는 것' 처럼 보이기만 한다. -->
+        <span class="btn btn-sub is-current">기본 제공</span>
+
+        <div class="plan-feats">
+          <b>계속 무료</b>
+          <!-- ⚠ 순서 규칙 (2026-09-07 고원빈): **바뀌는 것을 위로, 같은 것을 아래로.**
+                 위 묶음 = 무료↔Pro 가 다른 항목 (개수 → 페이지 → 워터마크 → 엑셀·CSV)
+                 아래 묶음 = 양쪽이 같은 항목
+               손님이 보는 첫 줄이 "무엇이 달라지는가" 여야 카드 셋을 비교할 수 있다.
+               항목을 새로 더할 때 아무 데나 끼우지 말고 이 두 묶음 중 맞는 쪽에 넣는다.
+               ⚠ 세 카드는 **같은 항목을 같은 순서로** 적는다. 값만 다르다.
+               무료에 있는 줄을 Pro 에서 빼면 "Pro 가 오히려 적네?" 로 읽힌다(2026-09-07 고원빈).
+               무료가 못 쓰는 것은 지우지 말고 li.off 로 같은 자리에 남긴다.
+               ⚠ 여기 숫자는 js/pro.js 의 LIMIT · COMP_LIMIT · SHEET_LIMIT 과 **같아야 한다.**
+               한쪽만 고치면 "30개라더니 25개에서 막힌다" 가 된다. verify_plan.mjs 가 지킨다. -->
+          <ul>
+            <li><span>도면 하나에 <b>부품 10개 · 배선 30개</b></span></li>
+            <li><span>도면 페이지 <b>1장</b></span></li>
+            <li><span>PNG · PDF 내보내기 (<b>워터마크 포함</b>)</span></li>
+            <li><span>BOM · 결선표 <b>엑셀 · CSV 내보내기</b></span></li>
+            <li><span>부품 사진 올리기 · 배경 자동 제거</span></li>
+            <li><span>단자 배치 · 배선 그리기 · 구간 정렬 · 분기</span></li>
+            <li><span>내 부품 라이브러리 무제한 · 공용 부품 이용</span></li>
+            <li><span>BOM · 결선표 인쇄 · PDF 출력</span></li>
+            <li><span>파일 저장 / 열기</span></li>
+          </ul>
+        </div>
+      </article>
+
+      <!-- 1개월권
+           ⚠ 여기에 '월 3,450원' 같은 월 환산을 쓰지 않는다.
+              1년권의 '월 3,900원' 과 나란히 놓이면 1개월권이 더 싸 보여서
+              1년권 앵커가 깨진다. 월 환산은 1년권에만 쓴다. -->
+      <article class="plan is-paid">
+        <p class="plan-name">Pro · 1개월</p>
+        <p class="plan-price">
+          <span class="num">₩6,900</span>
+          <span class="per">/ 1개월</span>
+        </p>
+        <!-- ⚠ 비워 두되 요소는 남긴다. .plan-sub 의 min-height 가 세 카드의
+             가격줄 아래 높이를 맞춘다 — 지우면 이 카드만 버튼이 올라간다. -->
+        <p class="plan-sub"></p>
+        <p class="plan-desc">짧은 기간에 많은 배선도 작업이 필요한 경우에 유용합니다.</p>
+        <a class="btn btn-main" href="checkout.html?plan=month">Pro 시작하기</a>
+
+        <div class="plan-feats">
+          <b>1개월 동안</b>
+          <!-- ⚠ 무료 카드와 **같은 항목·같은 순서**. 값만 다르다(위 무료 카드 주석 참고).
+               ⚠ 여기는 '실제로 구현된 것'만 적는다. 구현 안 된 것을 적으면 거짓 광고이고
+               PG 심사에서도 걸린다. 아래 셋은 모두 코드에 게이트가 있다 —
+                 개수·페이지 무제한   js/pro.js  canAddBundle · canAddSheet
+                 워터마크 없음        js/pro.js  watermark() → render.js · app.js · styles.css
+                 엑셀·CSV 내보내기    js/app.js  내보내기막힘()
+               '회사 양식 표제란 · 이전 버전 복구' 는 아직 없어서 안 적는다. -->
+          <ul>
+            <li><span>부품 · 배선 <b>무제한</b></span></li>
+            <li><span>도면 페이지 <b>무제한</b></span></li>
+            <li><span>PNG · PDF 내보내기 (<b>워터마크 없음</b>)</span></li>
+            <li><span>BOM · 결선표 <b>엑셀 · CSV 내보내기</b></span></li>
+            <li><span>부품 사진 올리기 · 배경 자동 제거</span></li>
+            <li><span>단자 배치 · 배선 그리기 · 구간 정렬 · 분기</span></li>
+            <li><span>내 부품 라이브러리 무제한 · 공용 부품 이용</span></li>
+            <li><span>BOM · 결선표 인쇄 · PDF 출력</span></li>
+            <li><span>파일 저장 / 열기</span></li>
+          </ul>
+        </div>
+      </article>
+
+      <!-- 1년권 — 월 환산은 여기에만 쓴다.
+           ⚠ 파란 강조(.is-pick)가 여기 있다. 예전에는 1개월권에 있었는데,
+              그건 「첫 결제 시 1개월 더」 리본이 붙는 자리였기 때문이다.
+              그 혜택을 없앤 뒤로는(2026-09-08) 1개월권을 들어올릴 이유가 남지 않아,
+              이미 '추천' 인 1년권으로 옮겼다. 안 옮기면 파란 테두리는 1개월권을,
+              '추천' 표는 1년권을 가리켜 화면이 서로 다른 말을 한다. -->
+      <article class="plan is-paid is-pick">
+        <span class="plan-tag">추천</span>
+        <p class="plan-name">Pro · 1년</p>
+        <p class="plan-price">
+          <span class="num">₩46,800</span>
+          <span class="per">/ 1년</span>
+        </p>
+        <!-- 이 카드에서 손님을 멈춰 세우는 것은 '월 3,900원' 하나다.
+             ₩46,800 은 얼핏 큰 돈으로 보이지만, 월로 나누면 1개월권(6,900원)의 절반이다.
+             그 숫자만 키워서 눈이 먼저 닿게 한다. -->
+        <p class="plan-sub"><span class="strike">₩82,800</span><span class="save"><b>월 3,900원</b></span></p>
+        <p class="plan-desc">배선도 작업이 꾸준히 이어지는 경우에 가장 저렴합니다.</p>
+        <a class="btn btn-sub" href="checkout.html?plan=year">1년권 구매하기</a>
+
+        <div class="plan-feats">
+          <b>12개월 동안</b>
+          <!-- 1개월권과 받는 것은 같다. 그래서 목록도 같게 두고, 이 카드만의 값어치인
+               '싸다' 를 맨 위 한 줄로 올린다. 목록을 줄이면 또 "1년권이 더 적나?" 가 된다. -->
+          <ul>
+            <li><span>1개월권을 12번 사는 것보다 <b>36,000원</b> 저렴</span></li>
+            <li><span>부품 · 배선 <b>무제한</b></span></li>
+            <li><span>도면 페이지 <b>무제한</b></span></li>
+            <li><span>PNG · PDF 내보내기 (<b>워터마크 없음</b>)</span></li>
+            <li><span>BOM · 결선표 <b>엑셀 · CSV 내보내기</b></span></li>
+            <li><span>부품 사진 올리기 · 배경 자동 제거</span></li>
+            <li><span>단자 배치 · 배선 그리기 · 구간 정렬 · 분기</span></li>
+            <li><span>내 부품 라이브러리 무제한 · 공용 부품 이용</span></li>
+            <li><span>BOM · 결선표 인쇄 · PDF 출력</span></li>
+            <li><span>파일 저장 / 열기</span></li>
+          </ul>
+        </div>
+      </article>
+
+    </div>
+
+    <p class="vat">* VAT가 포함된 가격입니다.</p>
+  </div>
+</section>
+
+<!-- ── 결제·환불 안내 ─────────────────────────────── -->
+<section class="faq" id="faq">
+  <div class="wrap">
+    <h2>자주 묻는 질문</h2>
+    <p class="faq-sub">가장 많이 물어보시는 것들입니다</p>
+
+    <!-- ⚠⚠ 이 네 문항은 pricing.html 의 것과 **글자 하나까지 같아야 한다.**
+         한쪽만 고치면 같은 질문에 두 가지 답이 있는 사이트가 된다.
+         한쪽을 고치면 반드시 다른 쪽도 같이 고칠 것. -->
+    <div class="faq-list">
+
+      <details>
+        <summary>자동으로 다시 결제되나요?
+          <svg class="chev" viewBox="0 0 20 20" aria-hidden="true"><path d="M5 8l5 5 5-5" /></svg></summary>
+        <p class="a">아닙니다. 구독이 아니라 <b>이용권</b>이라, 산 기간만큼만 쓰고 끝나면
+           자동으로 무료로 돌아갑니다. 해지할 것이 없고, 카드에서 다시 빠져나가는 돈도 없습니다.
+           계속 쓰시려면 그때 다시 결제하시면 됩니다.</p>
+      </details>
+
+      <details>
+        <summary>다른 컴퓨터에서도 쓸 수 있나요?
+          <svg class="chev" viewBox="0 0 20 20" aria-hidden="true"><path d="M5 8l5 5 5-5" /></svg></summary>
+        <p class="a"><b>이용권은</b> 계정을 따라가므로, 로그인하시면 어느 컴퓨터에서든 그대로 적용됩니다.
+           <br /><b>도면은</b> 쓰시던 브라우저에 저장되기 때문에 자동으로 옮겨지지 않습니다.
+           옮기시려면 도면을 파일(<code>.ezc</code>)로 내보낸 뒤 다른 컴퓨터에서 열면 됩니다.
+           부품과 사진까지 한 덩어리로 들어가므로 그대로 이어서 작업하실 수 있습니다.</p>
+      </details>
+
+      <details>
+        <summary>배선도면이 노출되지 않나요?
+          <svg class="chev" viewBox="0 0 20 20" aria-hidden="true"><path d="M5 8l5 5 5-5" /></svg></summary>
+        <p class="a">도면은 <b>저희 서버로 올라가지 않습니다.</b> 그릴 때도, 저장할 때도
+           여러분 브라우저 안에서만 처리됩니다. 그래서 저희도 여러분의 도면을 볼 수 없습니다.
+           <br />도면이 밖으로 나가는 것은 <b>직접 파일이나 PDF로 내보내 전달하실 때뿐</b>입니다.
+           올리신 부품 사진도 마찬가지로 브라우저에만 남습니다.</p>
+      </details>
+
+      <details>
+        <summary>데이터는 어디에 저장되나요?
+          <svg class="chev" viewBox="0 0 20 20" aria-hidden="true"><path d="M5 8l5 5 5-5" /></svg></summary>
+        <p class="a">도면·부품·사진은 모두 <b>쓰시는 브라우저 안</b>에 저장됩니다.
+           저희 서버에 있는 것은 <b>계정 정보와 결제 기록뿐</b>입니다.
+           <br />다만 그래서 브라우저 데이터를 지우시거나 다른 기기로 옮기시면 도면이 따라오지 않습니다.
+           중요한 도면은 <b>파일(<code>.ezc</code>)로 내보내 따로 보관</b>해 두시길 권합니다.</p>
+      </details>
+
+    </div>
+  </div>
+</section>
+
+<!-- ── 푸터 ─────────────────────────────────────── -->
+<!-- ⚠ 법적 필수 영역 (전자상거래법 제10조). 항목을 임의로 지우지 말 것.
+     welcome.html 푸터와 글자 하나까지 같아야 한다 — PG 심사가 대조한다. -->
+<footer>
+  <div class="wrap">
+    <div class="foot-top">
+      <div class="foot-brand">
+        <p class="biz-name">이지케이블</p>
+        <p class="foot-tag">부품 사진을 올리고 단자를 이으면,<br />그게 배선도가 됩니다.</p>
+      </div>
+      <!-- ⚠ 여기에 **없는 페이지를 만들어 넣지 않는다.** 링크가 많아 보이려고
+           '매뉴얼'·'블로그' 같은 걸 지어 넣으면 눌렀을 때 아무 데도 안 가고,
+           그건 심사에서 '깨진 링크' 로 잡힌다. 아래 여덟 개는 전부 실재한다. -->
+      <nav class="foot-cols">
+        <div>
+          <b>제품</b>
+          <a href="index.html">배선 그리기</a>
+          <a href="welcome.html#outputs">기능</a>
+          <a href="pricing.html">요금제</a>
+        </div>
+        <div>
+          <b>지원</b>
+          <a href="welcome.html#faq">자주 묻는 질문</a>
+          <a href="mailto:easycableinfo@gmail.com">이메일 문의</a>
+        </div>
+        <div>
+          <b>법적 고지</b>
+          <a href="terms.html">이용약관</a>
+          <a href="privacy.html">개인정보처리방침</a>
+          <a href="terms.html#refund">환불 정책</a>
+        </div>
+      </nav>
+    </div>
+
+    <p class="biz">
+      상호 아이비엑스(IBX)
+      <span class="sep">|</span>
+      대표 고원빈
+      <span class="sep">|</span>
+      사업자등록번호 497-25-02151
+      <span class="sep">|</span>
+      통신판매번호 제2026-영종구-0124호
+      <br />
+      주소 인천광역시 영종구 하늘별빛로 66 (중산동, 영종힐스테이트)
+      <br />
+      전화 010-2864-7171
+      <span class="sep">|</span>
+      이메일 easycableinfo@gmail.com
+    </p>
+
+    <p class="copy">© 2026 EasyCable. All rights reserved.</p>
+  </div>
+</footer>
+
+<!-- 로그인·회원가입을 이 화면에서 바로 처리한다. 순서가 중요하다 —
+     flags(동작 스위치) → authmodal(창 마크업) → auth(동작). 랜딩과 같은 차례다. -->
+<script src="js/flags.js"></script>
+<script src="js/authmodal.js"></script>
+<script src="js/auth.js"></script>
+<script>
+  /* 로그인 중이면 「로그인·회원가입」을 감추고 아바타를 보인다 — 랜딩·에디터와 같은 모양이다.
+
+     ⚠ 보이고 감추는 것은 **CSS 가 정한다**(.top-auth.is-in). auth.js 의 paint() 가
+        #acctWrap 의 hidden 을 직접 만지기 때문에, 여기서 hidden 을 같이 만지면
+        누가 나중에 실행되느냐에 따라 결과가 달라진다. 우리는 클래스만 붙였다 뗀다. */
+  /* 로그인 여부가 **확정**됐는가. 「확인 중」 표시를 걷어도 되는 시점이다.
+
+     ⚠ onChange 만 보고 걷으면 안 된다. auth.js 는 확정 전에도 _user=null 인 채로
+        여러 번 울린다(js/auth.js:507·795). 첫 울림에 걷으면 깜빡임이 그대로 돌아온다.
+     ⚠ 그렇다고 ready() 만 기다려도 안 된다. 로그인을 못 쓰는 환경에서는
+        init 이 그냥 반환해(js/auth.js:317) ready() 가 영원히 안 선다.
+        그 경우는 기다릴 것이 없으므로 곧바로 확정으로 본다. */
+  function 확정됐나() {
+    if (!(window.WE && WE.auth)) return false;          // auth.js 가 아직·영영 없다 → 2초 뒤 자동 해제
+    if (WE.auth._usable && !WE.auth._usable()) return true;
+    return !!(WE.auth.ready && WE.auth.ready());
+  }
+  function 계정표시() {
+    var box = document.querySelector(".top-auth");
+    if (!box) return;
+    box.classList.toggle("is-in", !!(window.WE && WE.auth && WE.auth.user && WE.auth.user()));
+    // 확정된 뒤에만 「확인 중」을 걷는다. 그전에는 회색 원을 그대로 둔다.
+    if (확정됐나()) document.documentElement.removeAttribute("data-auth");
+  }
+  if (window.WE && WE.auth && WE.auth.onChange) WE.auth.onChange(계정표시);
+  // 검사에서 로그인한 척하고 이 함수를 직접 부른다 — 화면 전환을 실제 코드로 확인하려고.
+  window.WE = window.WE || {}; WE.ui = WE.ui || {}; WE.ui.landingAccount = 계정표시;
+  계정표시();
+
+  document.querySelectorAll("a.nav-auth[data-auth]").forEach(function (a) {
+    a.addEventListener("click", function (e) {
+      if (!(window.WE && WE.auth && WE.auth.openAuth)) return;   // 못 열면 링크대로 간다
+      e.preventDefault();
+      WE.auth.openAuth(a.dataset.auth);
+    });
+  });
+</script>
+
+<script>
+/* 로컬 시험용 — 주소에 launch=1 이 있으면 결제 버튼에도 이어붙인다.
+
+   왜 필요한가: 로컬(127.0.0.1)은 유료화가 기본으로 꺼져 있고
+   ?launch=1 이 있을 때만 켜진다(js/flags.js 의 _wantsLocalLaunch).
+   이 값 없이 checkout.html 로 넘어가면 로그인해 두었는데도
+   "로그인이 필요합니다" 가 뜬다 — 페이지가 인증을 아예 안 켜기 때문이다.
+
+   ⚠ 실서비스·미리보기에서는 아무 일도 하지 않는다.
+      그쪽은 주소(호스트)로 판정하므로 이 값이 필요 없다. */
+(function () {
+  if (!/[?&]launch=1(&|$)/.test(location.search)) return;
+  document.addEventListener("DOMContentLoaded", function () {
+    var 링크 = document.querySelectorAll('a[href^="checkout.html"]');
+    for (var i = 0; i < 링크.length; i++) {
+      링크[i].setAttribute("href", 링크[i].getAttribute("href") + "&launch=1");
+    }
+  });
+})();
+
+/* ── 이미 Pro 를 쓰고 있으면 그 카드를 못 고르게 한다 ────────────────
+   ChatGPT 플랜 화면과 같은 방식이다. 지금 쓰는 요금제는 "현재 이용 중" 으로
+   비활성하고, 올라갈 수 있는 것만 남긴다. 결제 화면까지 갔다가
+   "이미 이용 중입니다" 를 보는 헛걸음을 없앤다.
+
+   ⚠ 왜 첫 판정을 localStorage 로 하나 —
+      auth.js 가 Pro 상태를 localStorage("we_last_pro")에 적어 두므로,
+      **로그인 확인이 끝나기 전에** 그 값만 읽어 카드를 미리 잠근다.
+      확인이 끝나면 아래 onChange 가 다시 칠한다.
+
+      ⚠ 이 주석은 원래 "이 페이지는 auth.js 를 안 불러온다" 였는데 **틀린 말이 됐다.**
+         2026-09-08 에 요금제 화면에도 로그인·회원가입을 붙이면서 auth.js 를 싣게
+         됐다(이 파일 아래쪽 <script src="js/auth.js">). 주석만 그대로 남아 있었다.
+         (2026-09-10 에 바로잡음)
+
+   ⚠ 이 값은 '화면 표시용 힌트' 다. 진짜 판정은 서버(order-create)가 한다.
+      위조해도 손해 볼 사람은 자기 자신뿐이다(결제 버튼이 잠길 뿐이다).
+
+   ⚠ 예전에는 월권인지 1년권인지 몰라서 **Pro 를 무조건 월권으로 표시**했다.
+      1년권을 산 사람에게 "1개월권 현재 이용 중 / 1년 이용권으로 변경" 이라고
+      거짓말을 했다(2026-08-31 발견). 지금은 auth.js 가 기억에 kind 를 같이 적는다.
+      kind 가 없으면(옛 기억) 예전처럼 월권으로 본다 — 아무것도 안 하는 것보다 낫다. */
+(function () {
+  var 유예일 = 7;   // auth.js 와 같은 값
+
+  function 프로기억() {
+    try {
+      var m = JSON.parse(localStorage.getItem("we_last_pro") || "null");
+      if (!m) return null;
+      if (Date.now() - (m.t || 0) > 유예일 * 86400000) return null;          // 기억이 오래됐다
+      if (m.expires_at && new Date(m.expires_at) <= new Date()) return null;  // 이미 끝났다
+      return m;
+    } catch (e) { return null; }
+  }
+
+
+  document.addEventListener("DOMContentLoaded", function () {
+    var 월권 = document.querySelector('a[href^="checkout.html?plan=month"]');
+    var 연권 = document.querySelector('a[href^="checkout.html?plan=year"]');
+    if (!월권 || !연권) return;
+
+    /* ⚠ 원래 모습을 **먼저** 찍어 둔다. (2026-09-10)
+       예전에는 이 코드가 DOMContentLoaded 에서 딱 한 번만 돌고 끝이었다.
+       그래서 카드를 잠근 뒤에 로그아웃하거나 다른 계정으로 갈아타면
+       머리줄은 바뀌는데 카드는 계속 "현재 이용 중" 으로 잠겨 있었다.
+       이제 인증이 바뀔 때마다 다시 칠하는데, 그러려면 **되돌릴 수 있어야** 한다.
+
+       ⚠ 되돌릴 값을 여기서 찍는 것이 중요하다. 이용중으로() 가 href 를 지우므로,
+          한 번 잠근 뒤에는 위 querySelector 로 이 버튼들을 **다시 찾지 못한다.** */
+    var 원본 = [월권, 연권].map(function (b) {
+      return {
+        버튼: b,
+        cls: b.className,
+        글: b.textContent,
+        href: b.getAttribute("href"),
+        강조: b.closest(".plan").classList.contains("is-pick")
+      };
+    });
+
+    function 되돌리기() {
+      원본.forEach(function (o) {
+        o.버튼.className = o.cls;
+        o.버튼.textContent = o.글;
+        if (o.href === null) o.버튼.removeAttribute("href");
+        else o.버튼.setAttribute("href", o.href);
+        o.버튼.closest(".plan").classList.toggle("is-pick", o.강조);
+      });
+    }
+
+    function 이용중으로(버튼) {
+      버튼.classList.remove("btn-main");
+      버튼.classList.add("btn-sub", "is-current");
+      버튼.textContent = "현재 이용 중";
+      버튼.removeAttribute("href");
+      // ⚠ 예전에는 여기에 "2026년 10월 24일 까지" 배지를 버튼 아래에 끼워 넣었다.
+      //    그 줄 때문에 **이 카드만 키가 커져서** 세 카드의 구분선이 어긋났다.
+      //    만료일은 '내 계정'(account.html)에서 보는 것이 맞다 —
+      //    요금제 화면은 고르는 곳이지 내 상태를 보는 곳이 아니다. (2026-08-31)
+    }
+
+    /* 지금 상태대로 카드를 칠한다. **몇 번을 불러도 같은 결과가 나와야 한다** —
+       그래서 항상 원래 모습으로 되돌린 다음 다시 잠근다. */
+    function 칠하기() {
+    되돌리기();
+    var 기억 = 프로기억();
+    if (!기억) return;                       // 무료거나 비로그인 — 되돌린 그대로 둔다
+
+    if (기억.kind === "year") {
+      // 1년권 이용자 — 더 살 것이 없다.
+      // ⚠ 월권도 잠근다. order-create 가 1년권 이용자에게는 월권도 막으므로,
+      //    여기서 열어 두면 결제 화면까지 갔다가 거절당하는 헛걸음이 생긴다.
+      이용중으로(연권);
+      월권.classList.remove("btn-main");
+      월권.classList.add("btn-sub", "is-current");
+      월권.textContent = "이용 중에는 구매할 수 없습니다";
+      월권.removeAttribute("href");
+      // ⚠ 여기서도 파란 테두리를 옮긴다. 1년권 이용자에게는 살 것이 하나도 없어서
+      //    "올라갈 수 있는 것" 이 없다 — 그러면 강조는 **지금 쓰는 것**에 있어야 한다.
+      //    안 옮기면 "이용 중에는 구매할 수 없습니다" 카드가 강조돼 있는 꼴이 된다.
+      월권.closest(".plan").classList.remove("is-pick");
+      연권.closest(".plan").classList.add("is-pick");
+    } else {
+      // 월권 이용자 (또는 종류를 모르는 옛 기억)
+      // ① 지금 쓰는 것은 못 고르게 한다
+      이용중으로(월권);
+      // ② 올라갈 수 있는 것(1년권)을 강조한다 — 고를 것이 하나뿐이어야 눈에 띈다
+      연권.classList.remove("btn-sub");
+      연권.classList.add("btn-main");
+      연권.textContent = "1년 이용권으로 변경";
+      // ⚠ 파란 테두리(.is-pick)도 같이 옮긴다.
+      //    안 옮기면 **살 수 없는 카드가 계속 강조돼 있고**, 정작 누를 수 있는 카드는
+      //    아무 표시가 없다. 버튼만 옮기고 테두리를 두고 온 상태였다(2026-08-31).
+      //    좁은 화면에서는 .is-pick 이 order:-1 이라 맨 위로도 올라간다 — 그게 맞다.
+      월권.closest(".plan").classList.remove("is-pick");
+      연권.closest(".plan").classList.add("is-pick");
+    }
+
+    /* ⚠ 여기에 "이미 결제한 사람의 .plan-sub 를 비운다" 는 처리가 있었다.
+       「첫 결제 시 1개월 더」 안내가 이미 산 사람에게 거짓말이 되기 때문이었는데,
+       그 혜택을 없애면서(2026-09-08) 비울 것이 없어졌다.
+       그대로 두면 1년권 이용자에게 '₩82,800 → 월 3,900원' 가격줄까지 지워져,
+       지우는 이유가 사라진 채로 화면만 달라진다. */
+    }
+
+    칠하기();          // 먼저 기억으로 한 번 — 로그인 확인을 기다리지 않는다
+
+    /* 로그인·로그아웃·프로필 갱신이 끝날 때마다 다시 칠한다. (2026-09-10)
+       auth.js 는 판정이 끝나면 we_last_pro 를 갱신하거나 지운 **뒤에** 알리므로
+       (js/auth.js:73·272·505), 여기서 기억을 다시 읽으면 최신 상태가 된다.
+
+       ⚠ 다른 탭에서 로그아웃한 경우도 여기로 들어온다 — SDK 가 BroadcastChannel 로
+          알리고 auth.js:339 가 받는다. */
+    if (window.WE && WE.auth && WE.auth.onChange) WE.auth.onChange(칠하기);
+
+    // 검사에서 직접 부른다 — 기억을 바꿔 놓고 화면이 따라오는지 실제 코드로 확인하려고.
+    window.WE = window.WE || {}; WE.ui = WE.ui || {}; WE.ui.pricingCards = 칠하기;
+  });
+})();
+</script>
+
+</body>
+</html>

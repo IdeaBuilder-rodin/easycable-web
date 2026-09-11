@@ -1,0 +1,477 @@
+/* auth.css — 로그인·회원가입·동의 모달의 겉모습.
+
+   왜 파일을 갈랐나 (2026-09-02):
+     랜딩(welcome.html)에서도 같은 로그인 창을 띄우기로 했다. 그런데 styles.css 를 통째로
+     싣자 랜딩 버튼이 44px → 36px 로 줄어드는 등 **7곳이 달라졌다** — 에디터 규칙이 새어 든다.
+     그렇다고 규칙을 복사하면 두 벌이 되어, 한쪽만 고치는 날 화면마다 달라진다.
+     그래서 **옮겼다.** 복사본은 없다 — 에디터와 랜딩이 이 한 파일을 같이 읽는다.
+
+   ⚠ index.html 은 styles.css **보다 먼저** 이 파일을 읽어야 한다.
+      아래 `.modal-box` 는 원래 styles.css 중간쯤에 있던 공용 규칙이라, 뒤로 보내면
+      뒤에 오는 같은 굵기(0,0,1,0)의 규칙들을 이겨 버린다 — 실제로 그렇게 뒀다가
+      공용 부품(1180) · 데이터시트(1400) · 공용부품 게시(680) · 환영(500) 창이
+      **전부 560px 로 줄었다.** (2026-09-02 고원빈 보고, 실측으로 확인) */
+
+:root {
+  --auth-w:     460px;            /* 기본 상자 폭 */
+  --auth-w-sm:  420px;            /* 짧은 화면(인증 완료) */
+  --auth-r:     16px;             /* 상자 모서리 */
+  --auth-r-ctl: 10px;             /* 버튼·입력 모서리 */
+  --auth-h:     48px;             /* 버튼·입력 높이 */
+  --auth-pad:   40px 46px 32px;   /* 안쪽 여백 (좌우 46px = 폭의 10%) */
+  --auth-pad-x: 56px;             /* 닫기(×)가 있을 때 위 여백 (× 아래끝 48px + 8px) */
+  --auth-title: 32px;             /* 제목 — .auth-box h3 가 쓴다 */
+}
+
+/* 모달 바탕 — 원래 styles.css 의 '배경 제거 모달' 자리에 있던 공용 규칙이다.
+   로그인 창도 이걸 쓰므로 함께 옮겼다. 에디터의 다른 모달도 이 파일을 통해 받는다. */
+.modal {
+  position: fixed; inset: 0; background: rgba(0,0,0,.45);
+  display: flex; align-items: center; justify-content: center; z-index: 100;
+}
+.modal[hidden] { display: none; }
+.modal-box {
+  background: #fff; border-radius: 8px; padding: 16px 18px;
+  width: min(560px, 92vw); max-height: 92vh; overflow: auto;
+  box-shadow: 0 10px 40px rgba(0,0,0,.3);
+}
+.modal-box h3 { margin: 0 0 6px; }
+
+/* 로그인 상태 유지 — 모든 로그인 방법 다음에, 구분선으로 묶어 둔다.
+   제목 밑에 회색 한 줄로 띄워 두면 어디에도 안 붙어 보인다 (그렇게 만들었다가 고쳤다).
+   ⚠ .login-keep > input 처럼 자식 결합자로 좁히지 않으면
+      #loginModal 의 넓은 규칙이 이 체크박스를 먹는다 (전에 동의 체크박스가 그랬다) */
+.auth-box .login-keep {
+  display: flex; align-items: center; gap: 8px;
+  margin: -2px 0 2px; font-size: 13px; color: #4a525c;
+  cursor: pointer; text-align: left;   /* 모달은 가운데 정렬이라 풀어 준다 */
+}
+.auth-box .login-keep > input {
+  width: 15px; height: 15px; margin: 0; flex: none; accent-color: var(--primary);
+}
+
+/* ─────────────────────────────────────────────────────────────
+   로그인 모달 — 미리캔버스 형태를 기준으로 맞췄다.
+
+   기준으로 삼은 것:
+     · 제목 바로 아래에 버튼이 온다 (부제 없음)
+     · 버튼이 크고(48px) 모서리가 둥글다(10px)
+     · 좌우 여백이 넉넉하다 — 폭의 약 9%
+     · 주력 수단은 브랜드색으로 채우고, 나머지는 흰 버튼
+     · '최근 사용'은 버튼 오른쪽 안쪽에 말풍선
+
+   순서는 국내 이용률 기준(카카오 98.9% > 네이버 > 구글).
+   상세 고지는 여기 두지 않는다 — 랜딩 푸터의 약관·처리방침으로 뺐다.
+
+   모든 규칙을 #loginModal 안으로 한정한다. 이 프로젝트의 최다 결함이
+   「전역 CSS 규칙이 새 요소에 몰래 얹히는 것」이라 범위를 좁혀 둔다.
+   ───────────────────────────────────────────────────────────── */
+/* 치수는 미리캔버스를 '모달 폭 대비 비율'로 환산해 맞췄다.
+   (캡처 배율을 몰라 절대 px 는 못 재지만 비율은 잴 수 있다)
+     좌우 여백 폭의 10%  ·  제목 위 여백 넉넉히  ·  버튼 높이 폭의 10% */
+/* 인증 계열 모달의 공용 상자.
+   새 모달을 만들 때 .auth-box 만 붙이면 치수가 자동으로 맞는다.
+   ⚠ id 를 나열하는 선택자(#loginModal, #consentModal …)를 쓰지 말 것 —
+      새 모달을 추가할 때 반드시 빠뜨린다. 실제로 그래서 인증 완료 모달의
+      버튼이 기본 브라우저 버튼으로 나왔었다. */
+/* ⚠ 창 안의 글꼴 기준을 여기서 못 박는다. (2026-09-02)
+   이 창은 에디터(바탕 13px)와 랜딩(바탕 16px) 양쪽에 뜨는데, 크기를 안 정한 글자는
+   바깥 페이지의 바탕을 물려받는다. 그래서 **같은 창인데 랜딩에서만 47px 더 길어져**
+   최대 높이(810px)를 넘겨 스크롤이 생겼다(고원빈 보고: "에디터는 한 화면인데 랜딩은 스크롤").
+   줄 간격도 같은 이유다 — 랜딩은 `font: 16px/1.7` 이라 **1.7** 이 상속되는데
+   에디터는 브라우저 기본이다. 같은 32px 제목이 43px vs 54px 로 벌어졌다.
+   바깥이 무엇이든 같은 모양이 되도록 창 안에서 둘 다 못 박는다. */
+.auth-box { font-size: 13px; line-height: normal; }
+
+.auth-box {
+  width: min(var(--auth-w), 92vw);
+  padding: var(--auth-pad);
+  border-radius: var(--auth-r);
+  max-height: 90vh; overflow-y: auto;
+  position: relative;                    /* 닫기(×)의 기준 */
+}
+.auth-box.has-close { padding-top: var(--auth-pad-x); }   /* 닫기 자리를 위에 비운다 */
+.auth-box.is-narrow { width: min(var(--auth-w-sm), 92vw); }
+/* 제목과 버튼 사이를 크게 띄운다 — 미리캔버스의 인상 대부분이 이 여백에서 온다 */
+.auth-box h3 {
+  /* 32px 는 회원가입 화면 기준(2026-08-20 망고보드 대조로 정함).
+     로그인·동의·인증완료·새 비밀번호도 같은 모달 가족이라 같은 크기를 쓴다 —
+     verify_authbox 가 세 모달의 제목 크기가 같은지 검사한다.
+     유일한 예외는 #loginPaneSent 다 (아래 참조). */
+  font-size: var(--auth-title); font-weight: 700; text-align: center;
+  margin: 0 0 50px; color: #202124; letter-spacing: -.01em;
+}
+
+/* 예외 — 「인증 링크를 메일로 전송했습니다」는 17자라 32px 에서 두 줄로 접힌다.
+   상자 460px − 좌우 여백 46px×2 = 368px, 32px 로는 11자까지 들어간다.
+   실측: 20px 일 때 27px → 32px 로 올리면 86px. 이 화면만 20px 를 유지한다. */
+#loginPaneSent h3 { font-size: 20px; }
+.auth-box .login-x {
+  position: absolute; top: 16px; right: 18px;
+  border: 0; background: none; cursor: pointer;
+  font-size: 24px; line-height: 1; color: #b8bec5; padding: 4px 6px;
+  font-weight: 300;
+}
+.auth-box .login-x:hover { color: #444; }
+
+/* 안내 줄 — 실패(빨강)와 준비 중(회색)을 같은 자리에 쓴다 */
+.auth-box .login-error {
+  margin: 0 0 14px; padding: 10px 12px;
+  background: #fdecea; border: 1px solid #f5c6c2; border-radius: 8px;
+  color: #b3261e; font-size: 13px; line-height: 1.5;
+}
+.auth-box .login-error.is-info {
+  background: #f3f5f8; border-color: #e2e7ed; color: #5f6771;
+}
+
+.auth-box .login-providers { display: flex; flex-direction: column; gap: 14px; }
+
+/* ⚠ hidden 속성은 브라우저 기본 스타일의 [hidden]{display:none} 으로만 걸린다.
+   바로 아래 .auth-box .login-btn 의 display:flex 는 클래스 선택자라 우선순위가 높아
+   hidden 을 이겨 버린다. 그래서 index.html 에서 네이버 버튼에 hidden 을 붙여 뒀는데도
+   화면에는 계속 보이고 있었다 (2026-08-24 발견 — 눌러도 「준비 중」만 뜨는 버튼이었다).
+
+   개별 버튼이 아니라 인증 상자 전체에 거는 이유는, 앞으로 어떤 요소에 hidden 을
+   붙이더라도 같은 함정에 빠지지 않게 하기 위해서다. hidden 은 '숨긴다'는 뜻이고
+   예외가 있어서는 안 되므로 !important 를 쓴다.
+   ※ aria-hidden 은 다른 속성이라 여기에 걸리지 않는다 (아이콘 span 들은 영향 없음). */
+.auth-box [hidden] { display: none !important; }
+
+.auth-box .login-btn {
+  position: relative;
+  display: flex; align-items: center; gap: 12px;
+  width: 100%; height: 48px; padding: 0 18px;   /* 폭의 약 10% */
+  border: 1px solid transparent; border-radius: 10px;
+  cursor: pointer; font-size: 15px; letter-spacing: -.01em;
+  /* 맑은 고딕은 굵기가 Regular / Bold 둘뿐이라 600 을 주면 곧바로 Bold 로 튄다.
+     미리캔버스는 Medium 이 있는 웹폰트라 그 중간이 나온다.
+     우리는 500 을 줘서 Regular 로 떨어뜨리는 편이 더 가깝다. */
+  font-weight: 500;
+}
+.auth-box .login-ico { display: flex; flex: 0 0 auto; }
+/* 아이콘이 왼쪽에 붙어도 글자는 가운데로 — 아이콘 폭만큼 오른쪽을 비워 균형을 맞춘다 */
+.auth-box .login-txt { flex: 1 1 auto; text-align: center; margin-right: 31px; }
+
+/* 브랜드색 — 각 사 가이드라인 값 */
+.auth-box .is-kakao  { background: #FEE500; color: #191600; }
+.auth-box .is-kakao:hover  { background: #f2da00; }
+.auth-box .is-naver  { background: #03C75A; color: #fff; }
+.auth-box .is-naver:hover  { background: #02b351; }
+.auth-box .is-google { background: #fff; color: #2f3438; border-color: #e0e4e9; }
+.auth-box .is-google:hover { background: #fafbfc; border-color: #d0d6dd; }
+.auth-box .login-btn:active { filter: brightness(.96); }
+
+/* 아직 심사가 안 끝난 수단 — 눌리기는 하되 '준비 중'이라고 알려 준다.
+   흐리게 만들지는 않는다. 최종 모양을 그대로 보고 판단해야 하기 때문이다. */
+.auth-box .login-btn[data-ready="0"] { cursor: pointer; }
+
+/* '최근 사용' 배지.
+   소셜 로그인의 최대 실패 지점이 "저번에 뭘로 가입했더라"다.
+   다른 걸로 누르면 같은 사람인데 계정이 하나 더 생긴다. */
+.auth-box .login-recent {
+  position: absolute; right: 12px; top: 50%; transform: translateY(-50%);
+  background: #202124; color: #fff;
+  font-size: 11.5px; font-weight: 500; line-height: 1;
+  padding: 7px 10px; border-radius: 6px; white-space: nowrap;
+}
+.auth-box .login-recent::before {
+  content: ""; position: absolute; left: -4px; top: 50%; margin-top: -4px;
+  border: 4px solid transparent; border-right-color: #202124; border-left: 0;
+}
+
+/* ── 간편 로그인 — 로고만 남긴 원형 아이콘 한 줄 ──────────────────────
+   가로 버튼 3개를 위에 두었을 때 초록(네이버)·노랑(카카오) 덩어리가
+   화면 상단을 다 먹어 「로그인」보다 남의 회사 로고가 주인공이 됐다.
+   브랜드색은 그대로 두되 면적을 줄여 화면의 주인을 되찾는다. */
+.auth-box .login-providers.is-icons {
+  flex-direction: row; justify-content: center; gap: 16px;
+}
+.auth-box .is-icons .login-btn {
+  width: 48px; height: 48px; padding: 0; border-radius: 50%;
+  justify-content: center; gap: 0;
+}
+/* 글자는 화면에서만 감춘다 — 스크린리더에는 남아야 무엇을 누르는지 알 수 있다 */
+.auth-box .is-icons .login-txt {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip-path: inset(50%); white-space: nowrap;
+}
+/* '최근 사용' 배지 — 가로 버튼일 때는 오른쪽 안쪽이었지만 원 안에는 못 들어간다.
+   ⚠ 없애면 안 된다. 소셜 로그인의 최대 실패 지점이 "저번에 뭘로 가입했더라"이고,
+      로고만 남기면 그 혼동이 더 심해진다. */
+.auth-box .is-icons .login-recent {
+  right: auto; left: 50%; top: -10px; transform: translate(-50%, -100%);
+  font-size: 10.5px; padding: 4px 8px;
+}
+.auth-box .is-icons .login-recent::before {
+  left: 50%; top: auto; bottom: -4px; margin: 0 0 0 -4px;
+  border: 4px solid transparent; border-top-color: #202124; border-bottom: 0;
+}
+
+/* ── 이메일 로그인 · 회원가입 · 동의 ─────────────────────────────────
+   소셜 버튼과 같은 상자 안에 들어가므로 높이(48px)와 모서리(10px)를 맞춘다.
+   여기서 치수가 어긋나면 "나중에 붙인 화면"처럼 보인다. */
+
+/* 아래 여백은 화면마다 입력칸 수가 달라 각자 값을 쓴다.
+   회원가입은 입력칸이 많아 공용 50px 이 과하다 → 위 여백(--auth-pad-x)과 같은 56px. */
+#loginPaneUp h3 { margin-bottom: 56px; }
+
+/* 소셜과 이메일을 가르는 줄 — 가운데 글자, 양옆으로 선 */
+.auth-box .login-or {
+  display: flex; align-items: center; gap: 12px;
+  margin: 22px 0 18px; color: #a8aeb6; font-size: 12px;
+}
+.auth-box .login-or::before, .auth-box .login-or::after {
+  content: ""; flex: 1; height: 1px; background: #eceff3;
+}
+
+.auth-box .login-form { display: flex; flex-direction: column; gap: 12px; }
+
+/* 특정 입력칸의 문제는 그 칸 바로 아래에 붙인다.
+   화면 위쪽 알림줄(.login-error)은 「가입에 실패했습니다」 같은 전체 오류용이고,
+   「이 칸을 고치세요」는 칸 옆에 있어야 사용자가 어디를 볼지 헤매지 않는다.
+   (미리캔버스가 이메일 중복을 이렇게 보여준다 — 2026-08-24 고원빈 결정)
+   .login-form 의 gap 이 12px 이라, 오류줄은 위로 6px 당겨 칸에 붙인다. */
+.auth-box .login-form > input.is-invalid {
+  border-color: #e5484d;
+  background: #fff8f8;
+}
+.auth-box .field-error {
+  margin: -6px 0 0; padding: 0 2px;
+  color: #b3261e; font-size: 12.5px; line-height: 1.5;
+}
+.auth-box .login-form > input {
+  width: 100%; height: 48px; padding: 0 16px;
+  border: 1px solid #dfe3e8; border-radius: 10px;
+  font-size: 15px; color: #202124; background: #fff;
+  box-sizing: border-box;      /* padding 을 폭 안에 넣는다 — 없으면 상자를 삐져나간다 */
+}
+.auth-box .login-form > input::placeholder { color: #aab0b8; }
+.auth-box .login-form > input:focus {
+  outline: none; border-color: #1e88e5; box-shadow: 0 0 0 3px rgba(30,136,229,.12);
+}
+
+/* 주 동작 버튼 — 소셜 버튼과 같은 높이·모서리 */
+/* ⚠ 여기에 id 를 나열하지 말 것. 새 모달을 추가할 때 반드시 빠뜨린다 —
+      실제로 인증 완료 모달의 버튼이 기본 브라우저 버튼으로 나왔던 원인이다. */
+.auth-box .login-submit {
+  width: 100%; height: 48px; margin-top: 4px;
+  border: 0; border-radius: 10px; cursor: pointer;
+  background: #1e88e5; color: #fff; font-size: 15px; font-weight: 500;
+}
+.auth-box .login-submit:hover { background: #1a7ad1; }
+/* 필수 동의 전에는 눌러도 소용없다 — 눌리지 않는다는 것을 색으로 보인다 */
+.auth-box .login-submit:disabled {
+  background: #dfe3e8; color: #9aa0a8; cursor: not-allowed;
+}
+
+/* 화면 전환 (회원가입 ↔ 로그인) */
+.auth-box .login-switch { margin: 18px 0 0; text-align: center; font-size: 13px; color: #6b7280; }
+.login-link {
+  border: 0; background: none; padding: 0; cursor: pointer;
+  color: #1e88e5; font-size: inherit; font-weight: 500;
+  text-decoration: underline; text-underline-offset: 2px;
+}
+.login-link:hover { color: #1666b0; }
+
+/* ── 동의 블록 ───────────────────────────────────────────────────
+   회원가입 폼과 동의 모달 두 곳에 같은 markup 이 들어간다.
+   '모두 동의'를 테두리로 감싸 한 덩어리로 보이게 하고, 개별 항목은 그 아래 둔다 —
+   미리캔버스가 쓰는 형태다. 전부 같은 줄로 나열하면 무엇이 상위인지 안 보인다. */
+.consent { margin: 6px 0 2px; }
+.consent .cs-all {
+  display: flex; align-items: center; gap: 10px;
+  padding: 14px; border: 1px solid #dfe3e8; border-radius: 10px;
+  cursor: pointer; font-size: 14px; color: #202124;
+}
+.consent .cs-all b { font-weight: 600; }
+.consent .cs-items { display: flex; flex-direction: column; gap: 4px; padding: 12px 14px 2px; }
+.consent .cs-items label {
+  display: flex; align-items: center; gap: 10px;
+  padding: 9px 0; cursor: pointer; font-size: 14px; color: #4b5563;
+}
+/* min-width:0 — 없으면 글자 폭 밑으로 못 줄어들어 줄이 삐져나간다 (배선 정렬에서 겪었다) */
+.consent .cs-items label > span { flex: 1; min-width: 0; }
+.consent em { font-style: normal; color: #1e88e5; font-weight: 500; }
+.consent em.is-opt { color: #9aa0a8; }
+.consent a { flex: none; color: #9aa0a8; font-size: 12px; text-decoration: underline; text-underline-offset: 2px; }
+.consent a:hover { color: #1e88e5; }
+/* 13px 체크박스는 누르기 어렵다 — 배선 속성창에서 같은 문제를 겪고 키웠다 */
+.consent input[type=checkbox] { flex: none; width: 17px; height: 17px; margin: 0; cursor: pointer; }
+
+/* ── 법정 고지 (개인정보보호법 제15조제2항) ──────────────────────
+   ①목적 ②항목 ③기간 ④거부권·불이익을 동의받는 화면에 둬야 한다.
+   ④(거부권)만 접힘 밖에 상시 노출한다 — 접어 두면 "명확히 표시했는가"가 다투어진다.
+   나머지 3개는 표로 접어 둔다. 망고보드·네이버가 쓰는 형태다.
+   ⚠ 왼쪽 27px = 체크박스 17 + gap 10. 체크박스 옆 글자와 왼쪽을 맞추기 위한 값이라
+     .cs-items label 의 gap 을 바꾸면 여기도 같이 바꿔야 한다. */
+.consent .cs-deny {
+  margin: -2px 0 0 27px;
+  font-size: 12px; color: #9aa0a8; line-height: 1.5;
+}
+.consent .cs-more { margin: 4px 0 6px 27px; }
+.consent .cs-more > summary {
+  display: flex; align-items: center; gap: 5px; width: fit-content;
+  cursor: pointer; font-size: 12px; color: #9aa0a8;
+  list-style: none;                                    /* 파이어폭스·크롬 기본 삼각형 */
+}
+.consent .cs-more > summary::-webkit-details-marker { display: none; }   /* 사파리 */
+.consent .cs-more > summary:hover { color: #6b7280; }
+/* 셰브론(˅) — 펼치면 위로 뒤집힌다 */
+.consent .cs-more > summary::after {
+  content: ""; width: 6px; height: 6px; margin-bottom: 3px;
+  border-right: 1.4px solid currentColor; border-bottom: 1.4px solid currentColor;
+  transform: rotate(45deg); transition: transform .15s;
+}
+.consent .cs-more[open] > summary::after { transform: rotate(-135deg); margin-bottom: -3px; }
+.consent .cs-tbl {
+  width: 100%; margin-top: 7px; border-collapse: collapse;
+  background: #f7f8fa; border-radius: 8px; overflow: hidden;
+  font-size: 12px; color: #6b7280; line-height: 1.55;
+}
+.consent .cs-tbl th, .consent .cs-tbl td {
+  padding: 7px 10px; text-align: left; vertical-align: top;
+  font-weight: 400; border-bottom: 1px solid #edeff2;
+}
+.consent .cs-tbl tr:last-child th, .consent .cs-tbl tr:last-child td { border-bottom: 0; }
+.consent .cs-tbl th { width: 68px; white-space: nowrap; color: #9aa0a8; }
+
+/* 동의 모달 — 로그인 모달과 같은 상자. 닫기(×)가 없어 위 여백만 줄인다 */
+#consentModal h3 { margin-bottom: 8px; }   /* 크기·색·정렬은 .auth-box h3 가 정한다 */
+#consentModal .consent-lead { margin: 0 0 22px; text-align: center; font-size: 13px; color: #6b7280; line-height: 1.6; }
+/* 오류줄 모양은 .auth-box .login-error 가 정한다 */
+#consentModal .consent-cancel { display: block; margin: 16px auto 0; color: #9aa0a8; font-size: 12px; font-weight: 400; }
+#consentModal .consent-cancel:hover { color: #6b7280; }
+
+/* ── 인증 링크 안내 · 인증 완료 ────────────────────────────────────
+   메일을 확인해야 한다는 사실은 회색 알림줄 한 줄로는 전달되지 않는다.
+   전용 화면으로 만들어 '지금 무엇을 해야 하는가' 를 분명히 한다. */
+
+/* 제목 아래 설명 — h3 의 아래 여백(50px)이 과하므로 여기서 줄인다 */
+#loginPaneSent h3, #loginPaneFind h3,
+#verifiedModal h3, #deleteAccountModal h3, #resetModal h3 { margin-bottom: 12px; }
+.login-lead {
+  margin: 0 0 22px; text-align: center;
+  font-size: 14px; line-height: 1.65; color: #6b7280;
+  /* 한글은 단어 중간에서도 줄이 바뀐다 — '있습니 / 다.' 가 되는 것을 막는다 */
+  word-break: keep-all;
+}
+/* 어느 주소로 보냈는지 — 오타로 못 받는 경우가 가장 흔해서 크게 보여준다 */
+.login-mail {
+  margin: 0 0 20px; padding: 14px;
+  background: #f4f6f9; border: 1px solid transparent; border-radius: 10px;
+  text-align: center; font-size: 15px; color: #202124; word-break: break-all;
+}
+/* 인증이 안 끝난 채로 로그인을 시도했을 때 — 어느 주소가 문제인지 바로 보이게 */
+.login-mail.is-error { background: #fdf1f0; border-color: #f0c4c0; margin-bottom: 10px; }
+
+/* 이 화면의 경고는 상자가 아니라 한 줄이다 — 이메일 칸 바로 아래 붙어야 관계가 보인다 */
+#loginPaneSent .login-error {
+  margin: 0 0 16px; padding: 0;
+  background: none; border: 0;
+  text-align: center; font-size: 13px;
+}
+#loginPaneSent .login-error::before { content: "⚠ "; }
+
+/* 인증 완료 — 닫기(×)가 없다. 확인 버튼 하나로만 닫는다 */
+#verifiedModal .login-box { text-align: center; }   /* 폭·여백은 .auth-box.is-narrow 가 정한다 */
+/* 확인 하나뿐이라 전폭이 과하다 — 가운데 두고 내용에 맞춘다 */
+#verifiedModal .login-submit { width: auto; min-width: 150px; margin: 4px auto 0; padding: 0 32px; }
+
+/* ── 계정 버튼·메뉴 (로그인한 뒤) ───────────────────────────────────
+   랜딩 머리줄에도 같은 것이 뜬다 — 로그인하면 「로그인·회원가입」이 사라지고
+   에디터처럼 동그란 아바타가 나와야 '지금 로그인 중'이 보인다(2026-09-02 고원빈).
+   그래서 **툴바에 매이지 않은 규칙만** 여기로 옮겼다.
+   어두운 툴바용(#toolbar button.tb-account …)은 styles.css 에 그대로 둔다. */
+.tb-acct { position: relative; flex: none; display: flex; }
+.tb-acct[hidden] { display: none; }
+
+/* 메뉴 — 같은 툴바 드롭다운인 .app-menu 와 같은 판을 쓴다 */
+.acct-menu {
+  position: absolute; top: calc(100% + 8px); right: 0; z-index: 300;
+  display: flex; flex-direction: column; min-width: 250px;
+  background: var(--bg); color: var(--tx);
+  border: 1px solid var(--bd); border-radius: var(--r-lg);
+  box-shadow: 0 8px 28px rgba(0,0,0,.28);
+  padding: 6px;
+}
+.acct-menu[hidden] { display: none; }
+
+.acct-head { display: flex; align-items: center; gap: 10px; padding: 10px 12px 12px; }
+.acct-face {
+  width: 38px; height: 38px; border-radius: 50%; flex: none;
+  background: var(--primary); color: #fff;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 14px; font-weight: 700; letter-spacing: -.02em;
+}
+.acct-who { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.acct-line { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.acct-line b { font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#acctMail {
+  font-size: 12px; color: #999;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.acct-plan {
+  font-size: 11px; font-weight: 700; color: #8a6400; flex: none;
+  background: #fdf3d4; border: 1px solid #e8d191;
+  border-radius: 999px; padding: 1px 7px;
+}
+.acct-plan[hidden] { display: none; }
+
+.acct-item svg { width: 17px; height: 17px; flex: none; }
+.acct-sep { height: 1px; background: var(--bd); margin: 5px 8px; }
+
+/* 메뉴 항목의 바탕 모양. 에디터에는 이보다 센 #toolbar 규칙이 따로 있어
+   (어두운 버튼 스타일을 덮어야 해서) 그쪽이 이긴다 — 여기 것은 랜딩이 쓴다. */
+.acct-menu .acct-item {
+  display: flex; align-items: center; gap: 10px;
+  background: none; border: none; color: var(--tx);
+  padding: 9px 12px; border-radius: var(--r); font-size: 14px;
+  text-align: left; cursor: pointer; white-space: nowrap; max-width: none;
+}
+.acct-menu .acct-item:hover { background: var(--primary-bg); color: var(--primary-d); }
+
+/* ── 랜딩 머리줄용 아바타 ─────────────────────────────────────────
+   에디터 아바타는 어두운 툴바에 맞춘 규칙(#toolbar …)이라 흰 머리줄에서는 안 걸린다.
+   같은 크기·같은 색으로 밝은 바탕용을 따로 준다. */
+.top-auth .tb-account {
+  width: 30px; height: 30px; padding: 0; border-radius: 50%;
+  background: var(--primary); border: 1px solid var(--primary-d); color: #fff;
+  font-size: 12px; font-weight: 700; letter-spacing: -.02em;
+  display: flex; align-items: center; justify-content: center; cursor: pointer;
+}
+/* ⚠ hidden 을 존중한다. 위 규칙이 display:flex 라 브라우저 기본 [hidden]{display:none}
+   을 이겨 버린다 — 로그인 전에도 빈 동그라미가 보였다(2026-09-02 검사에서 잡음).
+   auth.js 의 paint() 가 hidden 을 켜고 끄므로 이 한 줄이 있어야 한다. */
+.top-auth .tb-account[hidden] { display: none; }
+.top-auth .tb-account:hover { background: var(--primary-d); }
+.top-auth .tb-account.is-pro { border-color: #e0a91b; box-shadow: 0 0 0 2px #e0a91b; }
+
+/* 로그인 여부로 갈라 보인다. paint() 가 #acctWrap 의 hidden 을 직접 만지므로,
+   자바스크립트끼리 순서를 다투지 않도록 **표시 여부는 CSS 가 정한다.**
+   .is-in 은 랜딩 스크립트가 로그인 상태에 맞춰 붙였다 뗀다. */
+.top-auth.is-in a.nav-auth { display: none; }
+.top-auth:not(.is-in) #acctWrap { display: none; }
+
+/* ── 로그인 확인 중 (2026-09-10) ────────────────────────────────────
+   새로고침하면 auth.js 가 답을 알기까지 수백 ms 가 빈다(SDK 를 그때 내려받고,
+   로그인한 사람은 서버 왕복까지 한다). 그동안 로그인·회원가입을 그대로 두면
+   로그인해 둔 사람에게 **한 번 깜빡인다** — "로그아웃됐나?" 로 보인다.
+
+   그래서 확정 전에는 **어느 쪽도 보여 주지 않고** 자리만 잡아 둔다.
+   추측해서 미리 칠하는 방법도 있었지만, 방치 14일 규칙(js/auth.js:157) ·
+   sessionStorage 대체 읽기(js/auth.js:207) · 토큰 갱신 실패까지 전부 맞혀야 하고
+   틀리면 **반대 방향으로** 깜빡인다. 판정은 auth.js 한 곳에만 둔다.
+
+   ⚠ 자리표시자는 CSS 로만 그린다. #acctWrap 은 authmodal.js 가 body 끝에서
+      만들기 때문에 첫 페인트 시점에는 **아직 없다.**
+   ⚠ 이 표시를 거는 곳과 거두는 곳은 pricing.html · welcome.html 의 인라인이다. */
+html[data-auth="pending"] .top-auth a.nav-auth { display: none; }
+html[data-auth="pending"] .top-auth #acctWrap { display: none; }
+html[data-auth="pending"] #acctSlot {
+  display: block; width: 30px; height: 30px; border-radius: 50%;
+  background: #e6e9ee;
+}
+
+/* 간편 로그인이 막혔을 때의 우회로 안내 (2026-09-08).
+   구글·카카오가 죽으면 사용자는 그쪽 페이지에 갇혀 우리에게 돌아오지 못한다 —
+   그 실패는 감지할 수 없으므로 평소에 적어 두는 수밖에 없다. */

@@ -34,31 +34,32 @@ WE.model = (function () {
     _sheetSeq++;
     return {
       id: "sh" + Date.now().toString(36) + "_" + _sheetSeq,
-      name: name || WE.i18n.t("배선도"),
+      // 기본 이름은 **쪽 번호**다 — 01, 02 … (2026-09-09 고원빈).
+      // 예전에는 "배선도" 로 두고 다음 장을 "배선도_01" 로 이었는데, 쪽 번호가 이름 뒤에
+      // 숨어 몇 째 장인지 한눈에 안 들어왔다. 이름을 붙이고 싶으면 고쳐 쓰면 된다.
+      name: name || "01",
       note: "",                     // 도면 비고 — 인쇄물 하단 좌측. 도면마다 다르므로 시트가 갖는다
       components: [], wires: [], annotations: []
     };
   }
-  // 새 배선도 이름 — 지금 보고 있는 도면 이름 뒤에 _01, _02 … 를 붙인다.
-  // "퍼미어스 미니 V1" 로 이름을 지어 두면 다음 장이 "퍼미어스 미니 V1_01" 이 되어
-  // 같은 프로젝트의 장들이 한눈에 묶여 보인다.
-  // 이미 _NN 이 붙은 이름에서 추가하면 그 꼬리를 떼고 번호를 잇는다(_01 에서 추가 → _02).
+  /* 새 페이지 이름 — 두 자리 쪽 번호(01, 02 …). (2026-09-09 고원빈)
+
+     ⚠ baseName 은 더 쓰지 않는다. 예전에는 보고 있는 장 이름 뒤에 _01 을 붙였는데
+        ("퍼미어스 미니 V1_01"), 쪽 번호가 이름 뒤에 숨어 몇 째 장인지 한눈에 안 보였다.
+        부르는 쪽을 건드리지 않으려고 인자는 남겨 두되 무시한다.
+     ⚠ 이름을 손으로 고쳐 둔 장이 있어도(예: "전원부") 번호는 이어진다 —
+        **장 수보다는 큰 번호**에서 시작해, 이미 쓰는 이름은 건너뛴다. */
   // 이름에 든 숫자는 건드리지 않는다 — "V1" 의 1까지 떼면 "퍼미어스 미니 V" 가 되어 버린다.
-  function nextSheetName(baseName) {
-    var base = String(baseName || "").replace(/_\d+\s*$/, "").trim();
-    if (!base) base = WE.i18n.t("배선도");
-    var esc = base.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");   // 이름에 든 정규식 기호를 그대로 글자로
-    var re = new RegExp("^" + esc + "_(\\d+)$");
-    var used = {}, max = 0;
+  function nextSheetName() {
+    var used = {}, max = project.sheets.length;
     project.sheets.forEach(function (sh) {
       var nm = String(sh.name || "");
       used[nm] = 1;
-      var m = re.exec(nm);
-      if (m) max = Math.max(max, parseInt(m[1], 10));
+      if (/^\d+$/.test(nm)) max = Math.max(max, parseInt(nm, 10));
     });
     var n = max + 1, name;
     do {
-      name = base + "_" + (n < 10 ? "0" + n : String(n));
+      name = (n < 10 ? "0" : "") + n;
       n++;
     } while (used[name]);
     return name;
@@ -72,6 +73,15 @@ WE.model = (function () {
     palette: DEFAULT_PALETTE.map(function (p) { return { color: p.color, label: p.label }; }),
     manualBom: [],    // BOM 표에 수동 추가한 품목 [{id, name, spec, qty, price, link}]
     bomPrice: {},     // BOM 단가 프로젝트별 덮어쓰기 { <key>: 숫자 } (라이브러리 기본단가보다 우선)
+    /* 결선표 비고 { "<부품id>|<단자id>": "글" } — 케이블 길이 같은 현장 메모 (2026-09-09).
+       ⚠ 단자 **이름**이 아니라 id 로 키를 잡는다. 이름은 사용자가 바꾼다 —
+          이름을 키로 쓰면 단자 이름을 고치는 순간 적어 둔 메모가 사라진다. */
+    wireNote: {},
+    // BOM 이름·스펙·링크의 프로젝트별 덮어쓰기 { <key>: {name, spec, link} }
+    // BOM 은 사용자의 작업물이라, 표에서 고친 값이 부품 기본값보다 항상 우선한다.
+    // 부품 정보(라이브러리)는 BOM 편집으로 절대 바뀌지 않는다 — 우리가 기본값을 갱신해도
+    // 사용자가 넣은 구매처·품명이 되돌아가지 않게 하려는 것이다. 단가(bomPrice)와 같은 방식.
+    bomEdit: {},
     bomOrder: [],     // BOM 행 표시 순서 (rowId 배열: "auto:<key>" | "man:<id>")
     bomColShow: { spec: true, price: true, sum: true, link: true },  // 기본 열 표시/숨김
     bomExtraCols: [], // 사용자 지정 열 [{id, name}]
@@ -125,6 +135,79 @@ WE.model = (function () {
     return out;
   }
   function allComponents() { return allOf("components"); }
+
+  /* ---- 부품 번호(#1, #2 …) ----
+     종이를 보며 결선할 때 부품을 가리킬 이름이다. 이름만으로는 안 된다 —
+     스텝다운모듈이 둘이면 "스텝다운모듈 IN+" 가 어느 쪽인지 종이에서 가릴 수가 없다.
+     (2026-09-03 고원빈: 실제 결선 중에 이 문제로 막혔다)
+
+     ⚠ 여기 `no` 는 **화면에 보이는 번호가 아니다.** 놓은 순서를 기록해 두는 내부 값이고,
+        시트를 넘어 프로젝트 전체에서 하나씩 매긴다. 한 번 주면 안 바꾸고 지운 자리도 안 채운다.
+        사람이 보는 번호는 아래 cmpSeq/cmpLabel 이 이 순서를 근거로 따로 만든다 —
+        **같은 품목이 둘 이상일 때만** 1, 2, 3 … 으로 붙는다.
+        (하나뿐인 부품에까지 번호를 달면 종이에 글자만 는다. 2026-09-03 고원빈 확정)
+
+     · BOM 에는 안 쓴다. 발주는 "스텝다운모듈 2개"면 되고 낱개 번호는 의미가 없다. */
+  /* 부품 겹침 순서(z) 의 다음 값 — **배열 길이가 아니라 실제 최댓값 + 1** 이어야 한다.
+     길이로 매기면 삭제 후에 새로 놓은 부품이 기존 부품과 z 가 겹친다
+     (부품 3개 중 가운데(z=2)를 지우면 length=2, 다음에 놓는 부품이 z=3 을 받아
+      맨 위(z=3)와 겹친다 — 어느 게 위인지 안 정해진다). (2026-09-03) */
+  function _maxZ() {
+    var m = 0;
+    project.components.forEach(function (c) { if ((c.z || 0) > m) m = c.z; });
+    return m;
+  }
+
+  function maxCmpNo() {
+    var m = 0;
+    allComponents().forEach(function (c) { var n = Number(c.no) || 0; if (n > m) m = n; });
+    return m;
+  }
+  // 번호가 없는 부품에만 새 번호를 준다(이미 있는 번호는 절대 안 건드린다).
+  // 예전 파일을 열었을 때의 이관도 이 함수 하나로 끝난다.
+  function ensureCmpNos() {
+    var next = maxCmpNo() + 1, 준것 = 0;
+    allComponents().forEach(function (c) { if (!(Number(c.no) > 0)) { c.no = next++; 준것++; } });
+    return 준것;
+  }
+  /* '같은 품목인가' 판정 키 — BOM 이 수량을 세는 기준과 **반드시 같아야 한다.**
+     BOM 은 "스텝다운모듈 2개"라 하는데 도면에는 번호가 하나만 붙는 식으로 어긋나면 안 된다.
+     (app.js 의 buildBOM·bomRowKey 가 쓰던 식을 여기로 모았다 — 사본이 셋이 되면 언젠가 갈라진다) */
+  function cmpGroupKey(c) {
+    return c.libraryId || c.publicId || ("name:" + c.name);
+  }
+
+  /* 도면·결선표에 쓰는 표기.
+       같은 품목이 하나뿐  → "배터리 12.6V 10Ah"      (번호 없음)
+       같은 품목이 여럿    → "#1 스텝다운모듈 DC-DC"  (번호로 가린다)
+
+     번호는 **구분이 필요할 때만** 붙인다. 하나뿐인 부품에 번호를 달면 종이에 글자만 늘고
+     읽기 어려워진다(2026-09-03 고원빈 확정).
+     번호를 앞에 두는 이유 — 종이에서 눈으로 번호를 훑어 찾는 게 실제 동작이다.
+
+     ⚠ 보이는 번호는 **같은 품목 안에서의 순번**이다(1, 2, 3 …). 그 순서는 저장된 no 로 정한다 —
+        no 는 놓은 순서대로 한 번만 주고 안 바뀌므로, 부품을 옮기거나 다른 부품을 지워도
+        이 순번이 흔들리지 않는다. 같은 품목을 더 놓거나 지울 때만 바뀐다(그때는 도면 자체가
+        바뀐 것이라 어차피 다시 뽑는다).
+     ⚠ 표기 규칙은 여기 한 곳에만 둔다. 도면과 결선표가 다르게 적으면 종이에서 대조가 안 된다. */
+  function cmpSeq(cmp) {
+    if (!cmp) return 0;
+    var key = cmpGroupKey(cmp);
+    var 무리 = allComponents().filter(function (c) { return cmpGroupKey(c) === key; });
+    if (무리.length < 2) return 0;                 // 하나뿐이면 번호를 안 붙인다
+    무리.sort(function (a, b) { return (Number(a.no) || 0) - (Number(b.no) || 0); });
+    for (var i = 0; i < 무리.length; i++) if (무리[i].id === cmp.id) return i + 1;
+    return 0;
+  }
+  function cmpLabel(cmp) {
+    if (!cmp) return "";
+    /* 이름표를 감춘 부품은 빈 문자열을 준다 (2026-09-08).
+       ⚠ 이름 자체(cmp.name)는 그대로 둔다 — BOM·결선표·라이브러리 연결이 다 그 이름을 쓴다.
+          감추는 것은 **도면에 그리는 이름표**뿐이다. 지우는 것이 아니다. */
+    if (cmp.hideName) return "";
+    var s = cmpSeq(cmp);
+    return (s > 0 ? "#" + s + " " : "") + (cmp.name || "");
+  }
   function allWires() { return allOf("wires"); }
   function allAnnotations() { return allOf("annotations"); }
 
@@ -165,10 +248,71 @@ WE.model = (function () {
     return -1;
   }
   function addSheet(name) {
-    var s = makeSheet(name || nextSheetName(activeSheet().name));
+    // 무료 도면 페이지 한도 (2026-09-06). 시트 복제는 아래 duplicateSheet 가 따로 본다 —
+    // 그쪽은 배선·부품도 같이 늘어나서 확인할 것이 하나 더 있다.
+    if (WE.pro && !WE.pro.canAddSheet(1)) { WE.pro.deny("sheet"); return null; }
+    var s = makeSheet(name || nextSheetName());
     project.sheets.push(s);
     return s;
   }
+  /* ── 페이지 용지 크기 (2026-09-08) ────────────────────────────────
+     시트에 size 가 있으면 그것, 없으면 프로젝트 기본값(meta.canvas).
+     ⚠ 예전 파일에는 size 가 없다 — 그래서 아무것도 안 바뀐다. */
+  function sheetSize(sh) {
+    var s = sh || activeSheet();
+    if (s && s.size && s.size.width > 0 && s.size.height > 0) {
+      return { width: s.size.width, height: s.size.height };
+    }
+    var m = project.meta && project.meta.canvas;
+    return { width: (m && m.width) || 1600, height: (m && m.height) || 900 };
+  }
+
+  /* 용지 크기를 바꾼다. **부품은 옮기지 않는다** (고원빈 확정 2026-09-08) —
+     좌측 상단을 기준으로 그대로 두고, 새 용지 밖으로 나가는 것만 가장자리로 밀어 넣는다.
+
+     ⚠ 밖으로 나간 것을 그냥 두면 화면에서 사라진다(#canvas 는 overflow:hidden).
+        데이터에는 남아 BOM 에 잡히는데 눈에는 없는 '잃어버린 부품' 이 된다.
+        그래서 지우지도, 통째로 옮기지도 않고 **가장자리까지만** 당긴다.
+
+     ⚠ 되돌리기(Ctrl+Z)는 history 가 프로젝트 전체를 스냅샷하므로 그냥 된다.
+        다만 한 번의 동작이 한 단계가 되도록 부르는 쪽에서 commit 을 감싼다. */
+  function setSheetSize(w, h, sh) {
+    var s = sh || activeSheet(); if (!s) return false;
+    w = Math.round(w); h = Math.round(h);
+    if (!(w > 0 && h > 0)) return false;
+    var 지금 = sheetSize(s);
+    if (지금.width === w && 지금.height === h) return false;
+    s.size = { width: w, height: h };
+    밀어넣기(s, w, h);
+    return true;
+  }
+
+  /* 새 용지 밖으로 나간 것들을 가장자리 안쪽으로 당긴다. */
+  function 밀어넣기(s, w, h) {
+    var M = 4;   // 가장자리에 딱 붙지 않게 아주 조금 띄운다
+    (s.components || []).forEach(function (c) {
+      // 부품이 용지보다 크면 좌측 상단에 맞춘다 — 어디로도 다 넣을 수 없다
+      c.x = Math.max(M, Math.min(c.x, Math.max(M, w - (c.width || 0) - M)));
+      c.y = Math.max(M, Math.min(c.y, Math.max(M, h - (c.height || 0) - M)));
+    });
+    (s.annotations || []).forEach(function (a) {
+      a.x = Math.max(M, Math.min(a.x, w - M));
+      a.y = Math.max(M, Math.min(a.y, h - M));
+    });
+    (s.wires || []).forEach(function (wr) {
+      (wr.waypoints || []).forEach(function (p) {
+        p.x = Math.max(M, Math.min(p.x, w - M));
+        p.y = Math.max(M, Math.min(p.y, h - M));
+      });
+      [wr.from, wr.to].forEach(function (r) {          // 배선 끝점이 좌표인 경우(분기)
+        if (r && r.x != null) {
+          r.x = Math.max(M, Math.min(r.x, w - M));
+          r.y = Math.max(M, Math.min(r.y, h - M));
+        }
+      });
+    });
+  }
+
   function getSheetNote() { return activeSheet().note || ""; }
   function setSheetNote(v) { activeSheet().note = String(v == null ? "" : v); }
   function renameSheet(id, name) {
@@ -236,8 +380,15 @@ WE.model = (function () {
     var i = sheetIndex(id); if (i < 0) return null;
     // 무료 한도 — 과금 단위가 '프로젝트 전체'이므로 시트를 복제해도 합산된다.
     // 이 경로를 막지 않으면 시트를 늘려 우회할 수 있다.
-    var _n = (project.sheets[i].wires || []).length;
-    if (_n && WE.pro && !WE.pro.canAdd(_n)) { WE.pro.deny("dupSheet", _n); return null; }
+    // ⚠ 붙여넣기와 같은 이유로 부품도 센다 (부품만 있는 시트를 복제하면 통과했다)
+    var _w = (project.sheets[i].wires || []).length;
+    var _c = (project.sheets[i].components || []).length;
+    if ((_w || _c) && WE.pro && !WE.pro.canAddBundle(_w, _c)) {
+      WE.pro.deny("dupSheet", _w, _c); return null;
+    }
+    // 페이지 수도 늘어난다 — 배선·부품이 0 개인 빈 시트를 복제하는 경우
+    // 위 검사는 통과하므로(0 개짜리 요청은 안 막는다) 여기서 따로 본다. (2026-09-06)
+    if (WE.pro && !WE.pro.canAddSheet(1)) { WE.pro.deny("sheet"); return null; }
     var copy = JSON.parse(JSON.stringify(project.sheets[i]));
     copy.id = makeSheet().id;
     copy.name = project.sheets[i].name + WE.i18n.t(" 복사본");
@@ -288,8 +439,13 @@ WE.model = (function () {
     // 무료 한도 — 붙여넣을 배선을 더해 넘치면 통째로 거부한다.
     // 일부만 붙이면 배선이 끊긴 채 들어와 도면이 망가진다.
     // (이 경로를 막지 않으면 Ctrl+V 를 반복해 무제한으로 늘릴 수 있다)
-    var _n = (bundle.wires || []).length;
-    if (_n && WE.pro && !WE.pro.canAdd(_n)) { WE.pro.deny("paste", _n); return null; }
+    // ⚠ 예전에는 배선 수만 봤다. 배선 없이 부품만 복사하면 _n 이 0 이라
+    //    검사를 통째로 건너뛰었다 — 부품 한도가 생기면서 우회로가 됐을 자리다.
+    var _w = (bundle.wires || []).length;
+    var _c = (bundle.components || []).length;
+    if ((_w || _c) && WE.pro && !WE.pro.canAddBundle(_w, _c)) {
+      WE.pro.deny("paste", _w, _c); return null;
+    }
     var b = JSON.parse(JSON.stringify(bundle));
     b.components = b.components || []; b.wires = b.wires || []; b.annotations = b.annotations || [];
     remapBundle(b);
@@ -306,8 +462,11 @@ WE.model = (function () {
         if (w.labelPos) { w.labelPos.x += dx; w.labelPos.y += dy; }
       });
     }
-    var base = project.components.length;
-    b.components.forEach(function (c, i) { c.z = base + i + 1; project.components.push(c); });
+    var base = _maxZ();   // 배열 길이가 아니라 실제 최댓값 — 삭제 후 z 충돌 방지
+    // 붙여넣기·시트복제로 들어온 부품은 **새 번호**를 받는다 —
+    // 원본의 번호를 그대로 들고 오면 도면에 같은 번호가 둘이 된다.
+    var 새번호 = maxCmpNo() + 1;
+    b.components.forEach(function (c, i) { c.z = base + i + 1; c.no = 새번호++; project.components.push(c); });
     b.wires.forEach(function (w) { project.wires.push(w); });
     b.annotations.forEach(function (a) { project.annotations.push(a); });
     return b;
@@ -331,7 +490,8 @@ WE.model = (function () {
     wireWidth: 2,
     wireRouting: "ortho",      // 'ortho'(직각) | 'straight'(직선)
     selectedWp: null,          // 선택된 꺾임점 인덱스
-    selectedWireLabel: null    // 라벨(수축튜브)을 직접 클릭해 선택한 배선 id — Delete 시 라벨만 삭제
+    selectedWireLabel: null,   // 라벨(수축튜브)을 직접 클릭해 선택한 배선 id — Delete 시 라벨만 삭제
+    selectedWireLabelEnd: null // 그중 어느 끝("from"|"to") — 라벨은 배선당 둘이라 끝까지 구분해야 한다
   };
 
   var DEFAULT_TERMINAL_COLOR = "#1e88e5";
@@ -343,9 +503,18 @@ WE.model = (function () {
 
   // 부품 인스턴스 생성
   function addComponent(opts) {
+    // 무료 한도 — 도면에 놓는 부품만 센다.
+    // ⚠ 내 부품 라이브러리(WE.library.addPart)에는 한도를 걸지 않는다.
+    //    pricing.html 이 "내 부품 라이브러리 무제한" 을 약속하고 있다.
+    if (WE.pro && !WE.pro.canAddComp(1)) { WE.pro.deny("place", 0, 1); return null; }
     var cmp = {
       id: nextId("cmp"),
       libraryId: opts.libraryId || null,
+      // 공용 부품을 내 라이브러리에 복사하지 않고 바로 배치할 때의 원본 식별자.
+      // publicSnapshot은 BOM에 필요한 읽기 전용 정보만 담아 프로젝트 파일이 자립하게 한다.
+      publicId: opts.publicId || null,
+      publicVersion: opts.publicVersion || null,
+      publicSnapshot: opts.publicSnapshot ? JSON.parse(JSON.stringify(opts.publicSnapshot)) : null,
       name: opts.name || WE.i18n.t("부품"),
       x: opts.x != null ? opts.x : 100,
       y: opts.y != null ? opts.y : 100,
@@ -353,10 +522,14 @@ WE.model = (function () {
       scale: 1,
       width: opts.width || 160,
       height: opts.height || 120,
-      z: project.components.length + 1,
+      z: _maxZ() + 1,
       image: opts.image || null,   // data:image/... base64
-      terminals: opts.terminals || []  // Phase 2
+      terminals: opts.terminals || [],  // Phase 2
+      nameLabelPos: opts.nameLabelPos ? { x: opts.nameLabelPos.x, y: opts.nameLabelPos.y } : undefined,
+      terminalPlacementQueue: Array.isArray(opts.terminalPlacementQueue) ? opts.terminalPlacementQueue : undefined,
+      terminalPlacementQueueVersion: opts.terminalPlacementQueueVersion
     };
+    cmp.no = maxCmpNo() + 1;   // 프로젝트 통번호 (위 ensureCmpNos 주석 참고)
     project.components.push(cmp);
     return cmp;
   }
@@ -381,12 +554,105 @@ WE.model = (function () {
   function duplicateComponent(id) {
     var src = getComponent(id);
     if (!src) return null;
+    /* ⚠ 네 번째 입구다. 배치·붙여넣기·시트복제만 막으면
+          "하나 놓고 Ctrl+D 를 계속 누르기" 로 무제한이 된다. */
+    if (WE.pro && !WE.pro.canAddComp(1)) { WE.pro.deny("dupComp", 0, 1); return null; }
     var copy = JSON.parse(JSON.stringify(src));
     copy.id = nextId("cmp");
+    copy.no = maxCmpNo() + 1;   // 복제본은 새 번호 — 원본 번호를 물려받으면 도면에 같은 번호가 둘이 된다
     copy.x += 20; copy.y += 20;
-    copy.z = project.components.length + 1;
+    copy.z = _maxZ() + 1;
     project.components.push(copy);
     return copy;
+  }
+
+  /* ---- 겹침 순서(z) 바꾸기 ----
+     같은 시트 안에서만 의미가 있다 — render.js 가 project.components(현재 시트)를
+     z 로 정렬해 그린다. 캔바 등에서 흔히 쓰는 네 동작을 그대로 둔다.
+     (2026-09-03, 부품이 서로 겹칠 때 위아래를 바꿀 방법이 없다는 제보) */
+  /* 겹침 순서(z) 겹침 정리 — 예전엔 z 를 '배열 길이+1' 로 매겨 삭제 후 값이 겹쳤다
+     (위 _maxZ 주석 참고). 이미 저장된 파일에 그 흔적이 남아 있어(실측: 실사용 파일에서
+     3건 발견, 2026-09-03), 열 때 시트마다 한 번씩 중복 없는 값으로 다시 매긴다.
+     지금 보이는 순서(=지금 z로 정렬했을 때 순서, 동점이면 원래 배열 순서)는 그대로 두고
+     번호만 1,2,3… 으로 깨끗하게 다시 붙인다 — 화면에 아무 변화도 없어야 하는 조용한 이관이다. */
+  function ensureUniqueZ() {
+    project.sheets.forEach(function (sh) {
+      var cs = (sh.components || []).map(function (c, i) { return { c: c, i: i }; })
+        .sort(function (a, b) { return (a.c.z || 0) - (b.c.z || 0) || a.i - b.i; });
+      cs.forEach(function (o, idx) { o.c.z = idx + 1; });
+    });
+  }
+
+  function _byZ() {
+    return project.components.slice().sort(function (a, b) { return (a.z || 0) - (b.z || 0); });
+  }
+  /* 겹침 순서는 **배선층까지 넘나든다.** (2026-09-08)
+
+     예전에는 부품끼리만 순서를 바꿨다. 그런데 화면 층 순서가 고정이라
+     (부품 → 배선) 부품은 무조건 배선 아래였고, "배선에 가려서 안 보인다" 를
+     겹침 순서로 풀 수 없었다.
+
+     그래서 배선층을 **부품 하나처럼** 취급한다. 위에서부터:
+         [aboveWires 인 부품들] · 배선 · [나머지 부품들]
+     앞으로 가져오기를 누르면 자기 무리 안에서 한 칸 오르고, 무리 꼭대기에 닿으면
+     배선을 넘어 반대 무리의 바닥으로 간다. 뒤로 보내기는 그 반대다.
+
+     ⚠ aboveWires 는 새 항목이라 예전 파일에는 없다. 없으면 '배선 아래'로 읽히므로
+        기존 도면의 모습이 하나도 안 바뀐다. */
+  function _무리(위인가) {
+    return _byZ().filter(function (x) { return !!x.aboveWires === !!위인가; });
+  }
+  function bringToFront(id) {
+    var c = getComponent(id); if (!c) return false;
+    var 위 = _무리(true);
+    // 이미 맨 위(배선 위 무리의 꼭대기)면 할 일이 없다
+    if (c.aboveWires && 위.length && 위[위.length - 1].id === id) return false;
+    c.aboveWires = true;
+    c.z = _maxZ() + 1;
+    return true;
+  }
+  function sendToBack(id) {
+    var c = getComponent(id); if (!c) return false;
+    var 아래 = _무리(false);
+    if (!c.aboveWires && 아래.length && 아래[0].id === id) return false;   // 이미 맨 뒤
+    var list = _byZ();
+    delete c.aboveWires;
+    c.z = (list.length ? list[0].z : 0) - 1;
+    return true;
+  }
+  function bringForward(id) {
+    var c = getComponent(id); if (!c) return false;
+    var 내무리 = _무리(c.aboveWires);
+    var i = 내무리.findIndex(function (x) { return x.id === id; });
+    if (i < 0) return false;
+    if (i < 내무리.length - 1) {                 // 무리 안에서 한 칸 위로
+      var za = 내무리[i].z, zb = 내무리[i + 1].z;
+      내무리[i].z = zb; 내무리[i + 1].z = za;
+      return true;
+    }
+    if (c.aboveWires) return false;              // 이미 맨 위
+    // 무리 꼭대기 → 배선을 넘어 위 무리의 **바닥**으로
+    var 위 = _무리(true);
+    c.aboveWires = true;
+    c.z = 위.length ? 위[0].z - 1 : _maxZ() + 1;
+    return true;
+  }
+  function sendBackward(id) {
+    var c = getComponent(id); if (!c) return false;
+    var 내무리 = _무리(c.aboveWires);
+    var i = 내무리.findIndex(function (x) { return x.id === id; });
+    if (i < 0) return false;
+    if (i > 0) {                                  // 무리 안에서 한 칸 아래로
+      var za = 내무리[i].z, zb = 내무리[i - 1].z;
+      내무리[i].z = zb; 내무리[i - 1].z = za;
+      return true;
+    }
+    if (!c.aboveWires) return false;              // 이미 맨 뒤
+    // 위 무리의 바닥 → 배선을 넘어 아래 무리의 **꼭대기**로
+    var 아래 = _무리(false);
+    delete c.aboveWires;
+    c.z = 아래.length ? 아래[아래.length - 1].z + 1 : _maxZ() + 1;
+    return true;
   }
 
   // ---- 단자 ----
@@ -400,6 +666,11 @@ WE.model = (function () {
       rx: Math.max(0, Math.min(1, rx)),
       ry: Math.max(0, Math.min(1, ry))
     };
+    // visible은 꺼진 단자에만 false로 저장한다. 값이 없는 기존 파일은 모두 켜진 상태라
+    // 데이터 이관 없이 그대로 열린다.
+    if (opts.visible === false) t.visible = false;
+    if (opts.presetSource) t.presetSource = opts.presetSource;
+    if (opts.presetId) t.presetId = opts.presetId;
     cmp.terminals.push(t);
     return t;
   }
@@ -408,6 +679,24 @@ WE.model = (function () {
       if (cmp.terminals[i].id === termId) return cmp.terminals[i];
     }
     return null;
+  }
+  function terminalConnected(cmp, termId) {
+    if (!cmp) return false;
+    return project.wires.some(function (w) {
+      return (w.from && w.from.componentId === cmp.id && w.from.terminalId === termId) ||
+             (w.to && w.to.componentId === cmp.id && w.to.terminalId === termId);
+    });
+  }
+  // 끄기는 단자를 삭제하지 않는다. 좌표·이름·프리셋은 보존되고 도면 노출만 멈춘다.
+  // 연결된 끝점을 숨기면 배선이 허공에서 끝난 것처럼 보이므로 그 경우에는 거부한다.
+  function setTerminalVisible(cmp, termId, visible) {
+    var t = getTerminal(cmp, termId); if (!t) return false;
+    if (!visible && terminalConnected(cmp, termId)) return false;
+    if (visible) { delete t.visible; delete t.autoHidden; } else { t.visible = false; }
+    /* ⚠ 다시 켤 때 autoHidden 표시도 반드시 지운다.
+       안 지우면 "툴바가 숨긴 것" 이라는 표시가 남아, 나중에 토글을 눌렀을 때
+       사용자가 손으로 켜 둔 단자를 이 버튼이 제 것인 줄 알고 도로 숨긴다. (2026-09-08) */
+    return true;
   }
   function removeTerminal(cmp, termId) {
     cmp.terminals = cmp.terminals.filter(function (t) { return t.id !== termId; });
@@ -486,6 +775,8 @@ WE.model = (function () {
     project.palette = DEFAULT_PALETTE.map(function (p) { return { color: p.color, label: p.label }; });
     project.manualBom = [];
     project.bomPrice = {};
+    project.wireNote = {};
+    project.bomEdit = {};
     project.bomOrder = [];
     project.bomColShow = defaultBomColShow();
     project.bomExtraCols = [];
@@ -517,7 +808,11 @@ WE.model = (function () {
           id: s.id || ("sh" + Date.now().toString(36) + "_" + (i + 1)),
           name: s.name || (WE.i18n.t("배선도") + " " + (i + 1)),
           note: s.note || "",
-          components: s.components || [], wires: s.wires || [], annotations: s.annotations || []
+          components: s.components || [], wires: s.wires || [], annotations: s.annotations || [],
+          // 페이지마다 다른 용지 크기(2026-09-08). 없으면 undefined 로 두어
+          // sheetSize() 가 예전처럼 project.meta.canvas 를 쓰게 한다.
+          size: (s.size && s.size.width > 0 && s.size.height > 0)
+                  ? { width: s.size.width, height: s.size.height } : undefined
         };
       });
     } else {
@@ -536,6 +831,8 @@ WE.model = (function () {
     // 예전 파일: 수동품목에 id 없으면 부여
     project.manualBom.forEach(function (m) { if (!m.id) m.id = nextId("bm"); });
     project.bomPrice = data.bomPrice || {};
+    project.wireNote = data.wireNote || {};
+    project.bomEdit = data.bomEdit || {};
     project.bomOrder = data.bomOrder || [];
     project.bomColShow = data.bomColShow || defaultBomColShow();
     project.bomExtraCols = data.bomExtraCols || [];
@@ -545,6 +842,10 @@ WE.model = (function () {
     project.bomColOrder = data.bomColOrder || [];
     clearSelection();
     ui.selectedTerminalId = null;
+    /* 부품 번호 이관 — 번호가 생기기 전에 만든 파일에는 no 가 없다.
+       여기서 한 번 채워 주면 그 뒤로는 저장본에 남는다. 이미 번호가 있으면 안 건드린다. */
+    ensureCmpNos();
+    ensureUniqueZ();
     // id 카운터를 기존 최대값 뒤로 보정 (충돌 방지).
     // ★ 반드시 **모든 시트**를 훑어야 한다. 현재 시트만 보면 새로 만든 부품이 다른 시트의
     //   기존 부품과 같은 id를 갖고, 배선의 from/to·분기의 wireId가 엉뚱한 걸 가리킨다.
@@ -565,6 +866,31 @@ WE.model = (function () {
       (s.annotations || []).forEach(function (a) { scan(a.id); });
     });
     _idCounter = maxN + 1;
+
+    /* ── 캔버스 밖에 있는 부품을 안으로 당긴다 (2026-09-02 고원빈 결정) ──
+       캔버스는 viewBox 가 고정이고 overflow:hidden 이라, 밖에 있는 부품은
+       **화면에 아예 안 보인다.** 데이터에는 남아 BOM 에는 잡히는데 클릭도 PDF 도 안 된다.
+       그래서 여는 시점에 가장 가까운 안쪽 자리로 당긴다.
+
+       ⚠ 이건 **파일을 열면 그림이 달라질 수 있다**는 뜻이다.
+          바로 위 배선 모양 처리에 "옛 파일을 열었더니 그림이 바뀐다는 일이 없다"고
+          적어 둔 원칙과 정면으로 다르다. 알고 그렇게 정했다 —
+          안 보이는 부품을 그대로 두는 것보다 자리를 조금 옮기는 편이 낫다는 판단이다.
+       ⚠ 조금만 삐져나온 부품도 당겨진다. 전부 안 또는 전부 밖, 둘 중 하나여야
+          "가두기"가 규칙으로 성립한다.
+       ⚠ 캔버스보다 큰 부품은 건드리지 않는다(pullInside 가 그 축을 그냥 넘긴다).
+          어디에 둬도 안 들어가므로 옮겨 봐야 의미가 없다. */
+    if (WE.geometry && WE.geometry.pullInside) {
+      project.sheets.forEach(function (s) {
+        /* ⚠ **그 페이지의** 용지 크기로 가둔다. 예전엔 인자 없이 불렀는데,
+           그건 '지금 보고 있는 페이지' 크기라서 페이지마다 용지가 달라진 뒤로는
+           틀린 값이었다. 열 때 활성 시트는 늘 1장이라, 세로로 만든 2장이 1장 높이(900)로
+           눌려 부품이 통째로 위쪽에 뭉쳤다 (2026-09-08 고원빈 신고). */
+        var cv = sheetSize(s);
+        (s.components || []).forEach(function (c) { WE.geometry.pullInside(c, cv); });
+      });
+    }
+
     // 파일열기 · 자동저장 복원 · 최근작업 · 샘플 · 되돌리기가 모두 이 함수를 지난다.
     // 여기 한 곳에 걸면 모든 경로가 덮인다.
     if (WE.pro) WE.pro.projectChanged();
@@ -618,6 +944,18 @@ WE.model = (function () {
     var i = multi.indexOf(id);
     if (i >= 0) multi.splice(i, 1); else multi.push(id);
   }
+  /* 주석(텍스트) 다중 선택 토글.
+     ⚠ 배선의 toggleMultiWire 와 **같은 규칙**이다 — 다른 종류의 선택(multi)을 건드리지 않는다.
+        예전에는 주석만 이 길이 없어서 select("annotation") 을 탔고, 그 함수가 multi 를 비워서
+        Ctrl+클릭으로 부품과 텍스트를 함께 고를 수 없었다(2026-09-08 실측: 부품 3개가 날아갔다). */
+  function toggleMultiAnno(id) {
+    var i = multiAnno.indexOf(id);
+    if (i >= 0) multiAnno.splice(i, 1); else multiAnno.push(id);
+    if (multiAnno.length) { selection.type = "annotation"; selection.id = multiAnno[multiAnno.length - 1]; }
+    else if (multi.length) { selection.type = "component"; selection.id = multi[multi.length - 1]; }
+    else if (multiWire.length) { selection.type = "wire"; selection.id = multiWire[multiWire.length - 1]; }
+    else { selection.type = null; selection.id = null; }
+  }
   function toggleMultiWire(id) {
     var i = multiWire.indexOf(id);
     if (i >= 0) multiWire.splice(i, 1); else multiWire.push(id);
@@ -652,6 +990,8 @@ WE.model = (function () {
     setActiveSheet: setActiveSheet,
     makeSheet: makeSheet,
     addSheet: addSheet,
+    sheetSize: sheetSize,
+    setSheetSize: setSheetSize,
     nextSheetName: nextSheetName,
     renameSheet: renameSheet,
     getSheetNote: getSheetNote,
@@ -663,6 +1003,11 @@ WE.model = (function () {
     pasteBundle: pasteBundle,
     // 프로젝트 전체 집계용 — 시트 경계를 넘는 기능은 반드시 이걸 쓴다
     allComponents: allComponents,
+    ensureCmpNos: ensureCmpNos,
+    cmpLabel: cmpLabel,
+    cmpSeq: cmpSeq,
+    cmpGroupKey: cmpGroupKey,
+    maxCmpNo: maxCmpNo,
     allWires: allWires,
     hasContent: hasContent,
     countOf: countOf,
@@ -670,12 +1015,19 @@ WE.model = (function () {
     DEFAULT_TERMINAL_COLOR: DEFAULT_TERMINAL_COLOR,
     addTerminal: addTerminal,
     getTerminal: getTerminal,
+    terminalConnected: terminalConnected,
+    setTerminalVisible: setTerminalVisible,
     removeTerminal: removeTerminal,
     nextId: nextId,
     addComponent: addComponent,
     getComponent: getComponent,
     removeComponent: removeComponent,
     duplicateComponent: duplicateComponent,
+    ensureUniqueZ: ensureUniqueZ,
+    bringToFront: bringToFront,
+    sendToBack: sendToBack,
+    bringForward: bringForward,
+    sendBackward: sendBackward,
     addWire: addWire,
     addWireRef: addWireRef,
     getWire: getWire,
@@ -694,6 +1046,7 @@ WE.model = (function () {
     getWireClickPt: getWireClickPt,
     setMulti: setMulti,
     toggleMulti: toggleMulti,
+    toggleMultiAnno: toggleMultiAnno,
     toggleMultiWire: toggleMultiWire,
     setMultiSelection: setMultiSelection,
     addAnnotation: addAnnotation,

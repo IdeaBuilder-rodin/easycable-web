@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <!-- 이지케이블 파비콘 — 브라우저 탭 전용.
+       원본은 같은 폴더의 icon.svg 이고 이 파일은 아이콘생성.mjs 가 뽑았다.
+       그림을 고칠 때는 원본을 고치고 다시 뽑는다. 여기를 직접 고치면 원본과 어긋난다.
+       탭 바탕색이 브라우저·테마마다 달라서 흰 둥근 배경을 남겨 뒀다. -->
+
+  <!-- 배경 -->
+  <rect id="bgSquare" width="512" height="512" fill="#ffffff" style="display:none"/>
+  <rect id="bgRound"  width="512" height="512" rx="114" fill="#ffffff"/>
+  <circle id="bgCircle" cx="256" cy="256" r="256" fill="#ffffff" style="display:none"/>
+
+  <!-- 그림 — 0.78 배로 줄이고 가운데 정렬해 가장자리 여백을 만든다 -->
+  <g transform="translate(256,262) scale(0.78) translate(-256,-256)">
+    <!-- 심선 세 가닥. 아래(피복)에서 나와 위로 벌어진다.
+         stroke-linecap:round 로 끝을 둥글게 — 원본과 같은 인상 -->
+    <g fill="none" stroke-linecap="round" stroke-width="40">
+      <!-- 왼쪽 빨강 -->
+      <path d="M 214 268 C 214 196 186 150 128 122" stroke="#c8434f"/>
+      <path d="M 128 122 L 76 100"                  stroke="#fbe4a3"/>
+      <!-- 가운데 초록 -->
+      <path d="M 256 268 L 256 118"                 stroke="#7ac143"/>
+      <path d="M 256 118 L 256 62"                  stroke="#fbe4a3"/>
+      <!-- 오른쪽 파랑 -->
+      <path d="M 298 268 C 298 196 326 150 384 122" stroke="#3b6fd4"/>
+      <path d="M 384 122 L 436 100"                 stroke="#fbe4a3"/>
+    </g>
+
+    <!-- 피복(겉껍질). 심선을 덮어 가리도록 나중에 그린다 -->
+    <rect x="186" y="248" width="140" height="242" rx="8" fill="#4d4d4d"/>
+    <!-- 오른쪽 모서리를 조금 어둡게 — 원본의 입체감 -->
+    <rect x="300" y="248" width="26"  height="242" rx="8" fill="#3f3f3f"/>
+    <rect x="300" y="248" width="14"  height="242"        fill="#3f3f3f"/>
+  </g>
+</svg>

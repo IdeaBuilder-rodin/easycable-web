@@ -28,6 +28,15 @@
   --fs-h: 18px;            /* 제목 */
   /* 간격 스케일 */
   --sp1: 4px; --sp2: 6px; --sp3: 8px; --sp4: 12px; --sp5: 16px;
+
+  /* ── 인증 화면(로그인·동의·인증완료) 전용 치수 ────────────────────
+     에디터와 '의도적으로' 다른 체계다. 사고가 아니다.
+       에디터  하루 종일 보는 작업 도구 — 13px 본문 · 5px 모서리 · 빽빽하게
+       인증    처음 만나는 화면, 하루 한 번 — 크고 둥글게
+     랜딩(welcome·pricing)도 같은 계열이라 여기만 각지면 어색해진다.
+
+     ⚠ 치수는 여기서만 정한다. 개별 모달에 숫자를 직접 쓰지 말 것 —
+        세 모달의 폭(460·560·420)과 모서리(16·8·8)가 어긋났던 원인이다. */
 }
 
 * { box-sizing: border-box; }
@@ -55,11 +64,31 @@ body { display: flex; flex-direction: column; }
   border-bottom: 1px solid #1c1f24;
   position: relative;                            /* ☰ 드로어 기준점 */
 }
-#btnAppMenu { font-size: 15px; line-height: 1; }
+/* ☰ 는 2행에 있지만 옆의 그리기 도구와 성격이 다르다(문서 기능).
+   구분선 요소를 넣어 갈랐더니 .tb-row 의 gap 까지 붙어 폭이 21px 늘고,
+   1100px 폭에서 안내문이 다음 줄로 밀려 툴바가 두 줄이 됐다(verify_hint 가 잡음).
+   그래서 요소 대신 여백으로 가른다 — 항목이 안 늘어 gap 도 안 생긴다. */
+/* ☰ 와 그리기 도구 사이 구분선 — 안에 든 것이 새 작업·열기·설정 같은
+   '문서 기능' 이라, 옆의 선택·배선과 한 묶음으로 보이면 안 된다.
+
+   ⚠ .tb-divider 요소를 쓰지 않는다. flex 항목이 하나 늘어 gap 12px 까지 붙어
+      21px 을 먹는데(선 1px + 좌우 여백 8px + gap 12px), 2행은 1100px 창에서
+      여유가 23px 뿐이라 그러면 툴바가 다시 두 줄로 접힌다(verify_hint 가 잡는다).
+      ::after 는 절대배치라 자리를 전혀 차지하지 않는다. 벌어짐만 margin 8px 로 준다
+      (행 gap 12px 과 합쳐 20px, 선은 그 가운데).
+   색·높이는 .tb-divider 와 같게 맞췄다 — 두 종류의 구분선으로 보이면 안 된다. */
+#btnAppMenu { font-size: 15px; line-height: 1; position: relative; margin-right: 8px; }
+#btnAppMenu::after {
+  content: ""; position: absolute; right: -10px; top: 2px; bottom: 2px;
+  width: 1px; background: #454b55;
+}
 
 /* ☰ 앱 메뉴 드로어 (Excalidraw 스타일) — 문서·부가 기능 수납 */
 .app-menu {
-  position: absolute; top: 40px; left: 10px; z-index: 300;
+  /* ☰ 가 2행 맨 왼쪽에 있다(2026-08-24). 드로어는 그 아래에 붙는다.
+     전에는 top:40px 로 1행 바로 아래였는데, 그러면 2행의 ☰ 버튼을 덮는다.
+     100% 로 잡아 도구막대 전체 아래에 붙인다 — 행 높이가 바뀌어도 따라간다. */
+  position: absolute; top: calc(100% + 4px); left: 10px; z-index: 300;
   display: flex; flex-direction: column; min-width: 210px;
   background: var(--bg); color: var(--tx);
   border: 1px solid var(--bd); border-radius: var(--r-lg);
@@ -79,7 +108,7 @@ body { display: flex; flex-direction: column; }
 .app-menu .menu-item i {                       /* 아이콘 열 폭 고정 → 라벨 세로 정렬 */
   font-style: normal; width: 18px; text-align: center; flex: none; font-size: 13px;
 }
-/* 피드백 강조 버튼 (베타 핵심 액션) */
+/* 피드백 강조 버튼 — 사용자 의견이 제품을 고치는 유일한 통로다 */
 #toolbar button.tb-accent { background: var(--primary); border-color: var(--primary-d); }
 #toolbar button.tb-accent:hover { background: var(--primary-d); }
 .app-menu .menu-link { font-size: var(--fs-sm); color: var(--tx3); }
@@ -115,11 +144,30 @@ body { display: flex; flex-direction: column; }
   display: flex; align-items: center; gap: 12px;
   flex-wrap: wrap; row-gap: 6px;                 /* 그래도 좁으면 줄 단위로 접힘(글자 줄바꿈 방지) */
 }
-#toolbar .brand { font-weight: 700; margin-right: 4px; white-space: nowrap; }
-.beta-badge {
-  display: inline-block; margin-left: 6px; padding: 1px 6px;
-  font-size: 10px; font-weight: 700; letter-spacing: .5px;
-  color: #fff; background: #f6b100; border-radius: 8px; vertical-align: 2px;
+/* 브랜드 — 2026-08-24 확대. 전에는 본문과 같은 13px 이라
+   옆의 프로젝트 이름칸(13px)과 구분이 안 되고 로고도 16px 로 묻혔다.
+   inline-flex + gap 으로 세로 정렬을 맞춘다 (vertical-align 눈대중이 필요 없다). */
+#toolbar .brand {
+  font-weight: 700; margin-right: 4px; white-space: nowrap;
+  font-size: 17px;
+  display: inline-flex; align-items: center; gap: 5px;
+}
+#toolbar .brand-mark { width: 26px; height: 26px; margin-right: 0; vertical-align: 0; }
+/* 로고는 이제 홈으로 가는 링크다.
+   ⚠ styles.css 에는 전역 a 규칙이 없어서, 그냥 두면 브라우저 기본값(파란 밑줄)이 나온다.
+      어두운 도구막대 위에서 파란 밑줄은 눈에 띄게 어색하다 — 색을 물려받게 한다. */
+#toolbar a.brand { color: inherit; text-decoration: none; cursor: pointer; }
+#toolbar a.brand:hover { text-decoration: none; opacity: .82; }
+#toolbar a.brand:focus-visible { outline: 2px solid #6aa9ff; outline-offset: 3px; border-radius: 4px; }
+
+/* 브랜드 마크 — 🔌 이모지 자리를 실제 로고로 바꿨다 (2026-08-24).
+   이모지는 OS 마다 그림이 달라 브랜드가 일정하지 않았다.
+   글자 크기를 따라가도록 em 으로 잡고, 글줄 가운데에 맞춘다.
+   (px 로 박으면 도구막대와 방문안내 모달의 글자 크기가 달라 한쪽이 어긋난다) */
+.brand-mark {
+  width: 1.25em; height: 1.25em;
+  vertical-align: -0.24em;
+  margin-right: 1px;
 }
 /* 방문 안내 모달 — 여백을 넉넉히 */
 .welcome-box { width: min(500px, 92vw); padding: 0; overflow: hidden; }
@@ -139,7 +187,9 @@ body { display: flex; flex-direction: column; }
   background: var(--primary); color: #fff; border-radius: 50%;
   font-size: 12px; font-weight: 700;
 }
-.welcome-beta {
+/* 방문 안내창 아래쪽 안내 줄 (자동저장·피드백).
+   예전 이름은 .welcome-beta 였다 — 베타 문구를 걷어내면서 이름도 맞췄다(2026-08-31) */
+.welcome-note {
   margin: 0 0 18px; padding: 10px 14px; text-align: center;
   background: var(--primary-bg); color: var(--primary-d);
   border-radius: var(--r); font-size: 12.5px; line-height: 1.5;
@@ -163,12 +213,111 @@ body { display: flex; flex-direction: column; }
 .welcome-dismiss input { margin: 0; cursor: pointer; }
 .welcome-privacy { margin: 0; text-align: center; font-size: 11px; color: var(--tx3); }
 .welcome-privacy a { color: var(--tx3); }
+/* ── 프로젝트 이름 = 이 도면의 제목 ─────────────────────────────────
+   평소에는 상자가 없다. 마우스를 올리면 옅게, 고르면 또렷하게 나타난다
+   (피그마·구글 문서·노션과 같은 방식, 2026-09-09 고원빈 요청으로 바꿈).
+
+   ⚠ 늘 입력칸으로 보이면 "여기 뭘 넣어야 하지" 가 된다. 제목으로 보이면
+      "이 도면의 이름" 으로 읽힌다. 로고(17px/700)보다 한 단계 작게 두어
+      「이지케이블 / 퍼미어스 미니 V1」 의 위계를 만든다.
+   ⚠ 폭은 js/app.js 의 제목폭맞추기() 가 글자에 맞춰 정한다 — 여기서는 한계만.
+      150px 고정이었는데 "퍼미어스 미니 V1(배선도)" 가 7px 넘쳐 잘렸다.
+      상단 줄은 오른쪽에 남는 자리(.tb-spacer)가 있어 늘려도 다른 것을 밀지 않는다. */
 #projName {
-  background: #3d434d; color: #eee; border: 1px solid #555;
-  border-radius: 4px; padding: 4px 8px; width: 150px; font-size: 13px;
+  background: transparent; color: #e8eef5;
+  border: 1px solid transparent; border-radius: 5px;
+  padding: 4px 8px; font-size: 14px; font-weight: 600;
+  width: 150px; min-width: 150px; max-width: 420px;
+  cursor: text;
+  transition: background-color .12s ease, border-color .12s ease;
 }
+#projName:hover { background: #3d434d; border-color: #4a515c; }
+#projName:focus { background: #2b3037; border-color: #1e88e5; outline: none; }
+#projName::placeholder { color: #8a929d; font-weight: 400; }
+
 #projName:focus { outline: 1px solid #1e88e5; }
 .tb-group { display: flex; align-items: center; gap: 6px; flex: none; }
+/* ── 아이콘 한 벌 ────────────────────────────────────────────────────
+   ⚠ 이 세 값이 '한 언어' 를 만든다 — **16px 상자 · 굵기 1.6 · 끝 둥글게.**
+      예전에는 ▣ ╱ ▭ T ◎ ⊘ 같은 **글자**를 아이콘처럼 썼다. 서로 다른
+      유니코드 블록이라 굵기·크기·세로 정렬이 맞을 수가 없었고, ╱ 는 원래
+      표 그리기용 문자라 글꼴마다 다르게 그려졌다. (2026-09-09 전부 SVG 로 교체)
+
+   ⚠ 색은 currentColor 를 따른다 — 활성/비활성/호버가 CSS 만으로 따라온다.
+      그래서 아이콘을 이미지 파일로 두지 않는다. */
+.ico { width: 15px; height: 15px; display: block; flex: none; }
+.ico path, .ico rect, .ico circle {
+  fill: none; stroke: currentColor; stroke-width: 1.6;
+  stroke-linecap: round; stroke-linejoin: round;
+}
+.ico .fill { fill: currentColor; stroke: none; }
+/* 미연결 = 눈에 띄어야 하는 것. 가운데 점만 빨강이다 —
+   버튼 전체를 빨갛게 하면 '위험한 버튼' 으로 읽힌다. 이건 「빨간 것을 찾아라」 라는 뜻이고,
+   실제로 미연결 단자도 도면에서 빨갛게 표시된다. */
+.ico .warn { fill: #ff5252; stroke: none; }
+/* ⚠ 선 굵기는 **클래스로** 준다. SVG 의 stroke-width 속성은 위 .ico path 규칙에 진다 —
+   속성으로 주면 세 줄이 전부 같은 굵기로 그려져 ☰ 메뉴와 똑같아 보인다. */
+/* ⚠ 편차가 크면 제일 아래 줄이 뭉툭한 막대처럼 보여 오히려 안 읽힌다
+   (2026-09-09 고원빈: "편차가 너무 커서 구분이 안 된다"). 셋이 한 눈에
+   가늘다·보통·굵다로 읽히는 선에서 멈춘다. */
+/* 24격자 아이콘. (2026-09-10) 위 .ico 는 16격자인데, 밖에서 가져온 아이콘은 대개 24격자다
+   (국내 서비스 실측에서도 미리캔버스·채널톡·토스 전부 24격자였다).
+   격자를 억지로 16으로 고쳐 그리면 좌표가 틀어지므로, 24 그대로 두고 **굵기만** 맞춘다.
+
+   ⚠ 굵기 2.4 는 눈대중이 아니다 — 화면에 그려지는 선 두께를 기존 아이콘과 같게 맞춘 값이다.
+        기존 .ico   1.6 × (15px ÷ 16) = 1.50px
+        여기 .ico24 2.4 × (15px ÷ 24) = 1.50px
+      그래서 둘을 나란히 놓아도 한 벌로 보인다. 크기(15px)를 바꾸면 이 관계는 유지되지만,
+      **격자나 굵기를 바꾸면 다시 계산해야 한다.** */
+.ico24 { width: 15px; height: 15px; display: block; flex: none; }
+.ico24 path, .ico24 rect, .ico24 circle, .ico24 line, .ico24 polyline {
+  fill: none; stroke: currentColor; stroke-width: 2.4;
+  stroke-linecap: round; stroke-linejoin: round;
+}
+.ico .w1 { stroke-width: 1; }
+.ico .w2 { stroke-width: 1.8; }
+.ico .w3 { stroke-width: 2.8; }
+#toolbar button.ib { display: flex; align-items: center; justify-content: center; }
+
+/* ── 툴팁 ────────────────────────────────────────────────────────────
+   브라우저 기본 title 은 1초 가까이 늦게 뜨고 모양·속도를 정할 수 없다.
+   글자를 뺀 아이콘 툴바에서는 그 지연이 곧 "이게 뭔지 모르겠다" 가 된다.
+
+   ⚠ **간격 12px 이 핵심이다.** 마우스 화살표는 클릭 지점에서 아래로 20px 쯤 뻗어서,
+      버튼 바로 밑(7px)에 띄우면 커서 그림이 툴팁을 덮는다.
+   ⚠ 위로 띄우지 않는다 — 툴바 1행(로고·저장)을 덮는다.
+      다만 화면 아래쪽에 붙은 것(캔버스 우하단)은 .tip-up 으로 위에 띄운다. */
+[data-tip] { position: relative; }
+[data-tip]::after, [data-tip]::before {
+  position: absolute; left: 50%; transform: translateX(-50%);
+  pointer-events: none; z-index: 200;
+  opacity: 0; visibility: hidden;
+  transition: opacity .1s ease .12s, visibility 0s linear .22s;
+}
+/* ⚠ **위로** 띄운다 (2026-09-09 고원빈). 아래로 띄우면 마우스 화살표가 글자를 덮는다 —
+   화살표는 클릭 지점에서 아래로 20px 쯤 뻗는데, 툴팁이 바로 그 자리에 뜬다.
+   위로 띄우면 툴바 1행을 잠깐 덮지만, 그건 툴팁의 정상 동작이다(곧 사라진다). */
+[data-tip]::after {
+  content: attr(data-tip);
+  bottom: calc(100% + 10px);
+  background: #11141a; color: #e8eef5; font-size: 11.5px; line-height: 1.3;
+  padding: 5px 9px; border-radius: 6px; border: 1px solid #3c424b;
+  white-space: nowrap; box-shadow: 0 4px 14px rgba(0,0,0,.45);
+}
+[data-tip]::before {
+  content: ""; bottom: calc(100% + 5px);
+  border: 5px solid transparent; border-top-color: #3c424b;
+}
+/* 화면 맨 위에 붙은 것은 위로 띄우면 잘린다 → 그때만 아래로 */
+[data-tip].tip-down::after { bottom: auto; top: calc(100% + 12px); }
+[data-tip].tip-down::before {
+  bottom: auto; top: calc(100% + 7px);
+  border-top-color: transparent; border-bottom-color: #3c424b;
+}
+[data-tip]:hover::after, [data-tip]:hover::before {
+  opacity: 1; visibility: visible; transition-delay: .12s, 0s;
+}
+
 /* 배선 모양 고르기 — 선 그림을 그대로 보여주는 두 칸짜리 버튼.
    현재 값이 눌린 모양으로 보이므로 글자를 읽지 않아도 지금 무엇인지 안다. */
 .seg-btns { display: flex; flex: none; }
@@ -180,6 +329,9 @@ body { display: flex; flex-direction: column; }
 #toolbar .seg-btns .seg-btn:last-child { border-radius: 0 var(--r) var(--r) 0; margin-left: -1px; }
 .seg-btns .seg-btn svg { width: 20px; height: 14px; display: block; }
 .seg-btns .seg-btn svg path { fill: none; stroke: #cfd6df; stroke-width: 2; stroke-linecap: square; }
+/* 양 끝의 동그라미 = 단자. 이게 있어야 '선' 이 아니라 '배선' 으로 읽힌다 (2026-09-09) */
+.seg-btns .seg-btn svg circle { fill: #cfd6df; stroke: none; }
+.seg-btns .seg-btn.active svg circle { fill: #fff; }
 #toolbar .seg-btns .seg-btn.active { background: var(--primary); border-color: var(--primary-d); z-index: 1; }
 .seg-btns .seg-btn.active svg path { stroke: #fff; }
 .tb-spacer { flex: 1 1 auto; min-width: 12px; }
@@ -203,6 +355,20 @@ body { display: flex; flex-direction: column; }
 }
 #toolbar button:hover { background: #4a515c; }
 .chk { display: flex; align-items: center; gap: 4px; cursor: pointer; }
+
+/* ── 그리드·스냅 — 캔버스 우하단의 아이콘 토글 (2026-09-09 툴바에서 옮김) ──
+   왜 옮겼나: 단축키조차 없는, 자주 쓰지 않는 값이었다. 그런데 확대·용지와 성격이 같다
+   ("지금 이 화면을 어떻게 볼 것인가"). 설정 모달로 보내지 않은 이유는 **스냅은 작업 중에
+   껐다 켜는 일이 있어서** — 모달을 열어야 하면 그 흐름이 끊긴다.
+
+   ⚠ 안의 <input type="checkbox"> 를 그대로 둔다. 눈에만 안 보이게 하고 클릭은 라벨이 받는다.
+      js/app.js 가 chkGrid.checked 와 change 이벤트를 쓰고 있어서, 버튼으로 바꾸면
+      그 연결을 전부 다시 짜야 한다. 모양만 바꾸고 뼈대는 손대지 않는다. */
+.chk-ico { position: relative; width: 34px; height: 28px; justify-content: center; }
+.chk-ico input { position: absolute; opacity: 0; width: 0; height: 0; pointer-events: none; }
+.chk-ico .ico { color: #6d7681; }
+.chk-ico:hover .ico { color: #444b55; }
+.chk-ico input:checked ~ .ico { color: var(--primary); }
 .tb-label { color: #9fb4c9; font-size: 12px; }
 /* 한 그룹 안에서 성격이 다른 묶음을 가르는 옅은 선.
    그룹끼리 가르는 .tb-divider 보다 약해야 '그룹 안의 구분'으로 읽힌다. */
@@ -210,7 +376,8 @@ body { display: flex; flex-direction: column; }
   flex: none; width: 1px; align-self: stretch;
   margin: 3px 3px 3px 7px; background: #3c424b;
 }
-.tb-group.modes button.mode { padding: 5px 12px; }
+/* 아이콘만 남았으므로 좌우 여백을 줄인다 (2026-09-09 글자 제거) */
+.tb-group.modes button.mode { padding: 5px 9px; }
 .tb-group.modes button.mode.active {
   background: #1e88e5; border-color: #64b5f6; color: #fff; font-weight: 700;
   box-shadow: 0 0 0 1px rgba(100,181,246,.35), 0 0 8px rgba(30,136,229,.5);
@@ -238,6 +405,32 @@ body { display: flex; flex-direction: column; }
 
 /* 캔버스 우하단 플로팅 컨트롤(실행취소·다시실행 + 확대/축소) — Excalidraw 참고
    #centerCol(캔버스 영역 실제 박스) 기준 절대배치라 창 크기·패널 폭과 무관하게 항상 정확한 위치에 붙음. */
+/* 용지 크기 고르기 (2026-09-08) — 확대 옆에 둔다.
+   둘 다 '지금 보고 있는 화면을 어떻게 볼 것인가' 라 손이 같은 자리에서 움직인다. */
+.canvas-size-pick { position: relative; }
+/* ⚠ min-width 가 168px 이었다. 그건 항목 오른쪽에 '1600×900' 같은 크기를 함께
+   보이던 때의 폭이다(2026-09-10 에 그 숫자를 걷어냈다). 숫자가 사라졌는데 폭만 남아
+   메뉴 오른쪽이 휑하게 비었다. 이제 글자만큼만 넓힌다.
+   ⚠ 고정값(110px 등)을 쓰면 또 어긋난다 — 글자가 52px 뿐이라 오른쪽이 남는다.
+   그래서 **글자만큼(width:max-content)** 넓히되, **여는 단추보다는 좁지 않게(min-width:100%)** 둔다.
+   ⚠ 둘 중 하나만 쓰면 안 된다. max-content 만 두면 메뉴가 단추보다 좁아 삐뚤어 보이고,
+      min-width:100% 만 두면 단추가 좁아서 글자가 눌린다(실측: 「▭ 가로형」이 52 → 39px). */
+#pageSizeMenu {
+  position: absolute; right: 0; bottom: calc(100% + 6px);
+  width: max-content; min-width: 100%;
+  background: #fff; border: 1px solid #cfd6de; border-radius: var(--r);
+  box-shadow: 0 6px 20px rgba(0,0,0,.14); padding: 4px; z-index: 40;
+}
+#pageSizeMenu button {
+  display: flex; align-items: baseline; gap: 6px; width: 100%;
+  padding: 7px 10px; border: 0; background: none; text-align: left;
+  font-size: var(--fs-sm); border-radius: 5px; cursor: pointer;
+}
+#pageSizeMenu button:hover { background: #f0f4f9; }
+#pageSizeMenu button.on { background: #e8f1fb; font-weight: 600; }
+/* .sz(크기 숫자) 규칙은 걷어냈다 — 그 <span> 을 더 이상 만들지 않는다(js/app.js buildPageSizeMenu).
+   남겨 두면 다음 사람이 "숫자가 어디 갔지" 하고 이 규칙부터 뒤진다. (2026-09-10) */
+
 .canvas-corner-tools {
   position: absolute; right: 28px; bottom: 40px; z-index: 40;
   display: flex; align-items: center; gap: 6px;
@@ -355,9 +548,23 @@ body.note-open .canvas-corner-tools { bottom: 131px; }
 .ce-row b { color: var(--tx); font-weight: 600; }
 #wireConn { margin-bottom: 8px; }
 
+/* 공용 부품 게시 — 무엇을 덮어쓰는지 고르는 자리 */
+.publish-target {
+  margin: 2px 0 4px; padding: 10px 12px; border: 1px solid #ffd8a8;
+  background: #fff9f0; border-radius: var(--r);
+}
+.publish-target > b { display: block; margin-bottom: 6px; font-size: var(--fs-sm); }
+.publish-target label { display: flex; align-items: baseline; gap: 6px; margin: 3px 0; font-size: var(--fs-sm); }
+.publish-target p { margin: 6px 0 0; font-size: var(--fs-sm); }
+
 /* 주석 */
 .annotation { font-family: "Malgun Gothic", sans-serif; user-select: none; white-space: pre; }
-body.text-mode #canvas { cursor: text; }
+/* 텍스트 모드 커서는 **보통 화살표**로 둔다 (2026-09-08 고원빈).
+   I 빔(cursor:text)은 "여기 있는 글자를 선택·편집한다" 는 뜻이라,
+   "새 글자를 놓을 자리를 고른다" 인 이 모드와 뜻이 어긋난다.
+   게다가 마우스에 미리보기 상자가 붙어 다니는데 커서까지 I 빔이면
+   시선이 둘로 갈려 정작 상자를 안 보게 된다. 자리를 알려주는 일은 상자에 맡긴다. */
+body.text-mode #canvas, body.text-mode #canvas * { cursor: default !important; }
 
 /* 배선 / waypoint */
 body.wire-mode #canvas, body.wire-mode #canvas * { cursor: crosshair !important; }
@@ -384,12 +591,21 @@ body.label-mode #canvas, body.label-mode #canvas * { cursor: copy !important; } 
 
 /* 라이브러리 */
 .lib-head { flex: none; }
+.lib-source-actions { flex: none; display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp1); margin-bottom: var(--sp3); }
+/* ⚠ 좌우 여백이 4px 이었다 — 「내 부품 추가」가 잘려 … 로 뭉개졌다.
+   글자를 「부품 추가」로 줄이면서 여백을 10px 로 넓혔다. (2026-09-10)
+   ⚠ flex 로 두는 이유: 글리프는 글자 베이스라인에 앉아 세로 중심이 어긋났다.
+      아이콘을 SVG(블록 요소)로 바꾸면 flex 로만 정확히 가운데 맞출 수 있다. */
 .lib-add-btn {
-  flex: none; margin: 0 0 6px; padding: 7px; width: 100%;
+  min-width: 0; margin: 0; padding: 7px 10px; width: 100%;
+  display: flex; align-items: center; justify-content: center; gap: 6px;
   border: 1px solid var(--bd); border-radius: var(--r); background: var(--bg);
-  font-size: var(--fs); font-family: inherit; color: var(--tx); cursor: pointer;
+  font-size: var(--fs-sm); font-family: inherit; color: var(--tx); cursor: pointer;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .lib-add-btn:hover { background: var(--bg3); }
+#btnPublicLibrary { color: var(--primary-d); border-color: #9dbce5; background: var(--primary-bg); }
+#btnPublicLibrary:hover { border-color: var(--primary); background: #dceafb; }
 /* 하단 저장/불러오기 */
 .lib-footer {
   flex: none; display: flex; gap: 6px; margin-top: 8px; padding-top: 8px;
@@ -397,6 +613,7 @@ body.label-mode #canvas, body.label-mode #canvas * { cursor: copy !important; } 
 }
 .lib-io-btn {
   flex: 1; padding: 6px; background: var(--bg); border: 1px solid var(--bd);
+  display: flex; align-items: center; justify-content: center; gap: 5px;
   border-radius: var(--r); font-size: var(--fs-sm); color: var(--tx2);
   font-family: inherit; cursor: pointer;
 }
@@ -428,13 +645,15 @@ body.label-mode #canvas, body.label-mode #canvas * { cursor: copy !important; } 
 .lib-item:hover { border-color: #1e88e5; background: #f5f9ff; }
 .lib-item.dragging { opacity: 0.4; }
 .lib-item[draggable="true"] { cursor: copy; }   /* '추가' 어포던스: ＋ 붙는 커서 */
-/* hover 시 '＋ 배치' 힌트 */
-.lib-item:hover .lib-name::after {
-  content: "＋ 배치"; margin-left: 6px;
-  font-size: 10px; font-weight: 600; color: var(--primary);
-  background: var(--primary-bg); border-radius: 3px; padding: 1px 4px;
-  vertical-align: 1px;
-}
+/* ⚠ 여기에 hover 시 이름 뒤에 붙는 「＋ 배치」 배지가 있었다. **걷어냈다.** (2026-09-10)
+   '누르면 배치된다' 는 것을 이미 셋이 알려 준다 —
+     ① 커서가 ＋ 로 바뀐다(위 .lib-item[draggable] 의 cursor: copy)
+     ② 행 전체에 툴팁이 있다(js/app.js buildPartItem 의 item.title)
+     ③ 마우스를 올리면 테두리가 파래지고 배경이 바뀐다
+   셋 다 자리를 안 먹는데 이 배지만 **이름 자리를 뺏었다.** 이름이 이미 잘리는 판에
+   고르려고 마우스를 올리면 더 잘리는 꼴이었다.
+   ⚠ 되살리려면 자리를 차지하지 않게(position: absolute) 둘 것. flex 항목으로 두면
+      이름 칸이 그만큼 줄어 같은 병이 다시 난다. */
 .lib-fav, .lib-edit, .lib-del { cursor: pointer; }
 .lib-drop-line { height: 0; border-top: 3px solid #1e88e5; border-radius: 2px; margin: -2px 0; pointer-events: none; }
 .lib-thumb-wrap { position: relative; flex: none; }
@@ -443,14 +662,34 @@ body.label-mode #canvas, body.label-mode #canvas * { cursor: copy !important; } 
   background: #f0f0f0; border-radius: 4px;
 }
 /* 구매 링크 배지: 썸네일 우측 하단 모서리에 항상 같은 자리로 고정 */
+/* 구매 링크 배지. 안에 든 것은 🔗 이모지였는데 SVG 로 바꿨다 (2026-09-10) —
+   15px 짜리 동그라미 안에서 이모지가 뭉개져 무슨 그림인지 안 보였다. */
 .lib-haslink {
   position: absolute; right: -3px; bottom: -3px;
-  width: 15px; height: 15px; line-height: 15px; text-align: center;
-  font-size: 9px; background: #43a047; color: #fff; border-radius: 50%;
+  width: 15px; height: 15px;
+  display: flex; align-items: center; justify-content: center;
+  background: #43a047; color: #fff; border-radius: 50%;
   box-shadow: 0 0 0 1.5px #fff;
 }
+/* ⚠ 굵기 2.6 — 배지 안에서는 9px 로 줄어들어(9÷24) 2.4 로는 너무 가늘어 보인다.
+   여기만 예외다. 다른 곳은 .ico24 의 2.4 를 쓴다. */
+.lib-haslink svg { width: 9px; height: 9px; display: block; }
+.lib-haslink svg path {
+  fill: none; stroke: #fff; stroke-width: 2.6;
+  stroke-linecap: round; stroke-linejoin: round;
+}
 .lib-info { flex: 1; min-width: 0; }
-.lib-name { font-size: 12px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* 부품 이름은 **두 줄까지** 보인다. (2026-09-10 고원빈 지시)
+   예전에는 nowrap 한 줄이라, 패널 240px 에서 이름이 쓸 수 있는 폭이 약 124px
+   (= 240 − 패널여백 20 − 즐겨찾기 26 − 썸네일 44 − 간격 16 − 행여백 10) 뿐이었다.
+   12px 굵은 한글로 10~11 글자다. 그래서 「아두이노 우노 R3 (정품)」·「…R4 WiFi」·
+   「…R4 미니마」가 **전부 "아두이노 우노 …" 로 똑같이 보였다.**
+   두 줄이면 서로 구분된다. 썸네일이 이미 40px 라 행 높이는 6px 쯤만 는다. */
+.lib-name {
+  font-size: 12px; font-weight: 600; line-height: 1.35;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  overflow: hidden;
+}
 .lib-meta { font-size: 11px; color: #999; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* 수정(✎)·삭제(×)는 평소 숨긴다.
    아이콘 3개가 고정 폭을 차지하는 바람에 정작 부품 이름에 12px밖에 안 남아
@@ -475,8 +714,11 @@ body.label-mode #canvas, body.label-mode #canvas * { cursor: copy !important; } 
 /* 검색 + 새 폴더 버튼 한 줄 */
 .lib-search-row { flex: none; display: flex; gap: 6px; margin: 0 0 6px; }
 .lib-search-row #libSearch { flex: 1; width: auto; margin: 0; min-width: 0; }
+/* ⚠ 폭을 30px 로 못 박는다. 예전에는 글리프 한 글자의 폭이 버튼 폭을 정해서
+   ⇱(1글자)와 ＋📁(2글자)의 크기가 서로 달랐다. 아이콘 버튼은 정사각이어야 한다. */
 .lib-folder-add {
-  flex: none; padding: 0 8px; border: 1px solid var(--bd); border-radius: var(--r);
+  flex: none; width: 30px; padding: 0; border: 1px solid var(--bd); border-radius: var(--r);
+  display: flex; align-items: center; justify-content: center;
   background: var(--bg); font-size: var(--fs-sm); font-family: inherit; color: var(--tx2); cursor: pointer;
 }
 .lib-folder-add:hover { background: var(--bg3); }
@@ -543,6 +785,8 @@ body.label-mode #canvas, body.label-mode #canvas * { cursor: copy !important; } 
 #centerCol { flex: 1; display: flex; flex-direction: column; min-width: 0; position: relative; }
 #canvasWrap { flex: 1; min-height: 0; position: relative; overflow: auto; background: #dfe3e9; padding: 28px; }
 #canvas {
+  /* 실제 크기는 JS 가 setZoom 에서 style 로 정한다(페이지마다 다름·2026-09-08).
+     여기 값은 스크립트가 돌기 전 한순간의 기본값이다. */
   width: 1600px; height: 900px; display: block; background: #fff;
   margin: 0 auto;                 /* 가로 중앙 배치 */
   border: 1px solid #b6bcc6;
@@ -622,19 +866,71 @@ body.label-mode #canvas, body.label-mode #canvas * { cursor: copy !important; } 
 #bomTable, #wireListTable { border-collapse: collapse; width: 100%; font-size: 13px; }
 #bomTable th, #bomTable td, #wireListTable th, #wireListTable td { border: 1px solid #d5dae1; padding: var(--bom-rh, 6px) 9px; text-align: center; vertical-align: middle; }
 #bomTable th, #wireListTable th { background: #f2f5f8; font-weight: 600; white-space: nowrap; }
+/* ── 결선표 ────────────────────────────────────────────────────────────
+   부품 그림을 왼쪽에 한 번만 두고 그 부품의 단자들을 아래로 모은다 —
+   손에 부품을 쥔 채 그 칸만 보고 끝낼 수 있게. (2026-09-03) */
+/* ⚠ 표를 페이지 폭에 맞춰 늘리지 않는다. 늘리면 '연결 부품 → 색 → 단자' 사이가 벌어져
+   시선이 한참 오른쪽으로 이동해야 한 줄을 읽을 수 있다. 내용 폭에 맞춰 좁게 붙인다.
+   (2026-09-03 고원빈) */
+/* 칸 폭을 직접 정한다(table-layout:fixed). 자동 배분에 맡기면 '연결 부품'이 혼자 445px 까지
+   벌어져서, 한 줄을 읽으려고 시선이 한참 오른쪽으로 갔다 와야 했다. */
+#wireListTable { width: auto; min-width: 0; table-layout: fixed; }
+#wireListTable th, #wireListTable td { padding-left: 8px; padding-right: 8px; }
+#wireListTable .wl-chk   { width: 32px; }
+#wireListTable .wl-part  { width: 138px; }
+#wireListTable .wl-origin{ width: 84px; }
+#wireListTable .wl-member{ width: 190px; text-align: left; word-break: keep-all; }
+/* 색은 견본만 — 좌우로 넓힐 이유가 없다 */
+#wireListTable .wl-mterm { width: 88px; }
+#wireListTable .wl-count { width: 52px; }
+#wireListTable .wl-thumb {
+  display: block; width: 108px; height: 68px; margin: 0 auto 4px;
+  object-fit: contain; background: #f7f9fb; border-radius: 4px;
+}
+#wireListTable .wl-part-name { font-weight: 600; }
+/* 시작 단자 — 색 견본을 붙여 어느 색으로 잇는지 같이 본다 */
+#wireListTable .wl-origin { white-space: nowrap; }
+#wireListTable .wl-chk { color: var(--tx3); font-size: 15px; }
+#wireListTable .wl-count { color: var(--tx2); }
+#wireListTable .wl-sw {
+  display: inline-block; width: 9px; height: 9px; border-radius: 2px;
+  margin-right: 5px; vertical-align: middle; border: 1px solid rgba(0,0,0,.15);
+}
+#wireListTable .wl-mterm { white-space: nowrap; font-weight: 600; }
+#wireListTable .wl-chk { width: 34px; color: var(--tx3); font-size: 15px; }
+#wireListTable .wl-count { width: 62px; color: var(--tx2); white-space: nowrap; }
+/* 넷이 바뀌는 줄에 윗선을 진하게 — 덩어리 경계가 눈에 들어와야 한다 */
+#wireListTable tr.wl-first td { border-top: 1px solid #b9c2cc; }
 #bomTable td.num, #bomTable th.num { white-space: nowrap; }
+/* 결선표 비고 — 케이블 길이 같은 현장 메모 (2026-09-09 고원빈).
+   BOM 의 편집 칸과 **같은 결**로 둔다: 빈 칸에는 —, 고를 때 파란 테두리. */
+#wireListTable td.wl-note {
+  cursor: text; min-width: 110px; text-align: left; color: var(--tx1);
+}
+#wireListTable td.wl-note:empty::before { content: "—"; color: #bbb; }
+#wireListTable td.wl-note:focus { outline: 2px solid #1e88e5; background: #f0f7ff; }
 #bomTable td.editable { cursor: text; }
 #bomTable td.editable:empty::before { content: "—"; color: #bbb; }
 #bomTable td.editable:focus { outline: 2px solid #1e88e5; background: #f0f7ff; }
 #bomTable tr.total-row td { font-weight: 700; background: #f7f9fb; font-size: 14px; }
+/* 행 손잡이(⠿) 칸은 테두리가 없어 표 바깥으로 보인다. 합계 행 배경이 여기까지 칠해지면
+   회색이 표 왼쪽으로 삐져나온 것처럼 된다(2026-09-02 고원빈 지적). 이 칸만 빼 준다. */
+#bomTable tr.total-row td.bom-gutter { background: none; }
 #bomTable td.overridden { color: #1565c0; font-weight: 600; }
 /* 왼쪽 거터: 드래그 핸들 + (수동행) 삭제. 평소엔 숨고 행 hover 시 표시 */
-#bomTable th.bom-gutter-h { width: 30px; padding: 0; border: none; background: none; }
-#bomTable td.bom-gutter { width: 30px; padding: 0 2px; border: none; text-align: center; white-space: nowrap; }
+#bomTable th.bom-gutter-h { width: 46px; padding: 0; border: none; background: none; }
+#bomTable td.bom-gutter { width: 46px; padding: 0 2px; border: none; text-align: center; white-space: nowrap; }
 .row-grip { cursor: grab; color: #c2c8d0; font-size: 13px; visibility: hidden; user-select: none; }
 .row-grip:active { cursor: grabbing; }
 .row-del { border: none; background: none; color: #e53935; cursor: pointer; font-size: 14px; line-height: 1; padding: 0 2px; visibility: hidden; }
-#bomTable tbody tr:hover .row-grip, #bomTable tbody tr:hover .row-del { visibility: visible; }
+/* 행 되돌리기 ↺ — 고친 것이 있는 행은 항상 파랗게 보이게 둔다.
+   어느 행을 손댔는지가 표를 훑을 때 바로 보여야 하므로 hover 로 숨기지 않는다. */
+.row-reset { border: none; background: none; cursor: pointer; font-size: 13px; line-height: 1; padding: 0 2px; visibility: hidden; color: var(--tx3); }
+.row-reset.on { visibility: visible; color: var(--primary); }
+.row-reset:disabled { cursor: default; }
+.row-reset.on:hover { color: var(--primary-d); }
+#bomTable tbody tr:hover .row-grip, #bomTable tbody tr:hover .row-del, #bomTable tbody tr:hover .row-reset { visibility: visible; }
+@media print { .row-reset { display: none !important; } }   /* 인쇄물에는 안 나간다 */
 #bomTable tr.dragging { opacity: .4; }
 #bomTable tr.drop-target td { border-top: 2px solid #1e88e5; }
 
@@ -768,8 +1064,10 @@ body.panning #canvas, body.panning #canvas * { cursor: grabbing !important; }
 .f-num:focus-within { outline: 2px solid var(--primary); outline-offset: -1px; }
 .f-num .f-pre, .f-num .f-suf { flex: none; color: var(--tx3); font-size: var(--fs-sm); }
 .f-num .f-suf { margin-left: auto; }
-/* #propBody input 의 테두리·여백을 걷어낸다 — 이제 칸(.f-num)이 그 역할을 한다 */
-#propBody .f-num input {
+/* .f-num 안의 입력은 테두리·여백을 걷어낸다 — 이제 칸(.f-num)이 그 역할을 진다.
+   ⚠ #propBody 밖에도 이 구조를 쓰는 곳이 있다(라벨 모드의 #labelModeProps).
+      선택자를 #propBody 로만 묶어 두면 거기서 테두리가 이중으로 그려진다. */
+#propBody .f-num input, #labelModeProps .f-num input {
   flex: 1 1 auto; min-width: 0; width: auto;
   border: 0; background: none; padding: 0; margin: 0; outline: none; border-radius: 0;
 }
@@ -830,6 +1128,8 @@ body.panning #canvas, body.panning #canvas * { cursor: grabbing !important; }
    안 6~8px / 사이 16px + 옅은 선. 예전엔 전부 같은 간격이라 어디까지가 한 묶음인지
    알 수 없었다(제목·체크박스·버튼이 나란히 떠 있었다). */
 .p-sec { margin-top: var(--sp5); padding-top: var(--sp4); border-top: 1px solid var(--bd2); }
+/* 패널 머리('속성') 바로 아래 오는 첫 구획: 윗선이 있으면 머리와 겹쳐 두 줄로 보인다 */
+.p-sec.p-first { margin-top: var(--sp2); padding-top: 0; border-top: none; }
 .p-sec-title {
   font-size: var(--fs-sm); color: var(--tx3); font-weight: 600;
   margin: 0 0 var(--sp3); letter-spacing: .2px;
@@ -859,19 +1159,42 @@ body.panning #canvas, body.panning #canvas * { cursor: grabbing !important; }
 .selection-box { fill: none; stroke: #1e88e5; stroke-width: 1.5; stroke-dasharray: 4 3; }
 .resize-handle { fill: #fff; stroke: #1e88e5; stroke-width: 1.5; cursor: nwse-resize; }
 .rotate-handle { fill: #fff; stroke: #1e88e5; stroke-width: 1.5; cursor: grab; }
+/* 부품 이름표 — 배경을 칠하지 않고 **글자에 흰 테두리**를 둘러 읽히게 한다. (2026-09-08)
+
+   예전에는 이름표 뒤를 불투명 흰색으로 덮었다. 잘 읽히지만 **뒤에 있는 배선·부품이
+   통째로 가려져서**, 이름표가 지나가는 자리의 배선을 눈으로 못 따라갔다.
+
+   그렇다고 배경만 없애면 어두운 부품 위에서 글자가 묻힌다(실측: 레벨 시프터 칩 위에서
+   거의 안 읽혔다). 그래서 지도·CAD 라벨이 쓰는 방법을 쓴다 —
+   글자 둘레에만 흰 테두리를 깔면 글자는 또렷하고 글자 사이로는 뒤가 다 보인다.
+
+   ⚠ paint-order 로 **테두리를 먼저, 글자를 나중에** 그려야 한다.
+      기본 순서(fill→stroke)로 두면 테두리가 글자를 반쯤 먹어 획이 가늘어진다.
+   ⚠ 인쇄·PDF·PNG 도 같은 규칙을 탄다 — 인쇄용 덮어쓰기가 없고,
+      PNG 내보내기가 베끼는 속성 목록(js/app.js PROPS)에 paint-order 가 이미 들어 있다. */
 .cmp-label {
   font: var(--cmp-label-weight, 400) var(--cmp-label-size, 12px) "Malgun Gothic", sans-serif;
   fill: #222;
+  paint-order: stroke fill;
+  stroke: #fff; stroke-width: 3px; stroke-linejoin: round;
   text-anchor: middle; dominant-baseline: hanging; user-select: none;
   pointer-events: none;
 }
 .cmp-label-bg {
   display: var(--cmp-label-box-display, none);
-  fill: #fff; stroke: #888; stroke-width: 1;
+  /* 테두리만 남기고 속은 비운다 — 뒤에 있는 배선·부품이 그대로 보여야 한다 */
+  fill: none; stroke: #888; stroke-width: 1;
   pointer-events: none;
+}
+body.label-move-ready .cmp-label,
+body.label-move-ready .cmp-label-bg,
+body.label-move-ready .term-label {
+  pointer-events: all;
+  cursor: move;
 }
 .wire-label-guide { stroke: #ff3d7f; stroke-dasharray: 5 4; stroke-width: 1; pointer-events: none; }
 .align-guide { stroke: #1e88e5; stroke-width: 1; pointer-events: none; }   /* 부품 정렬 스마트 가이드 */
+.label-align-guide { stroke: #1e88e5; stroke-width: 1; stroke-dasharray: 5 4; pointer-events: none; }
 /* ⚠ 미연결 확인 — 켜져 있을 때는 경고색으로. 모드 버튼(파랑)과 구분되어야
    "지금 점검 중"이라는 게 한눈에 보인다. */
 #btnCheckTerm.active {
@@ -926,7 +1249,7 @@ body.panning #canvas, body.panning #canvas * { cursor: grabbing !important; }
    도면 우하단에 두되, 같은 자리를 쓰는 확대·축소 버튼과 겹치면 스크립트가 위로 비켜 준다. */
 #canvasMark {
   position: absolute; right: 28px; bottom: 77px; z-index: 40;
-  font: 700 19px "Segoe UI", "Malgun Gothic", sans-serif;
+  font: 700 38px "Segoe UI", "Malgun Gothic", sans-serif;
   letter-spacing: .10em;
   color: #5a6675; opacity: .30;
   pointer-events: none; user-select: none; white-space: nowrap;
@@ -942,14 +1265,16 @@ body.panning #canvas, body.panning #canvas * { cursor: grabbing !important; }
 #layerWatermark { display: none; }
 /* 인쇄용 페이지 워터마크 — 화면에선 항상 숨김 */
 #pageWatermark { display: none; }
+/* 인쇄 전용 로고 각인(도면 칸 우하단) — 화면에선 항상 숨김 */
+#canvasMarkPrint { display: none; }
 .wire-label-hover { fill: rgba(30,136,229,.10); stroke: #90b8dd; stroke-width: 1; pointer-events: none; }
 .wire-label-selected { fill: rgba(30,136,229,.16); stroke: #1e88e5; stroke-width: 1.5; pointer-events: none; }
 .term-label {
-  font: 11px "Malgun Gothic", sans-serif; fill: #333;
-  user-select: none; paint-order: stroke;
-  /* 반투명: 라벨 위를 지나는 배선이 비쳐 보여 선이 끊긴 것처럼 보이지 않음 */
-  fill-opacity: .78;
-  stroke: #fff; stroke-width: 1.5px; stroke-opacity: .5;
+  font: 500 11px "Malgun Gothic", sans-serif;
+  fill: #222; fill-opacity: 1;
+  stroke: #fff; stroke-width: 2.5px; stroke-opacity: 1;
+  stroke-linejoin: round; paint-order: stroke fill;
+  user-select: none; pointer-events: none;
 }
 /* 단자 마우스오버 강조: 이름 라벨을 꺼둔 부품에서도 단자 구성을 바로 확인 가능(네이티브 title 툴팁 병행) */
 .term-dot:hover .term-dot-mark { r: 7; stroke-width: 2.5px; }
@@ -965,13 +1290,32 @@ body.panning #canvas, body.panning #canvas * { cursor: grabbing !important; }
 .term-place select { width: 100%; }
 .term-place button.small { margin: 0; padding: 4px 8px; }
 .term-row {
-  display: flex; align-items: center; gap: 5px; margin-bottom: 5px; padding: 2px;
+  min-width: 0; height: 34px; display: flex; align-items: center; gap: 6px; padding: 4px 6px;
+  border: 1px solid #dfe4ea; border-radius: 5px; background: #fff; cursor: pointer;
 }
-.term-row .tcolor { flex: none; width: 24px; height: 24px; padding: 0; border: 1px solid #ccc; border-radius: 4px; cursor: pointer; }
-.term-row .tname { flex: 1 1 auto; width: 40px; padding: 3px 5px; }
-.term-row .tpreset { flex: none; max-width: 78px; }
-.term-row .tdel { flex: none; padding: 2px 7px; color: #c62828; cursor: pointer; }
-.term-row.sel { background: #eef4fb; border-radius: 4px; }
+.term-row:hover { border-color: #9dbce5; background: #f7faff; }
+.term-row.sel { border-color: #4f88d8; background: #eaf2fd; box-shadow: inset 0 0 0 1px #4f88d8; }
+.term-row.off { color: var(--tx3); background: #f5f6f7; }
+.term-row .tcolor-dot { flex: none; width: 12px; height: 12px; border: 1px solid rgba(0,0,0,.18); border-radius: 3px; }
+.term-row .tname-label { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
+.term-row .tconnected { flex: none; color: #66788d; font-size: 11px; }
+.term-row .tvisible { flex: none; width: 16px; height: 16px; margin: 0; cursor: pointer; accent-color: #1e88e5; }
+.term-row .tvisible:disabled { cursor: not-allowed; }
+.te-terminal-filter, .te-terminal-selection-actions { display: flex; align-items: center; gap: var(--sp1); }
+.te-terminal-filter { padding: 8px; border-bottom: 1px solid #e0e5ea; }
+.te-terminal-filter input { min-width: 0; flex: 1; padding: 5px 7px; border: 1px solid #cfd6de; border-radius: var(--r); font-size: var(--fs); }
+.te-terminal-filter select { flex: none; width: 74px; padding: 5px 4px; border: 1px solid #cfd6de; border-radius: var(--r); font-size: var(--fs-sm); }
+.te-terminal-selection-actions { flex: none; min-height: 42px; padding: 6px 8px; border-top: 1px solid #dfe4ea; background: #f7f9fb; }
+.te-terminal-selection-actions[hidden] { display: none; }
+.te-terminal-selection-actions span { margin-right: auto; color: var(--tx2); font-size: var(--fs-sm); }
+.te-terminal-selection-actions button, .te-manager-actions button {
+  min-width: 0; padding: 4px 6px; border: 1px solid #cfd6de; border-radius: var(--r);
+  color: var(--tx2); background: #fff; font-family: inherit; font-size: var(--fs-sm); cursor: pointer;
+}
+.te-terminal-selection-actions button:hover, .te-manager-actions button:hover { color: #1e88e5; border-color: #1e88e5; background: #e8f1fc; }
+.te-terminal-selection-actions button:disabled, .te-manager-actions button:disabled { color: #aaa; border-color: #ddd; background: #f5f6f7; cursor: default; }
+.te-term-off { opacity: .28; }
+.te-term-off text { text-decoration: line-through; }
 .te-align { margin: 4px 0 8px; padding: 6px; background: #f2f5f8; border: 1px solid #e0e5ea; border-radius: 6px; }
 .te-align-row { display: flex; flex-wrap: wrap; gap: 4px; }
 .te-align-row button { flex: 1 1 44%; padding: 6px 4px; border: 1px solid #cfd6de; background: #fff; border-radius: 5px; cursor: pointer; font-size: 12px; font-family: inherit; }
@@ -1003,7 +1347,7 @@ body.panning #canvas, body.panning #canvas * { cursor: grabbing !important; }
 .te-guide { stroke: #ff3d7f; stroke-dasharray: 5 4; pointer-events: none; }
 
 /* 단자 배치 편집 모달 */
-.modal-box.term-editor { width: min(1000px, 95vw); }
+.modal-box.term-editor { width: min(1500px, 96vw); max-height: 94vh; }
 .te-head { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-bottom: 8px; }
 .te-head h3 { margin: 0; }
 .te-tools { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
@@ -1012,28 +1356,223 @@ body.panning #canvas, body.panning #canvas * { cursor: grabbing !important; }
 .te-tools button { padding: 4px 10px; border: 1px solid #bbb; border-radius: 4px; background: #fff; cursor: pointer; }
 .te-tools button:hover { background: #eee; }
 .te-tools button.small { padding: 4px 8px; font-size: 12px; }
-#teZoomLabel { min-width: 44px; text-align: center; font-variant-numeric: tabular-nums; }
-.te-body { display: flex; gap: 12px; }
+.te-panel-tabs { display: none; }
+.te-body { display: grid; grid-template-columns: minmax(520px, 1fr) 250px 340px; gap: 12px; min-height: 0; }
 #teViewport {
   flex: 1; height: 60vh; border: 1px solid #ccc; border-radius: 4px;
   overflow: hidden; position: relative;
 }
 #teSvg { width: 100%; height: 100%; display: block; cursor: crosshair; touch-action: none; }
 #teSvg.panning { cursor: grabbing; }
-.te-side { width: 250px; display: flex; flex-direction: column; overflow: auto; }
-#teList { overflow: auto; }
+.te-zoom-controls {
+  position: absolute; z-index: 5; right: 8px; bottom: 8px; display: flex; align-items: center;
+  border: 1px solid #cfd6de; border-radius: 5px; background: rgba(255,255,255,.96);
+  box-shadow: 0 1px 3px rgba(0,0,0,.12); overflow: hidden;
+}
+.te-zoom-controls button {
+  height: 30px; min-width: 32px; padding: 0 8px; border: 0; border-left: 1px solid #dfe4ea;
+  color: var(--tx); background: transparent; font: inherit; font-size: 12px; cursor: pointer;
+}
+.te-zoom-controls button:first-child { border-left: 0; }
+.te-zoom-controls button:hover { color: #1e88e5; background: #e8f1fc; }
+#teZoomLabel { min-width: 46px; text-align: center; font-size: 12px; font-variant-numeric: tabular-nums; }
+.te-side { min-width: 0; display: flex; flex-direction: column; overflow: auto; }
+.te-placement-panel { margin: 4px 0 8px; padding: 8px; border: 1px solid #d6dce3; border-radius: 6px; background: #fff; }
+.te-placement-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
+.te-placement-head strong { font-size: 13px; }
+.te-placement-head span { color: var(--tx3); font-size: 11px; font-variant-numeric: tabular-nums; }
+.te-placement-current {
+  min-height: 38px; display: flex; align-items: center; gap: 8px; padding: 7px 8px;
+  border: 1px solid #9dbce5; border-radius: 5px; background: #eaf2fd;
+}
+.te-placement-current.complete { border-color: #cfd6de; color: var(--tx2); background: #f5f6f7; }
+.te-placement-current .te-preset-dot, .te-placement-chip .te-preset-dot {
+  flex: none; width: 12px; height: 12px; border: 1px solid rgba(0,0,0,.18); border-radius: 3px;
+}
+.te-placement-current strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
+.te-placement-actions { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 4px; margin-top: 6px; }
+.te-placement-actions button {
+  min-width: 0; padding: 5px 3px; border: 1px solid #cfd6de; border-radius: 5px;
+  color: var(--tx2); background: #fff; font: inherit; font-size: 11px; cursor: pointer;
+}
+.te-placement-actions button:hover { color: #1e88e5; border-color: #1e88e5; background: #e8f1fc; }
+.te-placement-actions button:disabled { color: #aaa; border-color: #ddd; background: #f5f6f7; cursor: default; }
+.te-placement-actions button[aria-pressed="true"] { color: #fff; border-color: #1e88e5; background: #1e88e5; }
+.te-placement-queue {
+  max-height: 132px; display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 4px;
+  margin-top: 6px; padding-right: 2px; overflow-y: auto;
+}
+.te-placement-chip {
+  min-width: 0; height: 30px; display: flex; align-items: center; gap: 6px; padding: 4px 6px;
+  border: 1px solid #dfe4ea; border-radius: 5px; color: var(--tx2); background: #fff;
+  font: inherit; font-size: 11px; cursor: pointer;
+}
+.te-placement-chip.dragging { opacity: .45; background: #f2f6fb; }
+.te-placement-chip.drop-before { box-shadow: inset 2px 0 0 #1e88e5; }
+.te-placement-chip.drop-after { box-shadow: inset -2px 0 0 #1e88e5; }
+.te-placement-chip.common .te-queue-drag-handle { color: #b87916; }
+.te-queue-drag-handle { flex: none; width: 10px; color: #8b98a7; text-align: center; cursor: grab; user-select: none; }
+.te-queue-drag-handle:active { cursor: grabbing; }
+.te-placement-chip:hover { border-color: #9dbce5; background: #f7faff; }
+.te-placement-chip.current { border-color: #1e88e5; color: #1565c0; background: #eaf2fd; box-shadow: inset 0 0 0 1px #1e88e5; }
+.te-placement-chip.placed::after { content: "✓"; flex: none; margin-left: auto; color: #27834a; font-weight: 700; }
+.te-placement-chip span:last-of-type { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.te-placement-basic { grid-column: 1 / -1; justify-content: center; color: var(--tx3); }
+.te-manager { min-width: 0; height: 60vh; display: flex; flex-direction: column; border: 1px solid #d6dce3; border-radius: 5px; background: #fff; overflow: hidden; }
+.te-manager-head { min-height: 45px; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 7px 8px; border-bottom: 1px solid #dfe4ea; }
+.te-manager-head > div { min-width: 0; display: flex; align-items: baseline; gap: 8px; }
+.te-manager-head strong { font-size: 13px; }
+.te-manager-head span { color: var(--tx3); font-size: 11px; white-space: nowrap; }
+.te-manager-actions { display: flex; gap: 4px; }
+.te-manager-actions button { white-space: nowrap; }
+.te-terminal-grid { min-height: 0; flex: 1; position: relative; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-content: start; gap: 5px; padding: 8px; overflow-x: hidden; overflow-y: auto; user-select: none; }
+.te-list-marquee { position: absolute; z-index: 4; border: 1px solid #1e88e5; background: rgba(30,136,229,.12); pointer-events: none; }
 .te-img-border { fill: none; stroke: #bbb; stroke-width: 1; }
+
+@media (max-width: 1199px) {
+  .te-panel-tabs { display: flex; justify-content: flex-end; gap: 4px; margin-bottom: 6px; }
+  .te-panel-tabs button { padding: 5px 10px; border: 1px solid #cfd6de; border-radius: 4px; background: #fff; color: var(--tx2); cursor: pointer; }
+  .te-panel-tabs button.active { border-color: #1e88e5; background: #1e88e5; color: #fff; }
+  .te-body { grid-template-columns: minmax(420px, 1fr) 300px; }
+  .te-side, .te-manager { grid-column: 2; grid-row: 1; }
+  .te-body[data-panel="layout"] .te-manager, .te-body[data-panel="manager"] .te-side { display: none; }
+  .te-terminal-grid { grid-template-columns: 1fr; }
+}
 
 /* 프리셋 관리 모달 */
 #presetModal { z-index: 110; }
-.preset-list { max-height: 46vh; overflow: auto; margin: 8px 0; }
-.preset-row { display: flex; align-items: center; gap: 8px; padding: 4px 2px; }
-.preset-row input[type=color] { width: 30px; height: 28px; padding: 0; border: 1px solid #ccc; border-radius: 4px; cursor: pointer; }
-.preset-row input[type=text] { flex: 1; padding: 4px 6px; border: 1px solid #ccc; border-radius: 3px; }
-.preset-row button { padding: 3px 9px; border: 1px solid #ccc; border-radius: 4px; background: #fff; cursor: pointer; color: #c62828; }
+.preset-manager-box { width: min(820px,92vw); }
+.preset-manager-columns { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; min-height: 0; margin-top: 10px; }
+.preset-manager-section { min-width: 0; display: flex; flex-direction: column; padding: 8px; border: 1px solid #d6dce3; border-radius: 5px; background: #fff; }
+.preset-manager-section.drop-active { border-color: #1e88e5; box-shadow: inset 0 0 0 1px #1e88e5; background: #f7faff; }
+.preset-manager-head { min-height: 30px; display: flex; align-items: center; justify-content: space-between; gap: 8px; border-bottom: 1px solid #e5e9ed; padding-bottom: 6px; }
+.preset-manager-head strong { font-size: 13px; }
+.preset-manager-head span { color: var(--tx3); font-size: 11px; }
+.preset-manager-head button { padding: 4px 6px; border: 1px solid #cfd6de; border-radius: 4px; color: var(--tx2); background: #fff; font: inherit; font-size: 11px; cursor: pointer; }
+.preset-manager-head button:hover { color: #1e88e5; border-color: #1e88e5; background: #e8f1fc; }
+.preset-list { min-height: 0; height: min(360px,46vh); overflow-y: auto; overflow-x: hidden; padding: 6px 0; }
+.preset-row, .part-preset-row { position: relative; display: flex; align-items: center; gap: 6px; min-height: 36px; padding: 3px 2px; border-bottom: 1px solid #f0f2f4; }
+.preset-row.selected, .part-preset-row.selected { border-radius: 4px; background: #eaf2fd; box-shadow: inset 0 0 0 1px #8bb8f0; }
+.preset-row.dragging, .part-preset-row.dragging { opacity: .45; background: #f2f6fb; }
+.preset-row.drop-before::after, .part-preset-row.drop-before::after,
+.preset-row.drop-after::after, .part-preset-row.drop-after::after {
+  content: ""; position: absolute; z-index: 2; left: 0; right: 0; height: 2px;
+  background: #1e88e5; pointer-events: none;
+}
+.preset-row.drop-before::after, .part-preset-row.drop-before::after { top: -1px; }
+.preset-row.drop-after::after, .part-preset-row.drop-after::after { bottom: -1px; }
+/* 공용 단자는 '가져다 쓰는 재료'라 행 전체가 버튼이다 — 누르면 부품 단자에 추가된다.
+   그래서 평소에는 안쪽 조작기(색상칸·이름칸)가 클릭을 가로채지 않게 통과시킨다.
+   그냥 두면 이름칸을 눌러 편집 상태가 되어 버려 "눌렀는데 안 들어간다"가 된다.
+   고칠 때는 더블클릭 → .editing 이 붙어 조작기가 살아난다(이름·색상 둘 다 수정). */
+.preset-row:not(.editing) { cursor: pointer; }
+.preset-row:not(.editing) .plabel,
+.preset-row:not(.editing) .color-trigger { pointer-events: none; }
+.preset-row:not(.editing) .plabel { border-color: transparent; background: transparent; cursor: pointer; }
+.preset-row:not(.editing):hover { background: var(--bg3); }
+.preset-row.editing { box-shadow: inset 0 0 0 1px var(--primary); background: #fff; }
+.preset-row.editing .plabel { border-color: var(--primary); background: #fff; }
+
+.preset-drag-handle { flex: none; width: 18px; color: #8b98a7; text-align: center; cursor: grab; user-select: none; }
+.preset-drag-handle:active { cursor: grabbing; }
+.preset-row input[type=color], .part-preset-row input[type=color] { width: 30px; height: 28px; padding: 0; border: 1px solid #ccc; border-radius: 4px; cursor: pointer; }
+.preset-row .color-trigger, .part-preset-row .color-trigger { width: 30px; height: 28px; }
+.preset-row input[type=text], .part-preset-row input[type=text] { min-width: 0; flex: 1; padding: 4px 6px; border: 1px solid #ccc; border-radius: 3px; }
+.preset-row .pdel, .part-preset-row .pdel { flex: none; width: 28px; height: 28px; padding: 0; border: 1px solid #ccc; border-radius: 4px; background: #fff; cursor: pointer; color: #c62828; font-size: 16px; line-height: 1; }
+/* 수정(연필) — 삭제(×) 왼쪽. 공용 단자는 행 전체가 '추가' 버튼이라
+   이름·색을 고치는 길을 따로 둬야 한다(더블클릭은 클릭 두 번이 먼저 먹혀 못 쓴다). */
+.preset-row .pedit { flex: none; width: 28px; height: 28px; padding: 0; border: 1px solid #ccc; border-radius: 4px; background: #fff; cursor: pointer; color: var(--tx2); font-size: 13px; line-height: 1; }
+.preset-row .pedit:hover { border-color: var(--primary); color: var(--primary-d); background: var(--primary-bg); }
+.preset-row.editing .pedit { border-color: var(--primary); color: var(--primary-d); background: var(--primary-bg); }
+.preset-row .pdel:hover, .part-preset-row .pdel:hover { border-color: #d66; background: #fff5f5; }
 .preset-add { display: flex; gap: 8px; align-items: center; border-top: 1px solid #eee; padding-top: 10px; }
-.preset-add input[type=color] { width: 34px; height: 30px; padding: 0; border: 1px solid #ccc; border-radius: 4px; }
-.preset-add input[type=text] { flex: 1; padding: 6px; border: 1px solid #ccc; border-radius: 4px; }
+.preset-add input[type=text] { min-width: 0; flex: 1; padding: 6px; border: 1px solid #ccc; border-radius: 4px; }
+.preset-add button.primary { flex: none; min-width: 58px; white-space: nowrap; }
+.preset-add .color-trigger { width: 34px; height: 30px; }
+/* 단자 세트 — 부품 단자 칼럼 맨 아래 한 줄.
+   왼쪽에서 이름을 지어 저장하고, 오른쪽에서 저장해 둔 것을 골라 바로 불러온다. */
+/* 칼럼이 좁아(약 250px) 한 줄에 넣으면 글자가 잘린다. 두 줄로 나눈다 —
+   윗줄 = 이름 짓고 저장, 아랫줄 = 저장한 것 고르기(고르면 바로 추가)·삭제 */
+/* 부품 단자 칼럼 맨 아래(＋ 추가 줄 밑).
+   위쪽·격자 위로도 옮겨 봤지만 화면이 어색해져 여기로 돌아왔다(2026-08-30).
+   한 줄에 다 넣어 보았으나 칼럼 폭에서 글자가 잘렸다. 창을 넓혀 억지로 한 줄로
+   만들지 않는다 — 그래서 두 줄: 윗줄 = 이름 짓고 저장, 아랫줄 = 골라 불러오기·삭제. */
+/* 표(테두리) 바깥, 격자 2행 2열. 왼쪽 칸은 비워 둔다 —
+   세트는 부품 단자에만 작용하므로 공용 단자 쪽으로 넓힐 이유가 없다. */
+.preset-sets { grid-column: 2; display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 4px; margin-top: var(--sp3); }
+.preset-sets input[type=text] { min-width: 0; padding: 5px 7px; border: 1px solid #ccc; border-radius: var(--r); font: inherit; font-size: var(--fs-sm); }
+.preset-sets select { min-width: 0; padding: 5px 4px; border: 1px solid #ccc; border-radius: var(--r); font: inherit; font-size: var(--fs-sm); }
+.preset-sets button { padding: 5px 9px; border: 1px solid var(--bd); border-radius: var(--r); background: var(--bg); color: var(--tx2); font: inherit; font-size: var(--fs-sm); cursor: pointer; white-space: nowrap; }
+.preset-sets button:hover:not(:disabled) { border-color: var(--primary); color: var(--primary-d); background: var(--primary-bg); }
+.preset-sets button:disabled { color: #bbb; cursor: default; }
+.preset-set-del { width: 26px; padding: 0 !important; color: var(--danger-d) !important; }
+.preset-set-del:hover:not(:disabled) { border-color: #e57373 !important; color: var(--danger-d) !important; background: #fff5f5 !important; }
+
+.preset-bulk-bar { min-height: 42px; display: flex; flex-direction: column; gap: 7px; margin-top: 10px; padding: 7px 8px; border-top: 1px solid #dfe4ea; border-bottom: 1px solid #dfe4ea; background: #f8fafc; }
+.preset-bulk-bar[hidden] { display: none; }
+.preset-bulk-bar strong { font-size: 12px; font-variant-numeric: tabular-nums; }
+.preset-bulk-controls { display: flex; align-items: center; gap: 8px; width: 100%; }
+.preset-bulk-spacer { flex: 1; }
+.preset-bulk-bar .color-trigger { width: 36px; height: 30px; }
+.preset-bulk-bar button { flex: none; min-height: 30px; white-space: nowrap; }
+@media (max-width: 720px) {
+  .preset-manager-columns { grid-template-columns: 1fr; }
+  .preset-list { height: min(240px,26vh); }
+}
+
+/* 이지케이블 전용 색상 선택 팝오버 (CapCut 스타일) — 공용 단자·부품 단자·신규 단자·
+   다중 선택 색상, 네 곳이 전부 이 팝오버 하나를 공유한다. js/colorpicker.js 가 그린다. */
+.color-trigger { flex: none; padding: 0; border: 1px solid #ccc; border-radius: 4px; cursor: pointer; background: var(--swatch-color, #1e88e5); }
+.color-trigger:hover { border-color: var(--primary); }
+.color-trigger:focus-visible { outline: 2px solid var(--primary); outline-offset: 1px; }
+
+.cc-popover {
+  position: fixed; z-index: 520; width: 220px; padding: 10px; box-sizing: border-box;
+  display: flex; flex-direction: column; gap: var(--sp3);
+  background: var(--bg); border: 1px solid var(--bd); border-radius: var(--r-lg);
+  box-shadow: 0 8px 28px rgba(0,0,0,.22); font-size: var(--fs-sm); color: var(--tx2);
+}
+.cc-popover[hidden] { display: none; }
+.cc-sv {
+  position: relative; width: 100%; height: 140px; border-radius: 6px; cursor: crosshair; touch-action: none;
+  background-image: linear-gradient(to top, #000, rgba(0,0,0,0)), linear-gradient(to right, #fff, rgba(255,255,255,0));
+}
+.cc-sv-thumb {
+  position: absolute; width: 14px; height: 14px; border-radius: 50%; pointer-events: none;
+  border: 2px solid #fff; box-shadow: 0 0 0 1px rgba(0,0,0,.4), 0 1px 3px rgba(0,0,0,.35);
+  transform: translate(-50%, -50%);
+}
+.cc-hue {
+  position: relative; width: 100%; height: 12px; border-radius: 6px; cursor: pointer; touch-action: none;
+  background: linear-gradient(to right, #f00, #ff0, #0f0, #0ff, #00f, #f0f, #f00);
+}
+.cc-hue-thumb {
+  position: absolute; top: 50%; width: 16px; height: 16px; border-radius: 50%; pointer-events: none;
+  background: #fff; border: 2px solid #fff; box-shadow: 0 0 0 1px rgba(0,0,0,.35), 0 1px 3px rgba(0,0,0,.3);
+  transform: translate(-50%, -50%);
+}
+.cc-value-row { display: flex; align-items: center; gap: var(--sp1); }
+.cc-preview { flex: none; width: 26px; height: 26px; border-radius: 4px; border: 1px solid #ccc; }
+.cc-field { flex: 1; display: flex; align-items: center; gap: 2px; min-width: 0; height: 26px; padding: 0 6px; border: 1px solid #ccc; border-radius: 4px; }
+/* display:flex 가 hidden 속성의 기본 display:none 을 덮어쓴다 — HEX/RGB 전환이 안 되던 원인 */
+.cc-field[hidden] { display: none; }
+.cc-field .cc-hash { color: var(--tx3); }
+.cc-field input { flex: 1; min-width: 0; border: none; padding: 0; font: inherit; color: var(--tx); background: transparent; text-transform: uppercase; }
+.cc-field input:focus { outline: none; }
+.cc-field-rgb { padding: 0 4px; }
+.cc-field-rgb input { text-align: center; text-transform: none; }
+.cc-field-rgb input + input { border-left: 1px solid #e3e8ee; }
+.cc-mode-toggle { flex: none; height: 26px; padding: 0 8px; border: 1px solid #ccc; border-radius: 4px; background: #fff; color: var(--tx2); font-size: 11px; cursor: pointer; }
+.cc-mode-toggle:hover { border-color: var(--primary); color: var(--primary); }
+.cc-section { display: flex; flex-direction: column; gap: var(--sp1); }
+.cc-section-label { color: var(--tx3); font-size: 11px; }
+.cc-swatches { display: grid; grid-template-columns: repeat(auto-fill, 22px); grid-auto-rows: 22px; gap: 4px; }
+.cc-recent { max-height: 74px; overflow: hidden; }
+.cc-swatch { width: 22px; height: 22px; padding: 0; border: 1px solid rgba(0,0,0,.25); border-radius: 4px; background: var(--swatch-color); cursor: pointer; }
+.cc-swatch:hover { border-color: var(--primary); box-shadow: 0 0 0 1px var(--primary); }
+.cc-swatch:focus-visible { outline: 2px solid var(--primary); outline-offset: 1px; }
+.cc-empty { color: var(--tx3); font-size: 11px; }
+.cc-empty[hidden] { display: none; }
 /* 단자 편집 모드일 때 캔버스 커서 */
 body.term-mode #canvas { cursor: crosshair; }
 
@@ -1062,17 +1601,6 @@ body.term-mode #canvas { cursor: crosshair; }
 #cmpMenu hr { border: none; border-top: 1px solid #eee; margin: 4px 0; }
 
 /* 배경 제거 모달 */
-.modal {
-  position: fixed; inset: 0; background: rgba(0,0,0,.45);
-  display: flex; align-items: center; justify-content: center; z-index: 100;
-}
-.modal[hidden] { display: none; }
-.modal-box {
-  background: #fff; border-radius: 8px; padding: 16px 18px;
-  width: min(560px, 92vw); max-height: 92vh; overflow: auto;
-  box-shadow: 0 10px 40px rgba(0,0,0,.3);
-}
-.modal-box h3 { margin: 0 0 6px; }
 /* 알림 본문은 
  으로 문단을 나눈다 — 그대로 보이게 둔다 */
 #noticeText { white-space: pre-line; }
@@ -1130,6 +1658,155 @@ body.term-mode #canvas { cursor: crosshair; }
 .modal-actions button.primary { background: #1e88e5; color: #fff; border-color: #1565c0; }
 .modal-actions button.primary:hover { background: #1976d2; }
 
+/* 공용 부품 검색 — 대형 카탈로그에서도 결과와 상세를 한 화면에서 비교하는 작업도구형 모달 */
+.public-library-box {
+  width: min(1180px, 94vw); height: min(760px, 90vh); max-height: 90vh; padding: 0;
+  display: flex; flex-direction: column; overflow: hidden;
+}
+.public-library-head {
+  flex: none; min-height: 56px; display: flex; align-items: center; justify-content: space-between;
+  gap: var(--sp3); padding: 12px 16px; border-bottom: 1px solid var(--bd2);
+}
+.public-library-head > div { min-width: 0; display: flex; align-items: center; gap: var(--sp3); }
+.public-library-head h3 { margin: 0; font-size: 18px; }
+.public-library-badge {
+  padding: 2px 7px; border-radius: 4px; color: var(--tx2); background: var(--bg3);
+  font-size: var(--fs-sm); white-space: nowrap;
+}
+.public-library-close {
+  flex: none; width: 32px; height: 32px; padding: 0; border: 0; border-radius: var(--r);
+  color: var(--tx2); background: transparent; font: inherit; font-size: 22px; line-height: 1; cursor: pointer;
+}
+.public-library-close:hover { color: var(--tx); background: var(--bg3); }
+.public-library-search {
+  flex: none; display: flex; gap: var(--sp3); padding: 12px 16px; border-bottom: 1px solid var(--bd2); background: var(--bg2);
+}
+.public-library-search input {
+  min-width: 0; flex: 1; padding: 8px 10px; border: 1px solid var(--bd); border-radius: var(--r);
+  color: var(--tx); background: var(--bg); font: inherit; font-size: var(--fs);
+}
+.public-library-search input:focus { outline: 2px solid rgba(30,136,229,.22); border-color: var(--primary); }
+/* ⚠ grid-template-rows 를 반드시 준다. (2026-09-02)
+   행이 auto 면 **내용만큼 늘어나서** 자식이 안 잘리고, 그러면 아래 결과 목록의
+   overflow-y:auto 가 스크롤할 것이 없어 아무 일도 안 한다.
+   상자는 overflow:hidden 이라 넘친 부품이 **보이지도 만져지지도 않았다** —
+   실측: 상자 760px 인데 안쪽 2725px, 끝까지 내려도 0px. (고원빈 보고)
+   minmax(0,1fr) 이라야 그리드 항목이 줄어들 수 있다. 1fr 만으로는 최소 크기가 auto 라 안 된다. */
+.public-library-body {
+  min-height: 0; flex: 1; display: grid;
+  grid-template-columns: 160px minmax(330px, 430px) minmax(320px, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+}
+.public-library-categories { min-width: 0; padding: 12px 8px; border-right: 1px solid var(--bd2); background: var(--bg2); overflow-y: auto; }
+.public-library-category {
+  width: 100%; display: flex; align-items: center; justify-content: space-between; gap: var(--sp1);
+  margin-bottom: var(--sp1); padding: 7px 8px; border: 1px solid transparent; border-radius: var(--r);
+  color: var(--tx); background: transparent; font: inherit; font-size: var(--fs); text-align: left; cursor: pointer;
+}
+.public-library-category:hover { background: var(--bg3); }
+.public-library-category.active { color: var(--primary-d); border-color: #9dbce5; background: var(--primary-bg); font-weight: 600; }
+/* 소분류 — 대분류 아래로 한 칸 들여쓴다. 트리를 선으로 그리지 않고 들여쓰기만으로 표현한다
+   (분류 칸이 160px 이라 선까지 넣으면 이름이 잘린다) */
+.public-library-category.sub { padding-left: 26px; color: var(--tx2); }   /* 소분류는 한 단계만 연하게 */
+
+/* 펼침 화살표 — 글자(▸)를 쓰지 않는다. OS 마다 모양이 달라지고 이모지로 읽히기도 한다.
+   테두리 두 변만 남긴 정사각형을 돌려서 그린다. (2026-09-02) */
+.public-library-caret {
+  flex: none; width: 6px; height: 6px; margin-right: 2px;
+  border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor;
+  transform: rotate(-45deg); transition: transform .12s ease;
+  opacity: .55;
+}
+.public-library-caret.open { transform: rotate(45deg); }
+/* 이름이 왼쪽에 붙고 개수는 오른쪽 끝에 남도록 — 화살표가 생겨도 줄이 안 흔들린다.
+   ⚠ 위치(span:first-of-type)로 잡지 않는다. 화살표가 첫 span 이라 그걸 잡아 버려
+      6px 짜리 화살표가 **71px 로 늘어나 큰 대각선**이 됐다(2026-09-02 고원빈 발견).
+      무엇인지로 잡는다. */
+.public-library-category-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.public-library-category.sub.active { color: var(--primary-d); }
+.public-library-category span:last-child { color: var(--tx2); font-size: var(--fs-sm); font-variant-numeric: tabular-nums; }
+.public-library-results { min-width: 0; display: flex; flex-direction: column; border-right: 1px solid var(--bd2); }
+.public-library-results-head {
+  flex: none; min-height: 42px; display: flex; align-items: center; justify-content: space-between;
+  gap: var(--sp3); padding: 8px 12px; border-bottom: 1px solid var(--bd2);
+}
+.public-library-results-head strong { font-size: var(--fs); }
+.public-library-results-head span { color: var(--tx3); font-size: var(--fs-sm); }
+.public-library-result-list { min-height: 0; flex: 1; padding: 4px; overflow-y: auto; }
+.public-library-result {
+  width: 100%; min-width: 0; display: grid; grid-template-columns: 58px minmax(0,1fr) auto;
+  align-items: center; gap: var(--sp3); padding: 7px 8px; border: 1px solid transparent;
+  border-radius: var(--r); color: var(--tx); background: var(--bg); font: inherit; text-align: left; cursor: pointer;
+}
+.public-library-result + .public-library-result { margin-top: 2px; }
+.public-library-result:hover { border-color: #c4d7ef; background: #f7faff; }
+.public-library-result.active { border-color: var(--primary); background: var(--primary-bg); }
+.public-library-result img { width: 58px; height: 46px; display: block; object-fit: contain; border-radius: 4px; background: #f0f1f3; }
+.public-library-result-info { min-width: 0; }
+/* ⚠ display:block 이 있어야 한다. 둘 다 <span> 이라 기본이 inline 인데,
+   그러면 이름과 설명이 한 줄에 붙어 나오고 아래 margin-top 도 무시된다.
+   카탈로그가 비어 있어 오래 안 보였다 — 부품이 실제로 목록에 뜨자 드러났다. */
+.public-library-result-name { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--fs); font-weight: 600; }
+/* ⚠ --tx3(#999)은 흰 바탕에 2.8:1 이라 읽기 기준(4.5:1)에 한참 못 미친다.
+   목록에서 규격·단자 수를 확인하는 자리라 흐리면 곤란하다 — --tx2(#555, 7.4:1)로 올렸다.
+   (2026-09-02 고원빈: "글자가 회색으로 되어 있어서 잘 안 보인다") */
+.public-library-result-meta { display: block; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--tx2); font-size: var(--fs-sm); }
+.public-library-added { color: #27834a; font-size: var(--fs-sm); white-space: nowrap; }
+.public-library-detail { min-width: 0; padding: 16px; overflow-y: auto; }
+.public-library-detail-empty, .public-library-empty {
+  height: 100%; display: flex; align-items: center; justify-content: center; padding: 24px;
+  color: var(--tx3); font-size: var(--fs); text-align: center;
+}
+.public-library-detail-image { width: 100%; height: 210px; display: block; object-fit: contain; background: #f4f5f7; border-radius: var(--r); }
+.public-library-detail h4 { margin: 12px 0 2px; font-size: 16px; }
+.public-library-detail-spec { margin: 0; color: var(--tx2); font-size: var(--fs); }
+.public-library-detail-grid { display: grid; grid-template-columns: 92px minmax(0,1fr); gap: 7px 12px; margin: 16px 0; font-size: var(--fs); }
+.public-library-detail-grid dt { color: var(--tx3); }
+.public-library-detail-grid dd { min-width: 0; margin: 0; overflow-wrap: anywhere; }
+.public-library-terminal-list { display: flex; flex-wrap: wrap; gap: var(--sp1); margin-top: var(--sp1); }
+.public-library-terminal {
+  display: inline-flex; align-items: center; gap: var(--sp1); padding: 3px 6px; border: 1px solid var(--bd2);
+  border-radius: 4px; color: var(--tx2); background: var(--bg2); font-size: var(--fs-sm);
+}
+.public-library-terminal i { width: 9px; height: 9px; border-radius: 2px; border: 1px solid rgba(0,0,0,.15); }
+.public-library-link { color: var(--primary-d); text-decoration: none; }
+.public-library-link:hover { text-decoration: underline; }
+.public-library-footer {
+  flex: none; min-height: 56px; display: flex; align-items: center; justify-content: flex-end;
+  gap: var(--sp3); padding: 10px 16px; border-top: 1px solid var(--bd2); background: var(--bg2);
+}
+.public-library-footer .muted { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.public-library-footer button:disabled { color: #aaa; border-color: #ddd; background: #f1f2f3; cursor: default; }
+.public-library-more { width: calc(100% - 8px); margin: 8px 4px; }
+
+.public-publish-box { width: min(680px, 94vw); max-height: 90vh; }
+.public-publish-body { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 18px; padding: 18px; overflow-y: auto; }
+.public-publish-preview { width: 220px; height: 180px; display: block; object-fit: contain; background: var(--bg2); border: 1px solid var(--bd2); border-radius: var(--r); }
+.public-publish-fields { min-width: 0; display: grid; gap: 12px; align-content: start; }
+.public-publish-fields label { display: grid; gap: 5px; color: var(--tx2); font-size: var(--fs-sm); }
+.public-publish-fields input, .public-publish-fields select { width: 100%; height: 38px; padding: 0 10px; color: var(--tx); background: var(--bg); border: 1px solid var(--bd); border-radius: var(--r); font: inherit; }
+#publicPublishStatus.error { color: var(--danger); }
+
+@media (max-width: 900px) {
+  .public-library-box { width: 96vw; height: 94vh; max-height: 94vh; }
+  .public-library-body { grid-template-columns: minmax(280px, .9fr) minmax(300px, 1.1fr); grid-template-rows: auto minmax(0,1fr); }
+  .public-library-categories {
+    grid-column: 1 / -1; display: flex; gap: var(--sp1); padding: 8px; border-right: 0; border-bottom: 1px solid var(--bd2); overflow-x: auto;
+  }
+  .public-library-category { width: auto; flex: none; margin: 0; white-space: nowrap; }
+}
+@media (max-width: 680px) {
+  .public-library-body { grid-template-columns: minmax(0,1fr); grid-template-rows: auto 220px auto; overflow-y: auto; }
+  .public-library-categories { grid-column: 1; overflow-y: hidden; }
+  .public-library-results { min-height: 220px; border-right: 0; border-bottom: 1px solid var(--bd2); }
+  .public-library-detail { overflow: visible; }
+  .public-library-detail-image { height: 180px; }
+  .public-library-footer .muted { display: none; }
+  .public-library-footer button { min-width: 0; padding-inline: 8px; }
+  .public-publish-body { grid-template-columns: minmax(0, 1fr); }
+  .public-publish-preview { width: 100%; height: 160px; }
+}
+
 /* 출시 알림(이메일 수집) 모달 — 뉴스레터 표준 패턴: 입력창+버튼 한 줄, 아래엔 텍스트형 닫기 */
 .notify-row { display: flex; gap: 8px; }
 .notify-row input {
@@ -1174,6 +1851,24 @@ body.term-mode #canvas { cursor: crosshair; }
 .sc-input:focus { outline: 2px solid #1e88e5; background: #fff; }
 #libEditModal .set-row label { flex-direction: column; align-items: stretch; gap: 3px; color: #555; font-size: 12px; }
 #libEditModal .set-row input, #libEditModal .set-row select { padding: 6px; border: 1px solid #ccc; border-radius: 4px; font-size: 13px; }
+
+/* 구매 링크 — 국내/해외 두 줄. 체크(라디오)한 쪽 하나만 BOM에 나간다.
+   위 규칙이 #libEditModal .set-row label 을 세로(column)로 눕히므로,
+   여기서는 가로로 되돌린다. 안 그러면 라디오·태그·입력칸이 세 줄로 쌓인다. */
+.buy-link-title { display: block; margin-bottom: var(--sp1); color: var(--tx2); font-size: var(--fs-sm); }
+.buy-link-title em { color: var(--tx3); font-size: 11px; font-style: normal; }
+#libEditModal .set-row .buy-link-item {
+  flex-direction: row; align-items: center; gap: var(--sp3); margin-top: var(--sp1); cursor: pointer;
+}
+#libEditModal .set-row .buy-link-item input[type=radio] { flex: none; width: 15px; height: 15px; margin: 0; padding: 0; cursor: pointer; }
+#libEditModal .set-row .buy-link-item input[type=text] { flex: 1; min-width: 0; }
+/* 단가는 링크 옆에 붙는다. 링크가 훨씬 길어서 단가 칸은 고정폭으로 둔다 */
+#libEditModal .set-row .buy-link-item input.buy-link-price { flex: none; width: 110px; min-width: 0; }
+.buy-link-tag {
+  flex: none; width: 30px; color: var(--tx2); font-size: var(--fs-sm); text-align: center;
+}
+/* 체크된 줄을 눈에 띄게 — 어느 쪽이 BOM 에 나가는지가 이 화면의 요점이다 */
+.buy-link-item:has(input[type=radio]:checked) .buy-link-tag { color: var(--primary); font-weight: 600; }
 .elec-grid { display: flex; gap: 8px; margin: 6px 0; }
 .elec-grid > label { flex: 1; display: flex; flex-direction: column; gap: 3px; font-size: 12px; color: #555; }
 .elec-grid input { padding: 6px; border: 1px solid #ccc; border-radius: 4px; font-size: 13px; width: 100%; }
@@ -1191,7 +1886,24 @@ body.term-mode #canvas { cursor: crosshair; }
 
 /* ===== 인쇄(PDF) ===== */
 @media print {
-  @page { size: landscape; margin: 8mm; }
+  /* 여백만 여기서 정한다.
+     ⚠ **용지 방향(size)은 여기 두면 안 된다.** 크롬은 @page 안에서 var() 를 풀지 않는다 —
+        size: var(--page-orient) 라고 쓰면 규칙에 글자로는 남는데 적용이 안 돼서
+        세로 도면이 가로로 인쇄된다(2026-09-08 확인). 방향은 js/app.js 의
+        applyCanvasSize() 가 <style id="pageOrient"> 에 글자 그대로 넣는다. */
+  @page { margin: 8mm; }
+/* 장마다 용지 방향이 다를 수 있다 (2026-09-10 고원빈).
+   "1페이지를 가로형 2페이지를 세로형으로 했다고 하면 1페이지는 가로 A4 에 맞게,
+    2페이지는 세로 페이지에 맞게" — @page 는 문서에 하나뿐이라 이름을 붙여 갈라 준다.
+   규칙 본문은 js/app.js 의 setPageOrient 가 넣는다(순서를 확실히 하려고 한곳에 모았다). */
+#printSheets .pr-sheet.pr-wide { page: pr-wide; }
+#printSheets .pr-sheet.pr-tall { page: pr-tall; }
+/* ⚠ 몸통에도 **첫 장과 같은 이름**을 준다. 안 그러면 문서 처음(이름 없는 쪽)에서 첫 장으로
+   넘어가는 순간 이름이 바뀌어 **빈 쪽이 한 장** 생긴다.
+   실측(tests/probe_break.mjs): 가로+세로 → 가로,가로,세로,가로 → 몸통에 이름을 주니 가로,세로.
+   .pr-break 를 꺼 봐도 안 없어졌다 — 쪽 넘김이 아니라 '이름이 바뀌는 자리'가 원인이다. */
+body.pr-multi, body.pr-multi main { page: pr-wide; }
+body.pr-multi.pr-first-tall, body.pr-multi.pr-first-tall main { page: pr-tall; }
   /* 워터마크는 도면 칸이 아니라 '종이 전체'에 찍는다.
      position:fixed 라 크롬이 인쇄할 때 모든 장에 반복해 그린다(도면 장 · BOM 장 전부).
      ※ 뒤에 깔면(z-index:-1) 안 된다 — 캔버스와 body의 흰 배경에 가려 아예 안 보인다.
@@ -1207,6 +1919,19 @@ body.term-mode #canvas { cursor: crosshair; }
     color: #8b97a4; opacity: .13;
     -webkit-print-color-adjust: exact; print-color-adjust: exact;   /* 옅은 회색이 인쇄에서 날아가지 않게 */
   }
+  /* 대각선 워터마크는 옅게 반복돼 눈에 잘 안 띌 수 있다 — 도면 칸 우하단에
+     뚜렷한 표식 하나를 더 둔다.
+
+     ⚠ 처음엔 종이 우하단(position:fixed, 종이 전체 기준)으로 만들었다. 그런데 도면·범례가
+        여백까지 거의 채우는 지면이라, 각인이 배선 범례 칸과 겹쳐 버렸다(2026-09-03).
+        도면 칸(SVG) 안의 좌표로 옮겨(#canvasMarkPrint, index.html) 종이 크기와 무관하게
+        늘 '도면 프레임의 우하단 구석'에 오도록 고쳤다. 색·크기는 여기 두지 않고
+        index.html 의 <text> 자체 style 속성으로 준다 — SVG 는 인쇄용으로 통째로
+        복제되는 게 아니라 화면과 같은 SVG 를 그대로 쓰므로, 여기서는 표시 여부만 켠다. */
+  #canvasMarkPrint { display: block !important; }
+  /* Pro 는 결과물에 서명을 남기지 않는다 (2026-09-06).
+     body.no-wm 은 js/render.js 의 refreshWatermark() 가 Pro 일 때 달아 준다. */
+  body.no-wm #canvasMarkPrint { display: none !important; }
   /* 화면 전용 UI는 종이에 나오지 않게. (복원 안내 띠가 빠져 있어 PDF 1페이지 머리에 찍혔다) */
   #toolbar, #leftPanel, #rightPanel, .modal, #cmpMenu, #viewTabs, #bomView, #wireListView,
   .canvas-corner-tools, #canvasHeader, #canvasFooter, #restoreBanner { display: none !important; }
@@ -1219,7 +1944,10 @@ body.term-mode #canvas { cursor: crosshair; }
     overflow: visible; width: 100%; height: auto; padding: 0 !important;
     box-shadow: none !important; background: #fff;
   }
-  #canvas { width: 100% !important; height: auto !important; margin: 0 !important; border: 1px solid #333 !important; box-shadow: none !important; background: #fff; box-sizing: border-box; }
+  /* 도면 칸 크기는 js/app.js 의 applyCanvasSize() 가 --print-w/--print-h 로 준다.
+     시트 비율마다 다르므로 CSS 가 혼자 정할 수 없다. 값이 없으면 예전처럼 폭 100%.
+     좁아질 때는 가운데로 — 테두리가 도면에 딱 붙어야 letterbox 로 안 보인다. */
+  #canvas { width: var(--print-w, 100%) !important; height: var(--print-h, auto) !important; margin: 0 auto !important; border: 1px solid #333 !important; box-shadow: none !important; background: #fff; box-sizing: border-box; }
   #gridBg, #layerOverlay { display: none !important; }  /* 그리드·선택표시 숨김 */
 
   .print-only { display: block; }
@@ -1250,10 +1978,11 @@ body.term-mode #canvas { cursor: crosshair; }
     font-size: 10.5px; font-weight: 500; color: #444; white-space: nowrap; letter-spacing: 0;
   }
 
-  /* 도면 높이 상한 — 아래 범례 자리를 먼저 확보한다.
-     이게 없으면 도면이 지면을 다 먹어 범례가 2페이지로 밀린다.
-     (A4 가로 기준 가용 194mm = 머리글 12 + 도면 161 + 범례 18 + 여백) */
-  #canvas { max-height: 161mm; }
+  /* ⚠ 예전에는 여기에 #canvas { max-height: 161mm } 이 있었다.
+     A4 **가로** 기준으로 박아 둔 값이라, 세로 용지를 쓰면 도면이 161mm 에서 멈춰
+     아래가 통째로 비고 폭도 못 채웠다(2026-09-08 고원빈 신고).
+     이제 applyCanvasSize() 가 방향별 가용 칸에 시트 비율을 맞춰 계산한다.
+     예산은 그대로다 — 가로 가용 194 중 도면 161, 즉 머리글·범례 몫 33mm. */
 
   /* ---- 하단 밴드: 비고(좌) + 배선 범례(우) ----
      위아래로 쌓으면 두 칸의 높이가 '더해지지만' 좌우로 두면 '공유'된다.
@@ -1274,12 +2003,9 @@ body.term-mode #canvas { cursor: crosshair; }
   #printNote { flex: 1 1 auto; min-width: 100mm; border-right: 1px solid #999; }
   /* 범례는 내용만큼만. 색이 늘면 아래가 아니라 왼쪽으로 열이 늘어난다(아래 column wrap) */
   #printLegend { flex: 0 0 auto; }
-  /* 비고가 비면 예전처럼 범례만 전폭 가로 한 줄 — 기존 도면 출력이 그대로 유지된다 */
-  #printFooter.pf-nonote #printNote { display: none; }
-  #printFooter.pf-nonote #printLegend { flex: 1 1 auto; }
-  #printFooter.pf-nonote #printLegendItems {
-    display: flex; flex-flow: row wrap; height: auto; gap: 1px 14px;
-  }
+  /* ⚠ 예전에는 '비고가 비면 칸을 없애고 범례를 전폭으로' 펴는 규칙(.pf-nonote)이 있었다.
+     그러면 비고를 적은 장과 안 적은 장의 밑단 모양이 달라진다 — 같은 도면인데 장마다
+     양식이 바뀌어 보여서 걷어냈다. 비어도 칸은 그대로 둔다. (2026-09-03) */
 
   /* 표제 칸 — BOM 표 머리행과 같은 모양(회색 바탕·가운데 정렬)으로 통일.
      본문이 여러 줄이어도 표제는 칸 한가운데에 놓인다.
@@ -1327,6 +2053,26 @@ body.term-mode #canvas { cursor: crosshair; }
   /* 배선 리스트 2단 — 표가 좁아 한 단이면 지면 절반이 비고 장수만 늘어난다 */
   .wl-cols { display: flex; align-items: flex-start; gap: 8mm; }
   .wl-cols > table { flex: none; }
+  /* 결선표 — 부품 그림을 왼쪽에 한 번만. 종이에서 그림으로 부품을 먼저 알아보고 단자를 찾는다. */
+  .wl-table .wl-part { width: 26mm; }
+  .wl-table .wl-thumb {
+    display: block; width: 20mm; height: 13mm; margin: 0 auto 1mm;
+    object-fit: contain;
+    /* 사진이 옅어도 종이에서 형태가 남게 — '배경 그래픽' 을 꺼도 이미지 자체는 나온다 */
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
+  }
+  .wl-table .wl-part-name { font-size: 9px; font-weight: 700; line-height: 1.3; }
+  .wl-table .wl-origin { white-space: nowrap; }
+  .wl-table .wl-cnt { color: #555; font-size: 8.5px; font-weight: 400; }
+  .wl-table .wl-member { text-align: left; }
+  .wl-table .wl-mterm { white-space: nowrap; }
+  /* 종이에서도 칸을 필요 이상 벌리지 않는다 — 한 줄을 한눈에 읽어야 한다 */
+  .wl-table .wl-member { max-width: 42mm; }
+  .wl-table .wl-mterm { width: 18mm; }
+  .wl-table .wl-count { width: 10mm; }
+  .wl-table .wl-chk { width: 7mm; font-size: 11px; }
+  /* 넷이 바뀌는 자리에 윗선을 진하게 — 덩어리 경계가 종이에서 보여야 한다 */
+  .wl-table tr.wl-first td { border-top: 0.6px solid #666; }
   /* 섹션 머리글 — 1페이지 도면 제목줄과 같은 모양으로 통일 */
   .bom-title {
     display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
@@ -1377,11 +2123,25 @@ body.term-mode #canvas { cursor: crosshair; }
 
 /* 도면 머리줄 — 캔버스 '위'에 따로 둔다.
    예전엔 캔버스 안에 절대배치했더니 확대·스크롤을 따라 움직여 자리가 흔들렸다. */
+/* ── 작성일 — 캔버스 위에 떠 있고 끌어서 옮긴다 (2026-09-09) ──────────
+   예전에는 캔버스 위에 줄 하나(#canvasHeader)를 차지해서 도면 볼 자리를 그만큼 먹었다.
+   ⚠ 자리는 js/app.js 가 localStorage 에 기억한다. 창을 줄여도 화면 밖으로 안 나가게
+      열 때 한 번 가둔다. */
 #canvasHeader {
-  flex: none; display: flex; align-items: center; justify-content: flex-end; gap: var(--sp2);
-  padding: 5px 28px; background: #dfe3e9; border-bottom: 1px solid #d3d9e0;
+  position: absolute; right: 28px; top: 14px; z-index: 40;
+  display: flex; align-items: center; gap: 2px;
+  padding: 3px 4px 3px 2px;
+  background: rgba(255,255,255,.92); backdrop-filter: blur(2px);
+  border: 1px solid var(--bd); border-radius: var(--r);
+  box-shadow: 0 2px 8px rgba(0,0,0,.10);
 }
-#canvasHeader label { margin: 0; font-size: var(--fs-sm); color: var(--tx2); }
+#canvasHeader.dragging { box-shadow: 0 6px 18px rgba(0,0,0,.22); cursor: grabbing; }
+.fd-grip {
+  display: flex; align-items: center; padding: 0 2px;
+  color: var(--tx3); cursor: grab; touch-action: none;
+}
+.fd-grip:hover { color: var(--tx2); }
+#canvasHeader.dragging .fd-grip { cursor: grabbing; }
 #canvasHeader input {
   width: 108px; padding: 3px 7px; text-align: center;
   font-size: var(--fs-sm); font-variant-numeric: tabular-nums; letter-spacing: .3px;
@@ -1486,28 +2246,100 @@ body.note-open #noteToggle { transform: rotate(180deg); }
 }
 #toolbar button.tb-account.is-pro:hover { background: #24693f; }
 
+
+/* ── 계정 아바타 + 계정 메뉴 ──────────────────────────────────────────
+   로그인 전에는 「로그인」 글자 버튼 그대로 둔다.
+   아바타로 바꾸면 무엇을 눌러야 로그인인지 알 수 없다.
+   로그인하면 이니셜을 담은 동그란 아바타가 되고, 누르면 메뉴가 열린다. */
+
+#toolbar button.tb-account.is-face {
+  width: 30px; height: 30px; padding: 0;
+  border-radius: 50%;
+  background: var(--primary); border-color: var(--primary-d); color: #fff;
+  font-size: 12px; font-weight: 700; letter-spacing: -.02em;
+  display: flex; align-items: center; justify-content: center;
+  max-width: none;              /* 글자 버튼일 때 쓰던 140px 제한을 푼다 */
+  overflow: visible;            /* 같은 이유 — 원이 잘리지 않게 */
+}
+#toolbar button.tb-account.is-face:hover { background: var(--primary-d); color: #fff; }
+
+/* Pro — 아바타는 작아서 채움색을 바꾸면 이니셜 대비가 무너진다. 링으로 표시한다.
+   (예전에는 버튼 전체가 초록 '✦ Pro' 로 바뀌어 정작 누구인지가 사라졌다) */
+#toolbar button.tb-account.is-face.is-pro {
+  background: var(--primary); border-color: #e0a91b;
+  box-shadow: 0 0 0 2px #e0a91b;
+}
+
+
+#toolbar .acct-menu .acct-item {     /* 툴바의 어두운 버튼 스타일을 덮어쓴다 */
+  display: flex; align-items: center; gap: 10px;
+  background: none; border: none; color: var(--tx);
+  padding: 9px 12px; border-radius: var(--r); font-size: var(--fs);
+  text-align: left; cursor: pointer; white-space: nowrap; max-width: none;
+}
+#toolbar .acct-menu .acct-item:hover { background: var(--primary-bg); color: var(--primary-d); }
+
 /* ── 미리보기 띠 ──────────────────────────────────────────────────────
    preview 주소에서만 보인다(flags.js 가 hidden 을 푼다).
    본판으로 착각하면 "본 서비스에도 이 기능이 있다"고 오판하게 되므로
    무시하기 어려운 색과 위치를 쓴다 — 여기서만 예외적으로 강한 색을 허용한다. */
-#previewBanner {
-  background: #a8710e; color: #fff;
-  font-size: 13px; font-weight: 600; letter-spacing: -.01em;
-  padding: 6px 12px; text-align: center;
-  border-bottom: 1px solid #7d5409;
-}
-@media print { #previewBanner { display: none !important; } }   /* 인쇄물에는 나가지 않게 */
 
-/* ── 시험용 도구 버튼 (미리보기 전용) ─────────────────────────────────
-   본 서비스에는 나오지 않는다. 실제 기능 버튼과 헷갈리지 않게
-   점선 테두리로 '임시 도구'임을 드러낸다. */
-#toolbar button.tb-devtool {
-  background: transparent; color: #d9a441;
-  border: 1px dashed #a8710e; font-size: 12px; padding: 4px 8px;
+/* (미리보기 전용 시험 버튼 .tb-devtool 의 스타일이 있던 자리 —
+    버튼이 이미 화면에서 빠져 어느 파일도 이 클래스를 쓰지 않아 2026-09-01 정리했다.
+    미리보기 띠를 없애면서 같이 확인했다.) */
+
+
+/* ── 회원 탈퇴 ────────────────────────────────────────────────────
+   되돌릴 수 없는 동작이라 두 가지를 지킨다.
+     ① 설정 맨 아래에 조용히 둔다 — 잘못 누를 자리가 아니다
+     ② 무엇이 지워지고 무엇이 남는지를 먼저 보여준다
+        "도면도 사라지나?" 가 가장 먼저 드는 걱정인데 실제로는 안 사라진다 */
+
+/* 설정 안의 계정 구획 */
+.set-account { margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--bd2); }
+.set-account h4 { margin: 0 0 4px; font-size: var(--fs); color: var(--tx); }
+.set-account .muted { margin: 0 0 10px; }
+.set-danger {
+  border: 1px solid var(--bd); background: var(--bg); color: var(--danger-d);
+  border-radius: var(--r); padding: 6px 12px; font-size: var(--fs-sm); cursor: pointer;
 }
-#toolbar button.tb-devtool:hover { background: #3d434d; }
-#toolbar button.tb-devtool.on { color: #5fbe87; border-color: #2a7a4c; }
-@media print { #toolbar button.tb-devtool { display: none !important; } }
+.set-danger:hover { background: #fdecea; border-color: #e0a0a0; }
+
+/* 무엇이 지워지고 무엇이 남는가 */
+.del-what {
+  margin: 0 0 18px; padding: 16px 18px;
+  background: #f8f9fb; border-radius: 10px;
+  font-size: 13.5px; line-height: 1.6; color: #4b5563;
+}
+.del-what b { display: block; font-size: 13px; margin: 0 0 6px; }
+.del-what b.is-gone { color: #b3261e; }
+.del-what b.is-kept { color: #2e7d32; margin-top: 14px; }
+.del-what ul { margin: 0; padding-left: 18px; }
+.del-what li { padding: 2px 0; }
+
+/* 체크해야 버튼이 눌린다 — 실수로 지나칠 수 없게 */
+.del-agree {
+  display: flex; align-items: center; gap: 10px;
+  margin: 0 0 14px; padding: 12px 14px;
+  border: 1px solid #dfe3e8; border-radius: 10px;
+  font-size: 13.5px; color: #202124; cursor: pointer;
+}
+.del-agree input[type=checkbox] { flex: none; width: 17px; height: 17px; margin: 0; cursor: pointer; }
+
+/* 되돌릴 수 없는 동작이라 주 버튼 색을 빨강으로 바꾼다 */
+.auth-box .login-submit.is-danger { background: #c62828; }
+.auth-box .login-submit.is-danger:hover { background: #ad2222; }
+.auth-box .login-submit.is-danger:disabled { background: #dfe3e8; color: #9aa0a8; }
+#deleteAccountModal .del-cancel { display: block; margin: 14px auto 0; color: #6b7280; font-size: 13px; }
+#deleteAccountModal .del-cancel:hover { color: #202124; }
+
+.verified-mark {
+  width: 56px; height: 56px; margin: 0 auto 18px;
+  border-radius: 50%; background: #e8f5e9; color: #2e7d32;
+  font-size: 30px; line-height: 56px; font-weight: 700;
+}
+/* 인증완료 제목의 크기·색은 .auth-box h3 · 아래 여백은 #loginPaneSent 규칙과 공유 */
+
 
 /* 선 종류 고르는 칸 — 스타일 섹션. 색상·두께 아래 한 줄을 통째로 쓴다.
    선택지 글자에 모양(──── / ─ ─ ─)을 같이 넣어서, 이름만 보고 고르지 않아도 되게 했다. */
@@ -1614,3 +2446,71 @@ input[type="number"] {
   -moz-appearance: textfield;   /* 파이어폭스 */
   appearance: textfield;
 }
+
+/* 게시창의 분류 — 대분류·소분류 두 칸을 한 줄에 나란히 */
+.publish-category { display: flex; gap: var(--sp3); }
+.publish-category select { flex: 1; min-width: 0; }
+
+/* 관리자 화면 — 분류별 개수가 정확하지 않을 때의 알림 */
+.adm-count-warn { margin-top: var(--sp3); color: var(--danger-d); font-size: 11px; line-height: 1.5; }
+
+/* ── 제휴 고지 ────────────────────────────────────────────────
+   알리익스프레스 제휴 링크로 수수료를 받는다는 표시. 공정위 「추천·보증 등에 관한
+   표시·광고 심사지침」이 요구하는 것은 **쉽게 인식할 수 있는 글자 크기와 색상**이다.
+   그래서 반투명(opacity)이나 #999 같은 옅은 회색을 쓰지 않는다 — 그러면 표시를
+   해놓고도 위반이 되어, 화면만 지저분해지고 보호는 못 받는다.
+   본문보다 한 단계만 연한 --tx2 까지가 한계선이다. */
+.affiliate-note { margin: 10px 2px 0; color: var(--tx2); font-size: 12px; line-height: 1.6; }
+/* BOM 카드 안에서는 표 바로 밑이 아니라 **맨 아래**에 놓는다(고원빈 요청 2026-09-02).
+   세로 방향 flex 로 두고 margin-top:auto 를 주면 남는 공간이 전부 고지 위로 간다.
+   화면채우기() 가 min-height 로 그 공간을 만든다 — 둘이 한 쌍이라 같이 봐야 한다. */
+/* ⚠ :not([hidden]) 를 빼면 안 된다. [hidden] 의 display:none 은 브라우저 기본 스타일이라
+   특정도가 0 이고, #bomView 는 id 선택자라 그걸 이겨 **숨겨야 할 BOM 카드가 계속 그려진다.**
+   BOM 탭을 누르지도 않았는데 스크롤을 내리면 빈 BOM 표가 나왔다(2026-09-03). */
+#bomView:not([hidden]) { display: flex; flex-direction: column; }
+#bomView .affiliate-note { margin-top: auto; padding-top: 14px; }
+/* 인쇄물(PDF 저장 포함)에는 나가지 않는다 — 사용자가 납품하는 문서다 */
+@media print { .affiliate-note { display: none !important; } }
+
+/* 공용 부품 창 하단의 고지는 footer 안에서 남는 폭을 다 쓴다.
+   .public-library-footer .muted 처럼 한 줄로 자르면(…) 좁은 창에서 고지가 통째로 사라진다. */
+.public-library-footer .affiliate-note { flex: 1; min-width: 0; margin: 0; }
+/* 상태줄은 이제 샘플 모드 경고에만 쓴다 — 비어 있으면 자리를 차지하지 않는다 */
+.public-library-footer .muted:empty { display: none; }
+
+/* ── 「자세히」 — 마우스를 올리면 상세 설명이 뜬다 ─────────────────
+   별도 페이지를 만들지 않는다(고원빈 확정 2026-09-03). 페이지가 늘면 심사에서
+   확인할 링크가 늘고 관리도 갈라진다.
+   ⚠ 법적 요건은 **항상 보이는 한 줄**이 이미 채운다. 이 말풍선은 더 알고 싶은
+      사람을 위한 보충이라, 마우스를 치우면 사라져도 고지 자체가 사라지는 게 아니다.
+   위로 띄운다 — 두 곳 다 화면 맨 아래라 아래로 띄우면 잘린다. */
+.affiliate-more { position: relative; margin-left: 5px; color: var(--primary);
+  border-bottom: 1px dotted currentColor; cursor: help; white-space: nowrap; }
+.affiliate-tip { display: none; position: absolute; left: 0; bottom: 100%; margin-bottom: 9px;
+  width: 340px; padding: 12px 14px; background: var(--bg); color: var(--tx);
+  border: 1px solid var(--bd); border-radius: var(--r); box-shadow: 0 6px 20px rgba(0,0,0,.18);
+  font-size: 12px; line-height: 1.7; white-space: normal; z-index: 900; cursor: default;
+  /* 한국어는 기본값이 아무 글자에서나 줄을 끊는다 — 「참여하/고」처럼 단어가 쪼개진다.
+     keep-all 이면 띄어쓰기에서만 끊긴다. 폭은 그대로 두고 이것만으로 해결된다(측정 확인). */
+  word-break: keep-all; }
+.affiliate-more:hover .affiliate-tip { display: block; }
+.affiliate-tip span { display: block; }
+.affiliate-tip span + span, .affiliate-tip b { margin-top: 9px; }
+.affiliate-tip b { display: block; }
+
+/* ── 베타 안내 모달 ──────────────────────────────────────────
+   짧게 읽고 바로 닫을 수 있어야 한다 — 들어오자마자 읽을 거리를 길게 내밀면
+   진입 자체를 막는다(2026-09-01 에 방문 안내 모달을 끈 이유가 그것이었다). */
+.beta-box { width: min(340px, calc(100vw - 32px)); padding: 34px 28px 24px; text-align: center; }
+.beta-title { margin: 0 0 24px; font-size: 20px; font-weight: 700; color: var(--tx); word-break: keep-all; }
+/* .primary 는 이 프로젝트에 단독 규칙이 없다 — 늘 .modal-actions button.primary 처럼
+   다른 선택자와 짝지어 쓴다. 그래서 여기서도 색을 직접 준다(.welcome-start 와 같은 모양). */
+.beta-ok {
+  width: 100%; margin-top: 0; padding: 11px; font-size: 14px; font-weight: 600;
+  background: var(--primary); color: #fff; border: 1px solid var(--primary-d);
+  border-radius: var(--r); cursor: pointer; font-family: inherit;
+}
+.beta-ok:hover { background: var(--primary-d); }
+/* 마우스로 눌렀을 때는 링을 그리지 않는다. 키보드로 온 초점만 표시한다. */
+.beta-ok:focus { outline: none; }
+.beta-ok:focus-visible { outline: 2px solid var(--primary-d); outline-offset: 2px; }
