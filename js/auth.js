@@ -26,7 +26,7 @@ WE.auth = (function () {
      약관을 고치면 여기도 바꾼다 — 그래야 "누가 옛 약관에만 동의했는가"를
      나중에 골라내 재동의를 받을 수 있다.
      ⚠ terms.html · privacy.html 의 시행일과 반드시 같아야 한다. */
-  var TERMS_VER   = "2026-09-01";   // terms.html 시행일 (아직 미정 → 출시일로 잡아 둠)
+  var TERMS_VER   = "2026-09-11";   // terms.html 시행일 (2026-09-11 환불 정책 전면 개정)
   var PRIVACY_VER = "2026-09-01";   // privacy.html 시행일
 
   var client = null;      // supabase 클라이언트 (LAUNCH 가 켜져야 만든다)

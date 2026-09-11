@@ -26,6 +26,36 @@
   Cross-Origin-Opener-Policy: same-origin
   Content-Security-Policy: default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self' 'unsafe-inline' https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://ukttsmkenaappsazervx.supabase.co; font-src 'self' data:; connect-src 'self' https://ukttsmkenaappsazervx.supabase.co https://api.web3forms.com https://cloudflareinsights.com; frame-src blob:
 
+
+# ─────────────────────────────────────────────────────────────────────
+#  페이지(HTML)는 브라우저에 보관하지 않는다 (2026-09-11)
+#
+#  왜 — 구조 변경으로 같은 주소의 내용이 바뀌었다(index.html: 에디터 → 랜딩).
+#       옛 판본을 들고 있는 브라우저는 랜딩 버튼이 옛 주소를 가리켜 눌러도 제자리다.
+#       로컬에서는 안 나고 라이브에서만 난다 — 라이브에만
+#       /app.html → 308 → /app 리다이렉트 단계가 있기 때문이다.
+#
+#  ⚠ /*.html 로는 안 걸린다. Pages 가 확장자를 떼고 서빙해서 실제 주소는 /app 이다.
+#     그래서 경로를 하나씩 적는다. **페이지를 새로 만들면 여기에도 추가한다.**
+#  ⚠ js/css/assets 는 그대로 둔다(max-age=14400). 그걸 끄면 매번 500KB 를 다시 받는다.
+#     페이지 HTML 만 40KB 대라 매번 받아도 체감이 없다.
+# ─────────────────────────────────────────────────────────────────────
+/
+  Cache-Control: no-store
+/app
+  Cache-Control: no-store
+/pricing
+  Cache-Control: no-store
+/terms
+  Cache-Control: no-store
+/privacy
+  Cache-Control: no-store
+/account
+  Cache-Control: no-store
+/checkout
+  Cache-Control: no-store
+/admin
+  Cache-Control: no-store
 # ─────────────────────────────────────────────────────────────────────
 #  결제 페이지만 완화 (2026-08-24)
 #

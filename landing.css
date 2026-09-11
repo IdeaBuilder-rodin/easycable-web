@@ -437,6 +437,27 @@ section > .wrap > h2 {
    ⚠ 선택자 앞에 .price 를 붙여 랜딩의 요금 섹션 안에서만 걸리게 했다 —
       pricing.html 은 자기 <style> 을 그대로 쓰므로 서로 간섭하지 않는다. */
 .price .plans { padding: 40px 0 72px; }
+
+/* 요금 카드 아래 환불 안내 (2026-09-11 신설).
+   PG 심사가 "상품 상세페이지에 환불·취소 규정 기재"를 요구해서 넣었다.
+   ⚠ .plans 안으로 범위를 묶는다 — 전역 .refund-note 로 두면 나중에 다른 화면에
+      같은 이름을 쓸 때 서로 덮어쓴다(이 프로젝트에서 제일 자주 난 결함이다).
+   ⚠ 처음에 .price 로 묶었다가 규칙이 통째로 안 붙었다. 요금제 페이지의 섹션은
+      <section class="plans"> 이고 .price 는 랜딩 쪽 이름이다. 렌더링을 재서 잡았다
+      (폭이 max-width 760 을 무시하고 1040 으로 나왔다). */
+.plans .refund-note {
+  max-width: 760px; margin: 8px auto 0; padding: 20px 22px;
+  border: 1px solid #e6e8eb; border-radius: 12px; background: #fafbfc;
+  text-align: left;
+}
+.plans .refund-note h3 { margin: 0 0 10px; font-size: 15px; font-weight: 700; }
+.plans .refund-note ul { margin: 0; padding-left: 18px; }
+.plans .refund-note li { margin: 6px 0; font-size: 13.5px; line-height: 1.65; color: #5a6169; }
+.plans .refund-note b { color: #2b3138; }
+@media (max-width: 640px) {
+  .plans .refund-note { padding: 16px 16px; }
+  .plans .refund-note li { font-size: 13px; }
+}
 /* ⚠ align-items 를 start 로 두면 카드가 저마다 내용 높이만큼만 자라서
    세 장의 아래끝이 들쭉날쭉해진다. stretch(기본값)로 두어 높이를 맞춘다.
    내용이 적은 카드는 아래가 비는데, 그 자리는 아래 .plan-feats 가 채운다. */
