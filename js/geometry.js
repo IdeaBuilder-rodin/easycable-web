@@ -1189,36 +1189,35 @@ WE.geometry = (function () {
                    anchor: side === "L" ? "end" : "start", side: side });
       });
     });
-    var charW = opts.charW != null ? opts.charW : 6.5;       // 라벨 폭 추정용 글자 폭
     var minGapV = opts.minGapV != null ? opts.minGapV : 13;  // 세로쓰기 시 라벨 줄 간격
     ["T", "B"].forEach(function (side) {
       var arr = groups[side];
       arr.sort(function (a, b) { return a.dot.x - b.dot.x; });
       var ly = side === "T" ? box.y - offset : box.y2 + offset;
-      /* 밀도 판정: 가로쓰기로 뒀을 때 라벨이 서로 닿으면 세로쓰기(90° 회전)로 전환한다.
-         개수가 아니라 간격 기준이라, 핀 2개짜리(배터리)는 가로 유지·촘촘한 핀헤더만 세로가 된다.
+      /* 글자 방향 = **배선이 나가는 방향** (2026-09-11 고원빈 확정)
 
-         ⚠ **평균 간격으로 판정하면 안 된다.** 2026-09-11 고원빈 보고 —
-            「전체 단자 숨기기」를 누르면 세로였던 ESP32 라벨이 갑자기 가로로 바뀌며
-            "5VGPIOGPIOGPIOGPIO10" 처럼 뭉갰다.
-            그 버튼은 **연결 안 된 단자만** 숨기므로, 남는 것은 드문드문해지는데
-            GPIO10~13 처럼 **붙어 있던 몇 개는 그대로 남는다.**
-            평균만 보면 "넉넉하다"가 나오지만 그 뭉친 구간은 여전히 겹친다.
+           배선이 위·아래로 나감 (T·B 면) → 라벨도 세로
+           배선이 좌·우로 나감  (L·R 면) → 라벨도 가로 (위쪽 L/R 처리에서 눕힌다)
 
-         ⚠ 이웃 간격만 본다 — 하나라도 닿으면 그 변은 통째로 세운다.
-            한 변에서 어떤 라벨은 눕고 어떤 것은 서 있으면 읽는 순서가 헝클어진다.
+         여기는 T·B 면이므로 **항상 세로**다. 조건이 없다.
 
-         ⚠ 덤으로 **방향이 안정된다.** 뭉친 구간과 상관없는 단자를 숨겨도
-            판정이 안 바뀌므로, 숨기기 전후로 라벨이 눕거나 서지 않는다. */
-      var vertical = false;
-      if (arr.length >= 2) {
-        var 폭 = arr.map(function (o) { return String(o.t.name || "").length * charW + 8; });
-        for (var vi = 1; vi < arr.length; vi++) {
-          // 가운데 정렬이라 이웃끼리 반폭씩 다가오면 닿는다
-          var 필요 = (폭[vi - 1] + 폭[vi]) / 2;
-          if (arr[vi].dot.x - arr[vi - 1].dot.x < 필요) { vertical = true; break; }
-        }
-      }
+         왜 이렇게 정했나 —
+           ① 라벨이 붙는 '면' 은 이미 배선 탈출 방향을 따른다(위 opts.sideOf).
+              글자 방향까지 같이 따라가면 **라벨과 선이 한 방향으로 흐른다.**
+              눈이 선을 따라가다 그대로 이름을 읽게 된다.
+           ② 방향이 **무엇에도 흔들리지 않는다.** 단자를 숨기든 늘리든 이름을 바꾸든
+              같은 면이면 늘 같은 방향이다.
+
+         ⚠ 예전에는 '밀도' 로 정했다. 그게 2026-09-11 사고의 원인이었다 —
+            「전체 단자 숨기기」를 누르면 세로였던 ESP32 라벨이 가로로 뒤집히며
+            "5VGPIOGPIOGPIOGPIO10" 처럼 뭉갰다. 그 버튼은 **연결 안 된 단자만** 숨기므로
+            남는 것은 드문드문해지는데 GPIO10~13 처럼 붙어 있던 것은 그대로 남는다.
+            간격을 어떻게 재든(평균이든 이웃이든) **재는 값이 변하면 방향도 변한다** —
+            그래서 재지 않기로 했다.
+
+         ⚠ 핀 2개짜리 배터리도 위로 나가면 세로가 된다. 고원빈이 "무조건" 이라고 했다.
+            눕히는 편이 나아 보이는 경우가 생기면 그때 이 문단부터 다시 본다. */
+      var vertical = true;
       var lastX = -Infinity, gap = vertical ? minGapV : minGapTB;
       arr.forEach(function (o) {
         var lx = o.dot.x;
