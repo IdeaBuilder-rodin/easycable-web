@@ -534,6 +534,11 @@ WE.i18n = (function () {
     "↓ 아래": "↓ Bottom",
     "완료": "Done",
     "예: 오디오 R": "e.g. Audio R",
+    // 팔레트 창 열 머리글·칸 툴팁 (2026-09-13)
+    "굵기": "Width",
+    "규격": "Gauge",
+    "선 두께(px)": "Line width (px)",
+    "배선 규격(AWG)": "Wire gauge (AWG)",
     "예: MISO": "e.g. MISO",
 
     // ===== 단자 프리셋 =====

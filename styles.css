@@ -882,6 +882,7 @@ body.label-mode #canvas, body.label-mode #canvas * { cursor: copy !important; } 
 #wireListTable .wl-member{ width: 190px; text-align: left; word-break: keep-all; }
 /* 색은 견본만 — 좌우로 넓힐 이유가 없다 */
 #wireListTable .wl-mterm { width: 88px; }
+#wireListTable .wl-awg   { width: 60px; }
 #wireListTable .wl-count { width: 52px; }
 #wireListTable .wl-thumb {
   display: block; width: 108px; height: 68px; margin: 0 auto 4px;
@@ -898,6 +899,7 @@ body.label-mode #canvas, body.label-mode #canvas * { cursor: copy !important; } 
 }
 #wireListTable .wl-mterm { white-space: nowrap; font-weight: 600; }
 #wireListTable .wl-chk { width: 34px; color: var(--tx3); font-size: 15px; }
+#wireListTable .wl-awg { color: var(--tx2); white-space: nowrap; }
 #wireListTable .wl-count { width: 62px; color: var(--tx2); white-space: nowrap; }
 /* 넷이 바뀌는 줄에 윗선을 진하게 — 덩어리 경계가 눈에 들어와야 한다 */
 #wireListTable tr.wl-first td { border-top: 1px solid #b9c2cc; }
@@ -1469,6 +1471,62 @@ body.label-move-ready .term-label {
 .preset-row:not(.editing) .plabel,
 .preset-row:not(.editing) .color-trigger { pointer-events: none; }
 .preset-row:not(.editing) .plabel { border-color: transparent; background: transparent; cursor: pointer; }
+
+/* 배선 색상 팔레트(#paletteList)의 행은 단자 프리셋과 달리 "행 전체가 버튼"이 아니다 —
+   이름을 바로 클릭해서 고쳐야 한다. 프리셋 골격(.preset-row)을 빌려 쓰지만, 그쪽의
+   "평소엔 라벨 입력을 막는다" 규칙(위 pointer-events:none)은 여기서만 되돌린다.
+   (2026-09-13 고원빈: "색상팔레트에서 이름을 수정할 수 없더라") */
+#paletteList .preset-row .plabel {
+  pointer-events: auto; cursor: text;
+  border: 1px solid #ccc; background: #fff;
+}
+#paletteList .preset-row .plabel:hover { border-color: #cfd6de; }
+#paletteList .preset-row .plabel:focus { border-color: var(--primary); background: #fff; outline: 2px solid rgba(30,136,229,.2); }
+/* ---- 팔레트 창의 열 구조 (2026-09-13 고원빈: "× 는 제일 오른쪽으로") ----
+   머리글(.pal-head) · 색 행(.preset-row) · 추가 줄(.preset-add) 셋이 **같은 grid 열**을 쓴다.
+   flex 로 두면 세 줄의 칸이 조금씩 어긋나 머리글이 거짓말을 한다.
+   열: 색 견본 30 · 이름 160 · 굵기 52 · 규격 78 · 나머지 = 동작 열(× / ＋추가 가 오른쪽 끝에 붙는다).
+   이름 칸을 160 으로 못 박은 이유: 창 폭만큼 늘리면 "불필요하게 길다"(2026-09-13 고원빈).
+   ⚠ 이 선택자는 id+class 라 .preset-row / .preset-add 의 display:flex 를 이긴다(그래야 grid 가 된다). */
+#paletteModal .pal-grid {
+  display: grid; grid-template-columns: 30px 160px 52px 78px 1fr;
+  gap: 6px; align-items: center;
+}
+#paletteModal .pal-grid > :last-child { justify-self: end; }   /* 동작 열(× · ＋추가)은 오른쪽 끝 */
+#paletteModal .pal-grid input, #paletteModal .pal-grid select { width: 100%; min-width: 0; box-sizing: border-box; }
+/* 제목(h3) 바로 아래 붙어 있던 것을 띄운다 (2026-09-13 고원빈: "간격을 벌리고 배치를 해야지").
+   열 배치(칸 폭·순서)는 그대로 두고 위아래 여백만 넉넉하게 — 제목과 표는 다른 급이니 떨어져 보여야 한다. */
+#paletteModal .pal-head {
+  margin-top: 14px; padding: 0 2px 7px; font-size: 11px; font-weight: 600;
+  color: var(--tx2); letter-spacing: .2px;
+  border-bottom: 1px solid #e3e6ea;
+}
+/* 머리글 글자를 아래 입력칸의 글자 시작점에 맞춘다 (칸 안쪽 여백 6px + 테두리 1px) */
+#paletteModal .pal-head span:nth-child(2) { padding-left: 7px; }
+#paletteModal .pal-head span:nth-child(3) { text-align: center; }
+#paletteModal .pal-head span:nth-child(4) { padding-left: 5px; }
+/* 굵기·규격 칸 — 색 행과 추가 줄 양쪽에서 쓴다 */
+#paletteModal .pwidth {
+  height: 28px; padding: 4px 6px; text-align: center;
+  border: 1px solid #ccc; border-radius: 4px; background: #fff; color: var(--tx); font: inherit;
+}
+#paletteModal .pawg {
+  height: 28px; padding: 3px 4px;
+  border: 1px solid #ccc; border-radius: 4px; background: #fff; color: var(--tx); font: inherit;
+}
+/* 추가 줄: 옆 이름칸(padding 6px → 30px)과 높이를 맞춘다. 색 칸도 행과 같은 정사각 견본으로. */
+#paletteModal .preset-add { padding-left: 2px; padding-right: 2px; }
+#paletteModal .preset-add .pwidth, #paletteModal .preset-add .pawg { height: 30px; }
+/* 같은 줄의 높이를 맞춘다(개발_기록 11장 규칙). 실측: 이름칸 25 · 굵기칸 28 · 추가 버튼 25 로 제각각이었다. */
+#paletteModal .pal-grid .plabel { height: 28px; }
+#paletteModal .preset-add input[type=text], #paletteModal .preset-add button.primary { height: 30px; }
+#paletteModal #newPalColor { height: 30px; padding: 0; border: 1px solid #ccc; border-radius: 4px; cursor: pointer; }
+@media (max-width: 640px) {
+  /* 좁은 화면: 이름 칸이 남는 폭을 다 쓰고 굵기·규격은 조금 줄인다.
+     동작 열은 58px 고정 — ＋추가 버튼(min-width 58px)이 들어가는 폭. auto 로 두면 머리글(빈 칸 0)·
+     행(× 28)·추가 줄(버튼 58)의 동작 열 폭이 제각각이 되어 이름 칸이 세 줄에서 서로 어긋난다(실측). */
+  #paletteModal .pal-grid { grid-template-columns: 30px 1fr 44px 64px 58px; gap: 4px; }
+}
 .preset-row:not(.editing):hover { background: var(--bg3); }
 .preset-row.editing { box-shadow: inset 0 0 0 1px var(--primary); background: #fff; }
 .preset-row.editing .plabel { border-color: var(--primary); background: #fff; }
@@ -2050,7 +2108,12 @@ body.pr-multi.pr-first-tall, body.pr-multi.pr-first-tall main { page: pr-tall; }
   /* 여백을 주지 않는다 — BOM·배선 리스트는 저마다 강제로 새 장에서 시작(.pdf-page-break)하므로
      여기 margin은 다음 장으로 넘어가지 않고 1페이지 바닥만 3mm 잡아먹었다(하단 밴드 여유가 그만큼 줄었다). */
   #printBOM { margin-top: 0; }
-  /* 배선 리스트 2단 — 표가 좁아 한 단이면 지면 절반이 비고 장수만 늘어난다 */
+  /* 결선표는 항상 세로 A4 · 표 1개 (2026-09-13 고원빈 확정 — pdf.js 위쪽 설명 참고).
+     .wl-pages 하나에만 세로 쪽(pr-tall)을 걸면 안의 제목·표 전부가 **상속**으로 따라간다
+     (CSS 'page' 는 상속 속성) — 하나하나에 따로 붙일 필요가 없다. */
+  .wl-pages { page: pr-tall; }
+  /* .wl-cols: 예전 좌우 2단 시절 이름을 그대로 쓴다(검사·pdf.js 가 이 클래스로 '한 쪽'을 센다).
+     지금은 표 1개만 담지만, flex 자체는 해가 없어 그대로 둔다(표는 flex:none 이라 안 늘어난다). */
   .wl-cols { display: flex; align-items: flex-start; gap: 8mm; }
   .wl-cols > table { flex: none; }
   /* 결선표 — 부품 그림을 왼쪽에 한 번만. 종이에서 그림으로 부품을 먼저 알아보고 단자를 찾는다. */
@@ -2069,8 +2132,12 @@ body.pr-multi.pr-first-tall, body.pr-multi.pr-first-tall main { page: pr-tall; }
   /* 종이에서도 칸을 필요 이상 벌리지 않는다 — 한 줄을 한눈에 읽어야 한다 */
   .wl-table .wl-member { max-width: 42mm; }
   .wl-table .wl-mterm { width: 18mm; }
+  .wl-table .wl-awg { width: 13mm; white-space: nowrap; }
   .wl-table .wl-count { width: 10mm; }
   .wl-table .wl-chk { width: 7mm; font-size: 11px; }
+  /* 비고 — 항상 세로 1단으로 바뀌면서 남는 폭을 여기로 몰아준다 (2026-09-13 고원빈:
+     "비고 부분이 너무 좁아서 뭘 적기가 힘들다"). 케이블 길이 같은 메모 한두 줄이 줄바꿈 없이 들어간다. */
+  .wl-table .wl-note { min-width: 40mm; text-align: left; }
   /* 넷이 바뀌는 자리에 윗선을 진하게 — 덩어리 경계가 종이에서 보여야 한다 */
   .wl-table tr.wl-first td { border-top: 0.6px solid #666; }
   /* 섹션 머리글 — 1페이지 도면 제목줄과 같은 모양으로 통일 */

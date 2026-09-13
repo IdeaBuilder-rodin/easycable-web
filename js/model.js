@@ -488,6 +488,7 @@ WE.model = (function () {
     selectedTerminalId: null,
     wireColor: "#e53935",      // 새 배선에 적용할 색
     wireWidth: 2,
+    wireAwg: "",               // 새 배선에 적용할 규격(AWG). 빈 값은 미지정. 팔레트 색이 정한다.
     wireRouting: "ortho",      // 'ortho'(직각) | 'straight'(직선)
     selectedWp: null,          // 선택된 꺾임점 인덱스
     selectedWireLabel: null,   // 라벨(수축튜브)을 직접 클릭해 선택한 배선 id — Delete 시 라벨만 삭제
@@ -726,6 +727,8 @@ WE.model = (function () {
       to: toRef,
       color: color || ui.wireColor,
       width: width || ui.wireWidth,
+      // 규격(AWG) — 팔레트 색이 정한 값이 ui.wireAwg 로 와 여기 박힌다. 결선표 규격 열이 이걸 읽는다.
+      awg: ui.wireAwg || "",
       // 배선 모양(직각/직선)은 '그릴 때' 정해져 배선에 남는다.
       // 예전에는 화면 설정 하나를 렌더할 때마다 읽어서, 스위치를 넘기면 이미 그려 둔 배선까지
       // 전부 다시 계산됐다. 도면이 '보는 사람의 설정'에 따라 달라지는 문제도 같이 있었다.

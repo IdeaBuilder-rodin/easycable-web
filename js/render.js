@@ -454,8 +454,10 @@ WE.render = (function () {
 
      ⚠ 분기 쪽 끝에도 찍는다. 분기선도 작업자가 양손에 들고 결선하는 물리적인 전선
         한 가닥이라, 분기 쪽을 비워 두면 그 끝을 잡았을 때 무슨 선인지 알 수 없다.
-     ⚠ 번호 없이 AWG 만 있는 배선은 예전대로 가운데 한 곳에만 적는다.
-        AWG 는 '이 선의 이름'이 아니라 규격이라 양 끝에 찍을 것이 아니다.
+     ⚠ AWG 는 도면에 안 찍는다 (2026-09-13 고원빈: "도면이 너무 지저분해져").
+        예전엔 번호 없이 AWG만 있어도 가운데에 "AWG 22" 를 찍었는데, 부품이 많은 도면에서
+        그 글자만으로 지저분해 보였다. 규격은 결선표·BOM에 이미 나오므로 도면에서는 뺀다.
+        (데이터 wire.awg 자체는 그대로 둔다 — 결선표·CSV·속성창 권장 표시가 여전히 읽는다)
 
      데이터
        w.labelText            번호. 배선당 하나.
@@ -522,7 +524,6 @@ WE.render = (function () {
   }
 
   function labelSize(text) { return { w: text.length * 6.4 + 14, h: 16 }; }
-  function awgSize(text) { return { w: text.length * 6.4 + 6, h: 12 }; }
   function labelBoxOf(c) { return { x: c.cx - c.w / 2, y: c.cy - c.h / 2, w: c.w, h: c.h }; }
   function labelHits(c, obs) {
     var r = labelBoxOf(c);
@@ -652,37 +653,16 @@ WE.render = (function () {
     return g;
   }
 
-  // 번호 없이 AWG 만 — 튜브가 아니라 배선 색 글자 하나
-  function awgNode(wire, text, c) {
-    var lbl = el("text", {
-      x: c.cx, y: c.cy, "text-anchor": "middle", "dominant-baseline": "central",
-      "class": "wire-awg", "data-wire-label-for": wire.id, "data-wire-label-end": "mid",
-      "data-wire-label-cx": c.cx, "data-wire-label-cy": c.cy,
-      style: "font:600 11px 'Malgun Gothic',sans-serif;fill:" + wire.color +
-        ";paint-order:stroke;stroke:#fff;stroke-width:3px;pointer-events:all;cursor:move;user-select:none"
-    });
-    lbl.textContent = text;
-    return lbl;
-  }
-
-  // 배선 하나가 만들어 내는 라벨 노드들(0~2개)
+  // 배선 하나가 만들어 내는 라벨 노드들(0~2개) — 번호(labelText)가 있을 때만 그린다.
+  // AWG 는 도면에 안 찍는다(위 설명 참고) — 결선표·BOM 에서 이미 보여준다.
   function buildWireLabels(wire, obs) {
     var out = [];
     var tubeTxt = (wire.labelText || "").trim();
-    var parts = [];
-    if (tubeTxt) parts.push(tubeTxt);
-    if (wire.awg) parts.push("AWG " + wire.awg);
-    if (!parts.length) return out;
+    if (!tubeTxt) return out;
     var pts = WE.geometry.wireRoutePoints(wire);
     if (!pts || pts.length < 2) return out;
-    var text = parts.join(" · ");
+    var text = tubeTxt;
     obs = obs || termLabelRects().slice();
-
-    if (!tubeTxt) {                     // AWG 만 — 예전대로 가운데 글자 하나(단자 이름도 피한다)
-      var mid = placeMidLabel(pts, awgSize(text), obs);
-      if (mid) { obs.push(labelBoxOf(mid)); out.push(awgNode(wire, text, mid)); }
-      return out;
-    }
 
     var sz = labelSize(text);
     /* ⚠ 단자 이름도 장애물이다. 부품 쪽 기본 자리가 비어 있으면 거기 붙고,

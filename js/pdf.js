@@ -305,19 +305,33 @@ WE.pdf = (function () {
     /* 결선표 (조립용) — 넷 한 덩어리를 한 묶음으로 찍는다.
        한 줄씩 늘어놓지 않는 이유: "이 단자에 몇 군데가 물리는가" 가 보여야 케이블을 어떻게 뺄지
        정할 수 있다. 흩어 놓으면 두 군데 중 한 군데만 하고 넘어간다(2026-09-03 실작업에서 나온 문제).
-       체크칸(☐)을 맨 앞에 둔다 — 수십 가닥을 하다 보면 어디까지 했는지가 진짜 문제다.
-       열이 좁아 한 단으로 뽑으면 지면 절반이 비므로 좌우 2단으로 나눠 담는다. */
-    var wl = WE.app.netListByComponent ? WE.app.netListByComponent() : [];
-    if (wl.length) {
-      bomBox.appendChild(sectionTitle(WE.i18n.t("결선표"), true));
+       맨 앞 칸은 **순번**이다 (2026-09-13 고원빈: "체크박스보다 그냥 번호가 낫겠다" — 예전엔 빈
+       체크박스 ☐ 였는데, 넷마다 번호를 매겨 "몇 번째 넷인지" 로 짚게 한다. 페이지가 여러 장으로
+       나뉘어도 번호는 그 시트 안에서 계속 이어진다 — 2페이지 첫 줄이 다시 1번이면 안 된다.
+       ⚠ "번호" 대신 "순번" 을 쓴다 — 도면 위 배선 번호(W1·W2, 개발_기록.md 6.10)와 헷갈리지 않게.
 
-      function wireTable(nets) {
+       ⚠ 페이지는 **항상 세로 A4·표 1개**다 (2026-09-13 고원빈 확정 — "결선표는 도면이 가로든
+          세로든 그냥 세로로 고정해버리는 게 어떤가"). 예전엔 좌우 2단으로 지면을 아꼈는데,
+          실측해 보니 표 2개의 폭(약 287mm)이 **가로 A4 내용폭(281mm)조차 못 채우고
+          세로 A4(194mm)에서는 두 번째 표가 페이지 밖으로 잘렸다** — 규격 열을 더하기 전부터
+          이미 그랬다. 폭을 매번 재서 2단/1단을 가르는 대신, 결선표만 도면 방향과 무관하게
+          **세로로 고정**하는 편이 근본적으로 안전하다. 표 폭은 실측 150mm 안팎이라 세로 A4
+          194mm 안에 항상 들어가고, 남는 폭은 비고 칸에 몰아준다(styles.css .wl-note). */
+    /* ⚠ 결선표는 **시트마다** 만든다 (2026-09-13 고원빈: "한 프로젝트의 결선표가 전부 나와야 한다").
+       netListByComponent() 는 안에서 netFrom · getComponent · getWire 를 쓰는데, 셋 다 '현재 시트' 별칭
+       (model.js 의 project.wires / project.components)을 읽는다. 그래서 한 번만 부르면 보고 있던
+       시트의 결선표만 나왔다. 도면을 복제하는 buildSheetPages() 와 같은 방법으로 — 시트를 하나씩
+       활성으로 바꿔 가며 표를 만들고, 끝나면 원래 시트로 되돌린다.
+       (데이터 함수를 '시트 지정형'으로 바꾸는 길은 그 셋의 참조가 수십 곳이라 택하지 않았다) */
+    {
+      function wireTable(nets, startNo) {
         var t = document.createElement("table");
         t.className = "bom wl-table";
         var head = document.createElement("thead");
-        head.innerHTML = WE.i18n.t("<tr><th>☐</th><th>부품</th><th>시작</th><th>연결 부품</th><th>연결부 단자</th><th>배선수</th><th>비고</th></tr>");
+        head.innerHTML = WE.i18n.t("<tr><th>순번</th><th>부품</th><th>시작</th><th>연결 부품</th><th>연결부 단자</th><th>규격</th><th>배선</th><th>비고</th></tr>");
         t.appendChild(head);
         var body = document.createElement("tbody");
+        var no = startNo;   // 이 페이지에서 이어지는 순번 — appendWireList 가 페이지 시작 번호를 넘겨준다
         nets.forEach(function (그룹) {
           var 부품첫줄 = true;
           그룹.rows.forEach(function (net) {
@@ -330,7 +344,7 @@ WE.pdf = (function () {
                 if (span > 1) d.rowSpan = span;
                 d.textContent = text; return d;
               }
-              if (i === 0) tr.appendChild(wtd("☐", "wl-chk", net.count));
+              if (i === 0) tr.appendChild(wtd(String(no++), "wl-chk", net.count));
 
               /* 부품 그림 + 이름 — 그 부품의 모든 줄에 걸쳐 한 번만.
                  종이에서 "아, 이 부품" 을 그림으로 먼저 알아보고 단자를 찾는 순서가 된다. */
@@ -385,7 +399,21 @@ WE.pdf = (function () {
               ttd.appendChild(b);
               tr.appendChild(ttd);
 
-              // 배선수 — 화면 결선표와 같은 구성으로 맞춘다(레이아웃은 달라도 내용은 같아야 한다)
+              /* 규격(AWG) — 넷 하나에 하나(배선수·비고와 같은 자리). 시작 단자에 꽂히는
+                 배선의 규격을 쓴다 — 팔레트에서 색마다 정한 값이 net.awg 로 와 있다.
+                 (2026-09-13 고원빈: "연결부단자와 배선수 사이에 배선규격이 무엇으로
+                 되어있는지 만들어야해"). 미지정이면 빈칸.
+                 ⚠ "22" 처럼 숫자만 적으면 무슨 단위인지 안 보여서 "AWG22" 로 붙여 쓴다
+                 (2026-09-13 고원빈: "AWG인지 뭔지 표현을 적어야 맞을것 같아"). */
+              if (i === 0) {
+                var gtd = document.createElement("td");
+                gtd.className = "wl-awg";
+                if (net.count > 1) gtd.rowSpan = net.count;
+                gtd.textContent = net.awg ? "AWG" + net.awg : "";
+                tr.appendChild(gtd);
+              }
+
+              // 배선(가닥 수) — 화면 결선표와 같은 구성으로 맞춘다(레이아웃은 달라도 내용은 같아야 한다)
               if (i === 0) {
                 var ntd = document.createElement("td");
                 ntd.className = "wl-count";
@@ -408,36 +436,78 @@ WE.pdf = (function () {
         return t;
       }
 
-      /* 부품 묶음은 줄 수가 제각각이라 '개수'가 아니라 '줄 수'로 단을 나눈다.
-         ⚠ 한 부품 묶음은 쪼개지 않는다 — 그림과 단자가 다른 단으로 갈라지면
-            "이 단자가 어느 부품 것인지" 를 종이에서 잃는다.
+      /* 한 시트의 결선표(wl)를 페이지마다 표 1개씩 담는다 — **실제 인쇄 높이(mm)** 로 채운다.
+         (2026-09-13 고원빈: "MicroSD·푸시스위치까지 한 페이지에 다 들어가는 사이즈면 제일 좋겠다" —
+         실측해 보니 '줄 수'만 세는 예전 방식(PER_COL=30)은 실제로 남는 여백을 못 본다.
+         39줄짜리 결선표가 28/11로 갈렸는데, 실제 높이로 재면 39줄이 전부 275.8mm — 페이지
+         예산 281mm 안에 들어가는데도 잘렸다. 그래서 줄 수 대신 실제 렌더링 높이를 쓴다.)
 
-         ⚠ 한 단을 꽉 채우고 넘기면 종이가 남는다. 예전에는 18줄로 끊어 35줄짜리가
-            18/17 로 갈릴 것을 18/16/1 세 단으로 흩어져 두 장이 됐다(2026-09-03).
-            그래서 **먼저 몇 장에 담을지 정하고, 그 장수에 맞춰 고르게 나눈다.** */
-      var PER_COL = 30;                                   // 한 단(세로 한 칸)에 들어가는 줄 수 상한
-      var 전체줄 = 0;
-      wl.forEach(function (g) { 전체줄 += g.lines; });
-      var 단수 = Math.max(1, Math.ceil(전체줄 / PER_COL));  // 필요한 단 수
-      if (단수 % 2 === 1 && 단수 > 1) 단수++;                 // 한 장에 두 단이므로 짝수로 맞춘다
-      var 목표 = Math.ceil(전체줄 / 단수);                   // 단마다 이만큼씩 고르게
+         실측 상수(세로 A4·이 폰트 기준, `probe_wlheight` 로 잰 값 — 크게 벗어나면 다시 잰다):
+           · 그림 없는 이어줄 1개  = 5.82mm
+           · 부품 그림(.wl-thumb 13mm+이름)이 강제하는 한 묶음의 최소 높이 = 18.94mm
+             (묶음의 자연 높이(줄수×5.82)가 이보다 작으면 이만큼까지 늘어난다 —
+              4줄 넘는 묶음은 이미 자연 높이가 이를 넘어서므로 영향이 없다)
+           · 표 머리글(thead) = 5.8mm · 결선표 제목줄(.bom-title, 시트의 **첫 페이지에만** 붙는다) = 7.95mm
+         ⚠ 한 부품 묶음은 쪼개지 않는다 — 그림과 단자가 다른 페이지로 갈라지면
+            "이 단자가 어느 부품 것인지" 를 종이에서 잃는다. 그래서 예산을 넘기기 직전에
+            다음 페이지로 넘긴다(묶음 전체를 통째로 옮긴다). */
+      var ROW_MM = 5.82, MIN_GROUP_MM = 18.94, HEAD_MM = 5.8, TITLE_MM = 7.95, PAGE_MM = 281;
+      function groupCostMM(g) { return Math.max(g.lines * ROW_MM, MIN_GROUP_MM); }
 
-      var 쪽 = [], 단 = [], 줄수 = 0;
-      wl.forEach(function (그룹) {
-        // 이미 목표를 채웠고 남은 단이 있으면 다음 단으로 (묶음은 통째로 옮긴다)
-        if (줄수 && 줄수 + 그룹.lines > 목표 && 쪽.length + 1 < 단수) {
-          쪽.push(단); 단 = []; 줄수 = 0;
-        }
-        단.push(그룹); 줄수 += 그룹.lines;
-      });
-      if (단.length) 쪽.push(단);
-      for (var i = 0; i < 쪽.length; i += 2) {
-        var row = document.createElement("div");
-        row.className = "wl-cols" + (i > 0 ? " pdf-page-break" : "");
-        row.appendChild(wireTable(쪽[i]));
-        if (쪽[i + 1]) row.appendChild(wireTable(쪽[i + 1]));
-        bomBox.appendChild(row);
+      function appendWireList(wl) {
+        var 페이지들 = [], 담김 = [];
+        // 첫 페이지는 제목줄까지 얹으므로 그만큼 좁고, 다음 페이지부터는 표만 있어 더 넓다.
+        var 남은예산 = PAGE_MM - TITLE_MM - HEAD_MM;
+        wl.forEach(function (그룹) {
+          var 비용 = groupCostMM(그룹);
+          if (담김.length && 비용 > 남은예산) {
+            페이지들.push(담김); 담김 = [];
+            남은예산 = PAGE_MM - HEAD_MM;
+          }
+          담김.push(그룹); 남은예산 -= 비용;
+        });
+        if (담김.length) 페이지들.push(담김);
+        var 순번커서 = 1;   // 이 시트의 결선표 안에서는 페이지가 넘어가도 순번이 계속 이어진다
+        페이지들.forEach(function (그룹들, i) {
+          var wrap = document.createElement("div");
+          // wl-cols: 예전 좌우 2단 시절의 이름을 그대로 쓴다 — 검사·CSS가 이 클래스로 '결선표 한 쪽'을 센다.
+          wrap.className = "wl-cols" + (i > 0 ? " pdf-page-break" : "");
+          wrap.appendChild(wireTable(그룹들, 순번커서));
+          // 다음 페이지 시작 번호 — 이 페이지에 실린 넷 개수(그룹마다 rows.length)만큼 이어간다
+          그룹들.forEach(function (g) { 순번커서 += g.rows.length; });
+          wlBox.appendChild(wrap);
+        });
       }
+
+      /* 시트 순서대로 — 1번 도면의 결선표, 2번 도면의 결선표 … 각각 새 쪽에서 시작한다.
+         제목 규칙 (2026-09-13 고원빈: "결선표-01(페이지이름) 식으로 어느 페이지 것인지 구분"):
+           · 시트가 한 장이면 예전 그대로 "결선표" — 구분할 게 없는데 글자만 는다.
+             (도면 제목이 한 장일 때 시트명을 안 붙이는 것과 같은 규칙)
+           · 여러 장이면 "결선표-01(전원부)". 시트 이름이 기본값(쪽 번호 "01")과 같으면
+             "결선표-01(01)" 이 되어 겹치므로 괄호를 뺀다 → "결선표-01".
+         배선이 없는 시트는 결선표를 만들지 않는다(빈 표 한 장이 낭비다). */
+      /* 결선표 전체(모든 시트의 제목+표)를 이 안에 담는다 — .wl-pages 하나에만
+         "page: pr-tall"(세로 A4)을 걸면 안의 모든 요소가 **상속으로** 세로를 따라간다
+         (CSS 'page' 속성은 상속된다). 제목·표 하나하나에 각각 붙이지 않아도 된다. */
+      var wlBox = document.createElement("div");
+      wlBox.className = "wl-pages";
+      var sheets = WE.model.project.sheets || [];
+      var keepSheet = WE.model.getActiveSheetId();
+      var multiSheet = sheets.length > 1;
+      sheets.forEach(function (sh, si) {
+        WE.model.setActiveSheet(sh.id);
+        var wl = WE.app.netListByComponent ? WE.app.netListByComponent() : [];
+        if (!wl.length) return;
+        var no = (si + 1 < 10 ? "0" : "") + (si + 1);
+        var nm = String(sh.name || "").trim();
+        var title = !multiSheet ? WE.i18n.t("결선표")
+                  : WE.i18n.t("결선표") + "-" + no + (nm && nm !== no ? "(" + nm + ")" : "");
+        wlBox.appendChild(sectionTitle(title, true));
+        appendWireList(wl);
+      });
+      if (wlBox.children.length) bomBox.appendChild(wlBox);
+      // 보고 있던 시트로 되돌린다 — 인쇄가 화면 상태를 바꾸면 안 된다 (그리기는 안 건드렸으니 다시 그릴 것도 없다)
+      WE.model.setActiveSheet(keepSheet);
     }
 
     // 전력/배터리 요약

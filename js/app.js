@@ -1925,15 +1925,20 @@ WE.app = (function () {
        단자 앞의 색은 **같은 색이 이어지면 한 칸으로 합친다** — #1·#2 스텝다운의 IN- 처럼
        같은 색으로 잇는 경우가 대부분이라, 줄마다 같은 견본을 반복하면 눈만 어지럽다.
        색이 달라지는 자리에서만 칸이 새로 생기므로 **다른 색이 오히려 눈에 띈다.** */
-    var html = WE.i18n.t("<thead><tr><th>☐</th><th>부품</th><th>시작</th><th>연결 부품</th>" +
-      "<th>연결부 단자</th><th>배선수</th><th>비고</th></tr></thead><tbody>");
+    var html = WE.i18n.t("<thead><tr><th>순번</th><th>부품</th><th>시작</th><th>연결 부품</th>" +
+      "<th>연결부 단자</th><th>규격</th><th>배선</th><th>비고</th></tr></thead><tbody>");
+    /* 체크칸(☐)을 순번으로 바꿨다 (2026-09-13 고원빈: "체크박스보다 그냥 번호가 낫겠다").
+       빈 칸에 손으로 체크하는 대신, 넷마다 번호를 매겨 종이에서 "몇 번째 넷인지" 로 짚게 한다.
+       ⚠ "번호" 대신 "순번" 을 쓴다 — 이 앱에는 이미 "배선 번호"(도면 위 W1·W2 수축튜브 번호,
+       개발_기록.md 6.10)가 있어서 "번호"라고만 하면 그것과 헷갈린다. */
+    var 순번 = 1;
     nets.forEach(function (그룹) {
       var 부품첫줄 = true;
       그룹.rows.forEach(function (net) {
         net.targets.forEach(function (m, i) {
           var 넷첫줄 = i === 0;
           html += "<tr class='wl-row" + (넷첫줄 ? " wl-first" : "") + "'>";
-          if (넷첫줄) html += "<td class='wl-chk' rowspan='" + net.count + "'>☐</td>";
+          if (넷첫줄) html += "<td class='wl-chk' rowspan='" + net.count + "'>" + (순번++) + "</td>";
           if (부품첫줄) {
             // 부품 그림 + 이름은 그 부품의 모든 줄에 걸쳐 한 번만 — 손에 쥔 부품을 바로 알아보게
             html += "<td class='wl-part' rowspan='" + 그룹.lines + "'>" +
@@ -1957,6 +1962,11 @@ WE.app = (function () {
                 (2026-09-03 고원빈) */
           html += "<td class='wl-mterm'><b>" + esc(m.term) + "</b></td>";
           if (넷첫줄) {
+            /* 규격(AWG) — 넷 하나에 하나, 배선수·비고와 같은 자리(2026-09-13 고원빈).
+               "22" 처럼 숫자만 적으면 뭘 뜻하는지 안 보여서 "AWG22" 로 단위를 붙인다
+               (2026-09-13 고원빈: "AWG인지 뭔지 표현을 적어야 맞을것 같아"). */
+            html += "<td class='wl-awg' rowspan='" + net.count + "'>" +
+              (net.awg ? "AWG" + esc(net.awg) : "") + "</td>";
             html += "<td class='wl-count' rowspan='" + net.count + "'>" +
               net.count + "</td>";
             var k = 비고키(net);
@@ -3886,7 +3896,7 @@ WE.app = (function () {
       sw.className = "swatch" + (p.color === WE.model.ui.wireColor ? " active" : "");
       sw.style.background = p.color;
       sw.title = p.label;
-      sw.addEventListener("click", function () { pickQuickColor(p.color); });
+      sw.addEventListener("click", function () { pickQuickColor(p); });
       wrap.appendChild(sw);
     });
     pop.hidden = false;
@@ -3903,19 +3913,40 @@ WE.app = (function () {
   function closeQuickColorPicker() {
     document.getElementById("quickColorPicker").hidden = true;
   }
-  function pickQuickColor(color) {
-    WE.model.ui.wireColor = color;
+  /* 팔레트 색 하나를 지금 배선에 적용한다 — 색만이 아니라 그 색에 매인 굵기·규격까지.
+     p 는 팔레트 항목 { color, label, width?, awg? }.
+     · width/awg 가 있으면 그 값을, 없으면 색만 바꾸고 굵기·규격은 건드리지 않는다
+       (규격 없는 색을 골랐다고 이미 정한 굵기를 지우면 안 된다).
+     · 배선을 골라 뒀으면 그 배선들에도 같은 값을 입힌다(색과 같은 규칙). */
+  function applyPalette(p) {
+    if (!p) return;
+    WE.model.ui.wireColor = p.color;
+    // 굵기는 색마다 반드시 있다(미지정이면 기본 2). 색을 고르면 그 굵기가 늘 따라온다.
+    var wv = (p.width != null && p.width !== "" && !isNaN(+p.width)) ? +p.width : 2;
+    WE.model.ui.wireWidth = wv;
+    var wIn = document.getElementById("wireWidthSel");
+    if (wIn) wIn.value = String(wv);
+    var hasW = true;
+    var hasA = typeof p.awg === "string" && p.awg !== "";
+    WE.model.ui.wireAwg = hasA ? p.awg : "";
     saveWireSettings();
-    var mW = WE.model.getMultiWire();
-    if (mW.length) {
-      mW.forEach(function (id) { var w = WE.model.getWire(id); if (w) w.color = color; });
+    var 대상 = WE.model.getMultiWire();
+    if (!대상.length) { var one = WE.model.getSelectedWire(); if (one) 대상 = [one.id]; }
+    if (대상.length) {
+      대상.forEach(function (id) {
+        var w = WE.model.getWire(id); if (!w) return;
+        w.color = p.color;
+        if (hasW) w.width = +p.width;
+        w.awg = hasA ? p.awg : "";
+      });
       WE.render.renderWires(); WE.render.renderOverlay();
-    } else {
-      var sw2 = WE.model.getSelectedWire();
-      if (sw2) { sw2.color = color; WE.render.renderWires(); WE.render.renderOverlay(); }
     }
     renderPalette();
     refreshProps();
+  }
+  // 빠른 색상 팝업에서 부른다 — 팝업만 닫고 나머지는 applyPalette 가 한다.
+  function pickQuickColor(p) {
+    applyPalette(typeof p === "string" ? { color: p } : p);
     closeQuickColorPicker();
   }
   function bindQuickColorPicker() {
@@ -4280,6 +4311,8 @@ WE.app = (function () {
       }
       var c = localStorage.getItem("we_wireColor");
       if (c) WE.model.ui.wireColor = c;
+      var ag = localStorage.getItem("we_wireAwg");
+      if (ag != null) WE.model.ui.wireAwg = ag;
       var r = localStorage.getItem("we_wireRouting");
       if (r === "ortho" || r === "straight") WE.model.ui.wireRouting = r;
     } catch (e) { /* 무시 */ }
@@ -4288,8 +4321,17 @@ WE.app = (function () {
     try {
       localStorage.setItem("we_wireWidth", String(WE.model.ui.wireWidth));
       localStorage.setItem("we_wireColor", WE.model.ui.wireColor);
+      localStorage.setItem("we_wireAwg", WE.model.ui.wireAwg || "");
       localStorage.setItem("we_wireRouting", WE.model.ui.wireRouting);
     } catch (e) { /* 무시 */ }
+  }
+  /* 팔레트 창의 "추가" 줄이 기억하는 마지막 규격(AWG) — we_wireAwg(지금 그리는 배선의 규격)과는
+     다른 값이다. 이건 "색을 새로 등록할 때 규격 칸의 기본값"만을 위한 것이라 따로 키를 둔다. */
+  function lastPalAwg() {
+    try { return localStorage.getItem("we_lastPalAwg") || ""; } catch (e) { return ""; }
+  }
+  function saveLastPalAwg(v) {
+    try { localStorage.setItem("we_lastPalAwg", v || ""); } catch (e) { /* 무시 */ }
   }
 
   /* 배선 두께 상한. 도면에서 그 이상은 쓸 일이 없다 (2026-09-09 고원빈).
@@ -4341,10 +4383,23 @@ WE.app = (function () {
 
     var pm = document.getElementById("paletteModal");
     document.getElementById("palClose").addEventListener("click", function () { pm.hidden = true; });
+    /* 추가 줄의 규격 드롭다운은 한 번만 채운다(목록은 바뀌지 않는다).
+       기본값은 **지난번에 추가할 때 골랐던 규격**이다 (2026-09-13 고원빈:
+       "AWG22로 추가를 한 상태면 기본값을 AWG22로 해놓는거지 — 다음에 바로 변경 없이
+       추가 가능하니까"). 브라우저에 저장해 두므로 새로고침·다음 방문에도 이어진다. */
+    fillAwgSelect(document.getElementById("newPalAwg"), lastPalAwg());
     document.getElementById("btnAddPal").addEventListener("click", function () {
       var label = document.getElementById("newPalLabel").value.trim() || WE.i18n.t("색");
       var color = document.getElementById("newPalColor").value;
-      WE.model.project.palette.push({ color: color, label: label });
+      /* 굵기·규격도 추가 줄에서 바로 받는다 (2026-09-13 고원빈).
+         예전엔 현재 배선 굵기(ui.wireWidth)를 몰래 넣고 규격은 비워서, 추가한 뒤 위로 올라가
+         다시 고쳐야 했다. 굵기가 비었거나 이상하면 기본 2, 규격은 미지정 가능. */
+      var wv = parseInt(document.getElementById("newPalWidth").value, 10);
+      var width = (isNaN(wv) || wv < 1) ? 2 : Math.min(15, wv);
+      var awg = document.getElementById("newPalAwg").value || "";
+      WE.model.project.palette.push({ color: color, label: label, width: width, awg: awg });
+      saveLastPalAwg(awg);   // 방금 고른 규격을 다음 추가의 기본값으로 남긴다
+      // 이름만 비운다. 색·굵기·규격은 그대로 둔다 — 비슷한 선을 연달아 등록할 때 다시 고르지 않게.
       document.getElementById("newPalLabel").value = "";
       renderPaletteList(); renderPalette(); saveDefaultPalette();
     });
@@ -4359,8 +4414,21 @@ WE.app = (function () {
         WE.model.allWires().forEach(function (w) { if (w.color === oldC) w.color = newC; });   // 전체 시트
         if (WE.model.ui.wireColor === oldC) WE.model.ui.wireColor = newC;
         WE.render.renderWires(); WE.render.renderOverlay();
-      } else if (e.target.classList.contains("plabel")) p.label = e.target.value;
+      } else if (e.target.classList.contains("plabel")) {
+        p.label = e.target.value;
+      } else if (e.target.classList.contains("pwidth")) {
+        var v = parseInt(e.target.value, 10);
+        p.width = (isNaN(v) || v < 1) ? "" : Math.min(15, v);
+      }
       renderPalette(); saveDefaultPalette();
+    });
+    // 규격 드롭다운은 change 로 받는다
+    pl.addEventListener("change", function (e) {
+      if (!e.target.classList.contains("pawg")) return;
+      var row = e.target.closest(".preset-row"); if (!row) return;
+      var p = WE.model.project.palette[+row.dataset.idx]; if (!p) return;
+      p.awg = e.target.value || "";
+      saveDefaultPalette();
     });
     pl.addEventListener("click", function (e) {
       if (!e.target.classList.contains("pdel")) return;
@@ -4518,36 +4586,44 @@ WE.app = (function () {
       sw.className = "swatch" + (p.color === WE.model.ui.wireColor ? " active" : "");
       sw.style.background = p.color;
       sw.title = p.label;
-      sw.addEventListener("click", function () {
-        WE.model.ui.wireColor = p.color;
-        saveWireSettings();
-        // 선택된 배선(들) 색도 즉시 변경
-        var mW = WE.model.getMultiWire();
-        if (mW.length) {
-          mW.forEach(function (id) { var w = WE.model.getWire(id); if (w) w.color = p.color; });
-          WE.render.renderWires(); WE.render.renderOverlay();
-        } else {
-          var sw2 = WE.model.getSelectedWire();
-          if (sw2) { sw2.color = p.color; WE.render.renderWires(); WE.render.renderOverlay(); }
-        }
-        renderPalette();
-        refreshProps();
-      });
+      sw.addEventListener("click", function () { applyPalette(p); });
       wrap.appendChild(sw);
     });
   }
 
   function openPaletteModal() { renderPaletteList(); document.getElementById("paletteModal").hidden = false; }
+  /* 규격(AWG) 드롭다운 채우기 — 색 행과 추가 줄이 같은 목록을 쓴다. 한 곳에서만 만든다.
+     (두 벌로 두면 한쪽만 고쳐져 목록이 서로 달라진다 — BOM 내보내기에서 이미 겪은 함정) */
+  function fillAwgSelect(sel, current) {
+    sel.innerHTML = "";
+    var opt0 = document.createElement("option"); opt0.value = ""; opt0.textContent = WE.i18n.t("규격");
+    sel.appendChild(opt0);
+    (WE.awg ? WE.awg.TABLE : []).forEach(function (e) {
+      var o = document.createElement("option"); o.value = e.awg; o.textContent = e.awg + "AWG";
+      if (current === e.awg) o.selected = true;
+      sel.appendChild(o);
+    });
+  }
   function renderPaletteList() {
     var pl = document.getElementById("paletteList");
     pl.innerHTML = "";
     WE.model.project.palette.forEach(function (p, i) {
       var row = document.createElement("div");
-      row.className = "preset-row"; row.dataset.idx = i;
+      // .pal-grid: 머리글·추가 줄과 같은 열 구조 (styles.css 의 #paletteModal .pal-grid)
+      row.className = "preset-row pal-grid"; row.dataset.idx = i;
       var color = document.createElement("input");
       color.type = "color"; color.className = "pcolor"; color.value = p.color;
       var label = document.createElement("input");
       label.type = "text"; label.className = "plabel"; label.value = p.label;
+      // 굵기(px) — 이 색으로 그릴 때의 선 두께. 상황에 따라 색마다 다르게 둘 수 있다.
+      var width = document.createElement("input");
+      width.type = "number"; width.className = "pwidth"; width.min = "1"; width.max = "15"; width.step = "1";
+      width.title = WE.i18n.t("선 두께(px)");
+      width.value = String((p.width != null && p.width !== "" && !isNaN(+p.width)) ? +p.width : 2);
+      // 규격(AWG) — 결선표에 나온다. 미지정 가능.
+      var awg = document.createElement("select");
+      awg.className = "pawg"; awg.title = WE.i18n.t("배선 규격(AWG)");
+      fillAwgSelect(awg, p.awg);
       var del = document.createElement("button");
       /* ⚠ 글자는 반드시 × 하나여야 한다.
          .pdel 은 28×28 정사각(styles.css)이라 "삭제" 두 글자를 넣으면 줄바꿈이 나서
@@ -4557,7 +4633,7 @@ WE.app = (function () {
          뜻은 title·aria-label 이 전한다(눈으로도, 화면읽기 프로그램에도). */
       del.className = "pdel"; del.type = "button"; del.textContent = "×";
       del.title = WE.i18n.t("삭제"); del.setAttribute("aria-label", WE.i18n.t("삭제"));
-      row.appendChild(color); row.appendChild(label); row.appendChild(del);
+      row.appendChild(color); row.appendChild(label); row.appendChild(width); row.appendChild(awg); row.appendChild(del);
       pl.appendChild(row);
     });
   }

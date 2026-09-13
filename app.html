@@ -28,7 +28,7 @@
           데이터시트(1400) · 공용부품 게시(680) · 환영(500) 창도 같이 560px 이 됐다.
           (2026-09-02 고원빈 보고 — "공용 부품 창이 갑자기 작아져서 내용이 안 보인다") -->
   <link rel="stylesheet" href="auth.css?v=0880ba8a" />
-  <link rel="stylesheet" href="styles.css?v=23e34ba3" />
+  <link rel="stylesheet" href="styles.css?v=6e3b3360" />
   <!-- 방문 통계는 Cloudflare Web Analytics 를 쓴다 (Pages 대시보드에서 켜면 비콘이 자동 주입된다).
        GA4 를 걷어낸 이유: 동의 화면보다 먼저 실행돼 브라우저 식별자가 미국으로 나갔다
        (개인정보보호법 제28조의8 국외이전). CF 는 쿠키를 안 써서 동의가 필요 없다. -->
@@ -951,11 +951,18 @@
   <div id="paletteModal" class="modal" hidden>
     <div class="modal-box">
       <h3>배선 색상 팔레트</h3>
-      <p class="muted">색상 + 의미를 등록하면 배선색으로 쓰고, 나중에 PDF 범례에도 나옵니다.</p>
+      <!-- 열 머리글 — 목록(#paletteList)은 스크롤되므로 머리글은 그 밖에 둔다(스크롤해도 안 사라진다).
+           칸 폭은 .pal-grid 하나로 행·추가 줄과 같이 맞춘다(styles.css). "색" 은 견본이 곧 뜻이라 비운다.
+           "굵기" 는 숫자 칸에서 px 를 뺀 뒤(2026-09-13) 그 숫자가 무엇인지 알려 주는 유일한 글자다. -->
+      <div class="pal-head pal-grid"><span></span><span>이름</span><span>굵기</span><span>규격</span><span></span></div>
       <div id="paletteList" class="preset-list"></div>
-      <div class="preset-add">
+      <!-- 추가 줄도 같은 열 구조 — 색·이름·굵기·규격을 한 번에 넣고 추가한다.
+           예전에는 색·이름만 넣고 위로 올라가 굵기·규격을 다시 고쳐야 했다(2026-09-13 고원빈). -->
+      <div class="preset-add pal-grid">
         <input type="color" id="newPalColor" value="#3949ab" />
         <input type="text" id="newPalLabel" placeholder="예: 오디오 R" />
+        <input type="number" id="newPalWidth" class="pwidth" min="1" max="15" step="1" value="2" title="선 두께(px)" />
+        <select id="newPalAwg" class="pawg" title="배선 규격(AWG)"></select>
         <button id="btnAddPal" class="primary">＋ 추가</button>
       </div>
       <div class="modal-actions"><button id="palClose">닫기</button></div>
@@ -1349,14 +1356,14 @@
      결제창에서 돌아오는 길이 끊기면(앱 전환·창 닫음·네트워크) 돈만 나가고 끝난다. -->
 <script src="js/payrecover.js?v=43022d21"></script>
   <script src="js/pro.js?v=221b51bb"></script>     <!-- 무료/Pro 경계. LAUNCH 가 꺼져 있으면 제한이 안 걸린다 -->
-  <script src="js/i18n.js?v=bf372f4b"></script>   <!-- 가장 먼저: DOMContentLoaded 번역이 app.js 초기화보다 앞서야 함 -->
+  <script src="js/i18n.js?v=24e90038"></script>   <!-- 가장 먼저: DOMContentLoaded 번역이 app.js 초기화보다 앞서야 함 -->
   <script src="js/awg.js?v=8af811c8"></script>
-  <script src="js/model.js?v=9f5a9ea7"></script>
+  <script src="js/model.js?v=0228ba34"></script>
   <script src="js/presets.js?v=698b6924"></script>
   <script src="js/presetsets.js?v=07bc4ede"></script>   <!-- 단자 세트: 부품 단자 목록을 이름 붙여 저장·재사용 -->
   <script src="js/presetmodal.js?v=490a73ee"></script>  <!-- 단자 프리셋 관리 모달 — 관리자 페이지와 공유 -->
   <script src="js/geometry.js?v=71c7d93b"></script>
-  <script src="js/render.js?v=5be1fcb0"></script>
+  <script src="js/render.js?v=d688052a"></script>
   <script src="js/colorpicker.js?v=e0379158"></script>   <!-- render 다음: 단자 색상 팝오버. termeditor/app 둘 다 이걸 쓴다 -->
   <script src="js/bgremove.js?v=8e7d0005"></script>
   <script src="js/termeditor.js?v=26f12188"></script>
@@ -1370,9 +1377,9 @@
   <script src="js/catalogbackup.js?v=002f523c"></script>   <!-- 게시한 것을 로컬 백업 폴더에도 따라 쓴다 -->
   <script src="js/public-publisher.js?v=351f5423"></script>
   <script src="js/io.js?v=ff98fa19"></script>
-  <script src="js/pdf.js?v=a8e86e7f"></script>
+  <script src="js/pdf.js?v=09d82180"></script>
   <script src="js/xlsx.js?v=b4f1d49f"></script>
-  <script src="js/app.js?v=7a40a000"></script>
+  <script src="js/app.js?v=691a3390"></script>
   <!-- 인쇄 전용: 페이지 전체를 덮는 워터마크. 도면 칸 안에만 찍히던 것을 종이 전체로 넓혔다.
        position:fixed 라 인쇄 시 '모든 장'에 반복해서 나온다(도면 장 · BOM 장 전부). -->
   <div id="pageWatermark" aria-hidden="true"></div>
