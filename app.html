@@ -311,7 +311,7 @@
           </span>
           <button id="bomExportCsv" class="btn-sm">⤓ CSV</button>
           <button id="bomExportXlsx" class="btn-sm" title="엑셀 파일(.xlsx)로 내보내기">⤓ Excel</button>
-          <button id="bomExportWires" class="btn-sm" title="배선 리스트(번호·색·AWG·출발→도착) CSV">⤓ 배선 리스트</button>
+          <!-- 「⤓ 배선 리스트」 버튼은 2026-09-14 에 뺐다 — 결선표 탭에 같은 내보내기가 있고 이름도 옛것이었다. -->
           <details class="bom-colcfg" id="bomColCfg">
             <summary title="표에 어떤 열을 보이게 할지 선택합니다">표시할 열 선택</summary>
             <div class="bom-colcfg-body">
@@ -1373,7 +1373,7 @@
      결제창에서 돌아오는 길이 끊기면(앱 전환·창 닫음·네트워크) 돈만 나가고 끝난다. -->
 <script src="js/payrecover.js?v=43022d21"></script>
   <script src="js/pro.js?v=221b51bb"></script>     <!-- 무료/Pro 경계. LAUNCH 가 꺼져 있으면 제한이 안 걸린다 -->
-  <script src="js/i18n.js?v=45654f22"></script>   <!-- 가장 먼저: DOMContentLoaded 번역이 app.js 초기화보다 앞서야 함 -->
+  <script src="js/i18n.js?v=9606bb4c"></script>   <!-- 가장 먼저: DOMContentLoaded 번역이 app.js 초기화보다 앞서야 함 -->
   <script src="js/awg.js?v=8af811c8"></script>
   <script src="js/model.js?v=99a1228f"></script>
   <script src="js/presets.js?v=698b6924"></script>
@@ -1396,7 +1396,7 @@
   <script src="js/io.js?v=ff98fa19"></script>
   <script src="js/pdf.js?v=c873b150"></script>
   <script src="js/xlsx.js?v=b4f1d49f"></script>
-  <script src="js/app.js?v=e37aaf90"></script>
+  <script src="js/app.js?v=c61afe7c"></script>
   <!-- 인쇄 전용: 페이지 전체를 덮는 워터마크. 도면 칸 안에만 찍히던 것을 종이 전체로 넓혔다.
        position:fixed 라 인쇄 시 '모든 장'에 반복해서 나온다(도면 장 · BOM 장 전부). -->
   <div id="pageWatermark" aria-hidden="true"></div>

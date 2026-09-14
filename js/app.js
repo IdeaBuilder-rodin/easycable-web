@@ -2333,7 +2333,9 @@ WE.app = (function () {
      숫자는 숫자 그대로 둔다 — 엑셀에서 합계·정렬이 되려면 문자열이면 안 된다.
      CSV 쪽은 어차피 문자로 찍히므로 손해가 없다. */
   function bomExportRows() {
-    var data = bomData(), cols = visibleCols();
+    /* 데이터시트 열은 파일로 내보내지 않는다 (2026-09-14 고원빈). 파일 안에는 첨부 이름만 실을 수 있는데
+       (PDF·이미지는 브라우저 안에 있어 엑셀에 못 넣는다) 이름만으로는 의미가 없다. 화면·인쇄의 📎 표시는 그대로. */
+    var data = bomData(), cols = visibleCols().filter(function (c) { return c.id !== "ds"; });
     var head = ["No"].concat(cols.map(function (c) { return c.label; }));
     var rows = [];
     data.rows.forEach(function (r) {
@@ -2344,7 +2346,6 @@ WE.app = (function () {
         else if (c.id === "price") row.push(n(r.price) || "");
         else if (c.id === "sum") row.push(r.sum || "");
         else if (c.id === "link") row.push(r.link || "");
-        else if (c.id === "ds") row.push((r.dsNames || []).join(" | "));
         else if (c.id === "name") row.push(r.name);
         else if (c.id === "spec") row.push(r.spec);
         else row.push("");
@@ -2362,9 +2363,14 @@ WE.app = (function () {
     return { head: head, rows: rows };
   }
 
-  /* 한 칸을 CSV 규격으로 감싼다 — 쉼표·따옴표·줄바꿈이 든 값이 표를 깨뜨린다 */
+  /* 한 칸을 CSV 규격으로 감싼다 — 쉼표·따옴표·줄바꿈이 든 값이 표를 깨뜨린다.
+     ⚠ =, +, -, @ 로 시작하는 글자는 엑셀이 **수식으로 오해**한다 — 팔레트 이름 "+ (전원)" 이
+        `#NAME?` 로 나왔다(2026-09-14 고원빈 스크린샷). 따옴표로 감싸도 마찬가지라 앞에 공백 한 칸을 둔다
+        (숫자는 그대로 — 숫자형으로 넘긴 칸은 이 조건에 안 걸린다). 엑셀 파일(.xlsx)은 문자열로 넣어 이 문제가 없다. */
   function csvCell(v) {
+    if (typeof v === "number") return String(v);
     v = (v == null ? "" : String(v));
+    if (/^[=+\-@\t\r]/.test(v)) v = " " + v;
     return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v;
   }
 
@@ -2645,7 +2651,6 @@ WE.app = (function () {
     // 툴바
     document.getElementById("bomExportCsv").addEventListener("click", exportBomCSV);
     document.getElementById("bomExportXlsx").addEventListener("click", exportBomXlsx);
-    document.getElementById("bomExportWires").addEventListener("click", exportWireListCSV);
     document.getElementById("wlExportCsv").addEventListener("click", exportWireListCSV);
     document.getElementById("wlExportXlsx").addEventListener("click", exportWireListXlsx);
     var cbs = document.querySelectorAll("#bomColCfg input[data-col]");
@@ -2690,8 +2695,6 @@ WE.app = (function () {
     if (SHOW_WIRE_LIST) return;
     var tab = document.querySelector('#viewTabs > .view-tab[data-view="wirelist"]');
     if (tab) tab.hidden = true;
-    var csv = document.getElementById("bomExportWires");
-    if (csv) csv.hidden = true;
   }
 
   // ---- 전력 / 배터리 요약 ----
@@ -5331,20 +5334,25 @@ WE.app = (function () {
   }
   /* 결선표 표 만들기 — 넷 하나가 여러 줄이 되므로 '넷 번호' 열로 묶음을 표시한다.
      엑셀에서 그 열로 정렬·필터하면 한 덩어리가 흩어지지 않는다. */
+  /* 결선표 파일(CSV·엑셀) — **화면 결선표와 같은 열·같은 순번·같은 부품 표기**로 낸다 (2026-09-14).
+       예전에는 옛 "배선 리스트" 형식(넷·색·AWG·여기서/여기로…)이라 화면과 이름·순서가 달랐다.
+     화면과 다른 점 두 가지는 스프레드시트라서 일부러 그렇다:
+       · 이어지는 줄에도 부품·시작·색·규격·배선·비고를 **다 채운다** — 화면·종이의 병합은 눈으로 읽기 위한 것이고,
+         엑셀에서 정렬·필터를 걸면 빈 줄이 흩어진다.
+       · 규격은 "AWG22" 글자가 아니라 숫자 22 (머리글에 AWG 를 적는다) — 정렬이 되게.
+     넷 하나에 순번 하나 = 화면과 같은 번호. 색은 화면의 색 견본 자리 — 팔레트 이름으로 적는다. */
   function wireListExportRows() {
     var nets = netListData();
-    var head = [WE.i18n.t("넷"), WE.i18n.t("색"), "AWG",
-                WE.i18n.t("여기서 부품"), WE.i18n.t("여기서 단자"),
-                WE.i18n.t("여기로 부품"), WE.i18n.t("여기로 단자"), WE.i18n.t("배선수"),
-                WE.i18n.t("비고")];
+    var head = [WE.i18n.t("순번"), WE.i18n.t("부품"), WE.i18n.t("시작 단자"), WE.i18n.t("색"),
+                WE.i18n.t("연결 부품"), WE.i18n.t("연결부 단자"), WE.i18n.t("규격(AWG)"),
+                WE.i18n.t("배선"), WE.i18n.t("비고")];
     var rows = [];
     nets.forEach(function (net, i) {
-      net.targets.forEach(function (m, j) {
-        // 기준 단자는 첫 줄에만 — '넷' 열로 묶어 보면 한 덩어리가 그대로 보인다
-        rows.push([i + 1, j === 0 ? net.color : "", j === 0 ? net.awg : "",
-                   j === 0 ? net.origin.cmp : "", j === 0 ? net.origin.term : "",
-                   m.cmp, m.term, j === 0 ? net.count : "",
-                   j === 0 ? 비고읽기(비고키(net)) : ""]);
+      var awg = net.awg === "" || net.awg == null ? "" : (isFinite(Number(net.awg)) ? Number(net.awg) : net.awg);
+      var note = 비고읽기(비고키(net));
+      net.targets.forEach(function (m) {
+        rows.push([i + 1, net.origin.cmp, net.origin.term, net.color,
+                   m.cmp, m.term, awg, net.count, note]);
       });
     });
     return { head: head, rows: rows, nets: nets.length };
@@ -6066,6 +6074,7 @@ WE.app = (function () {
     netListData: function () { return SHOW_WIRE_LIST ? netListData() : []; },
     // 검사가 '표에 보이는 것' 과 '내보내는 것' 이 같은지 맞춰 볼 때 쓴다
     wireListExportRows: wireListExportRows,
+    _테스트_csvCell: csvCell,
     // 인쇄용 결선표(js/pdf.js)도 화면과 **같은 비고**를 찍어야 한다
     wireNoteOf: function (net) { return 비고읽기(비고키(net)); },
     renderWireListView: renderWireListView,

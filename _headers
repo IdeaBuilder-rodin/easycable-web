@@ -97,6 +97,14 @@
 #        스크립트는 자기 자신 · cloudflareinsights · cdn.portone.io 뿐이다.
 #     ⚠ 이 완화는 **결제 화면 한 장에만** 걸린다. 에디터·랜딩은 전역 규칙 그대로다.
 #
+#  🔴 2026-09-14: connect-src 가 또 좁았다. 포트원 SDK 는 결제창을 열기 전에
+#     **checkout-service.prod.iamport.co**(문서에 없는 옛 iamport 도메인)를 부른다.
+#     api.portone.io · cdn.portone.io 만 열어 둔 상태라 라이브에서 「결제하기」를 눌러도
+#     "결제 창 호출에 실패하였습니다. Failed to fetch" 로 조용히 돌아왔다(콘솔에만 CSP 위반).
+#     로컬은 이 파일을 안 읽으니 멀쩡했다. 헤드리스로 라이브를 열어 requestPayment 를 직접 불러 잡았고,
+#     같은 헤더를 붙인 로컬 서버로 재현 → *.portone.io · *.iamport.co 로 넓히니 결제창이 떴다.
+#     포트원이 내부 호스트를 바꿔도 다시 막히지 않게 와일드카드로 둔다. script-src 는 그대로다.
+#
 #  ⚠ 여기서 한 번 틀렸다 — Cloudflare 는 "아래 규칙이 이기는" 방식이 **아니다.**
 #     여러 규칙이 맞으면 헤더를 **쉼표로 합친다.** CSP 가 두 개 오면 브라우저는
 #     둘 다 지키려고 더 좁은 쪽(교집합)을 쓰므로, 여기서 아무리 열어 줘도
@@ -112,4 +120,4 @@
   Cache-Control: no-store
   Permissions-Policy: geolocation=(), microphone=(), camera=(), payment=(self), usb=()
   Cross-Origin-Opener-Policy: same-origin-allow-popups
-  Content-Security-Policy: default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self' https:; script-src 'self' 'unsafe-inline' https://static.cloudflareinsights.com https://cdn.portone.io; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' https://ukttsmkenaappsazervx.supabase.co https://cloudflareinsights.com https://api.portone.io https://cdn.portone.io; frame-src 'self' blob: https:
+  Content-Security-Policy: default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self' https:; script-src 'self' 'unsafe-inline' https://static.cloudflareinsights.com https://cdn.portone.io; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' https://ukttsmkenaappsazervx.supabase.co https://cloudflareinsights.com https://*.portone.io https://*.iamport.co; frame-src 'self' blob: https:

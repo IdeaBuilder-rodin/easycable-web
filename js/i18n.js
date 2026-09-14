@@ -905,6 +905,16 @@ WE.i18n = (function () {
 
     // 결선표 엑셀 파일 이름
     "_결선표.xlsx": "_connections.xlsx",
+    "_결선표.csv": "_connections.csv",
+    // 결선표 파일 머리글 (2026-09-14, 화면 결선표와 같은 열) — 순번·부품·색·연결 부품·연결부 단자·배선·비고는 위에 있다
+    "순번": "No.",
+    "시작 단자": "From terminal",
+    "연결 부품": "To part",
+    "연결부 단자": "To terminal",
+    "규격(AWG)": "Gauge (AWG)",
+    "배선": "Wires",
+    "결선표 내보내기: ": "Connections exported: ",
+    "개 넷": " nets",
     "결선표": "Connections",
 
     // ---- 계정 (auth.js) ----

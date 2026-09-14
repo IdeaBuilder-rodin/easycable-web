@@ -129,6 +129,7 @@ section > .wrap > h2 {
   margin: 0 0 40px; text-align: center; color: var(--tx2); font-size: 17px;
   text-wrap: balance;
 }
+/* (무료 기간 안내는 띠가 아니라 창으로 한다 — js/freegate.js. 요금제 입장 창 + 결제하기 앞 창. 2026-09-14) */
 
 /* ── 상단 바 ─────────────────────────────────────── */
 .top {

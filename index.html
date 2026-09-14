@@ -20,7 +20,7 @@
        브라우저 탭에서 브랜드가 일정하지 않았다. (2026-08-24 교체) -->
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml" />
   <link rel="apple-touch-icon" href="assets/icon-180.png" />
-  <link rel="stylesheet" href="landing.css?v=a5a79d09" />
+  <link rel="stylesheet" href="landing.css?v=f0d5a6ac" />
 <!-- 로그인 창의 겉모습. 에디터와 **같은 파일**을 읽는다(복사본 없음). -->
 <link rel="stylesheet" href="auth.css?v=0880ba8a" />
   <!-- 「로그인 확인 중」 표시를 첫 페인트 전에 건다. (2026-09-10)
@@ -430,7 +430,8 @@
              가격줄 아래 높이를 맞춘다 — 지우면 이 카드만 버튼이 올라간다. -->
         <p class="plan-sub"></p>
         <p class="plan-desc">짧은 기간에 많은 배선도 작업이 필요한 경우에 유용합니다.</p>
-        <a class="btn btn-main" href="checkout.html?plan=month">결제하기</a>
+        <!-- 보조 버튼 — 주 버튼(파란색)은 1년권이다. 1년 결제를 유도하는 쪽이 유리하다(2026-09-14 고원빈). -->
+        <a class="btn btn-sub" href="checkout.html?plan=month">결제하기</a>
 
         <div class="plan-feats">
           <b>1개월 동안</b>
@@ -473,7 +474,7 @@
              그 숫자만 키워서 눈이 먼저 닿게 한다. -->
         <p class="plan-sub"><span class="strike">₩82,800</span><span class="save"><b>월 3,900원</b></span></p>
         <p class="plan-desc">배선도 작업이 꾸준히 이어지는 경우에 가장 저렴합니다.</p>
-        <a class="btn btn-sub" href="checkout.html?plan=year">결제하기</a>
+        <a class="btn btn-main" href="checkout.html?plan=year">결제하기</a>
 
         <div class="plan-feats">
           <b>12개월 동안</b>
@@ -617,6 +618,8 @@
 
 <!-- 로그인·회원가입을 이 화면에서 바로 처리한다. 순서가 중요하다 —
      flags(동작 스위치) → authmodal(창 마크업) → auth(동작). -->
+<!-- 결제하기 앞에서 한 번 묻는 창 — 무료 이용 기간 동안만. 결제를 여는 날 이 줄을 지운다(pricing.html 도). -->
+<script src="js/freegate.js?v=bd5fbcf6"></script>
 <script src="js/flags.js?v=b0a55adc"></script>
 <script src="js/authmodal.js?v=2bee75f1"></script>
 <script src="js/auth.js?v=9bc336a0"></script>
