@@ -210,7 +210,9 @@ WE.render = (function () {
     var p = labelPos(cmp);
     lbl.setAttribute("x", p.x);
     lbl.setAttribute("y", p.y);
-    lbl.textContent = WE.model.cmpLabel(cmp);   // "#3 스텝다운모듈" — 표기 규칙은 model.cmpLabel 한 곳에
+    // "#3 스텝다운모듈" — 표기 규칙은 model.cmpLabel 한 곳에. 도면은 cmpDiagramLabel 을 거친다:
+    // 부품별 「번호 숨기기」(hideNo)가 여기서만 적용되고 결선표(cmpLabel)에는 번호가 남는다.
+    lbl.textContent = WE.model.cmpDiagramLabel(cmp);
     // 이름표 배경 사각블럭(설정에서 켠 경우만 CSS로 보임)
     try {
       var b = lbl.getBBox();

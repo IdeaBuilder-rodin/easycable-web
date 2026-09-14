@@ -524,6 +524,9 @@ body.note-open .canvas-corner-tools { bottom: 131px; }
 .wp-btn-row button {
   flex: 1; padding: 5px 8px; border: 1px solid var(--bd); border-radius: var(--r);
   background: var(--bg); font-size: var(--fs-sm); color: var(--tx2); cursor: pointer; font-family: inherit;
+  /* 좁으면 어절 단위로만 줄을 바꾼다 — "번호 붙 / 이기" 처럼 낱말 한가운데서 갈리던 것을
+     "번호 / 붙이기" 로 (2026-09-14 고원빈). 한글은 기본값이 글자 단위 줄바꿈이라 keep-all 이 필요하다. */
+  word-break: keep-all; line-height: 1.35;
 }
 .wp-btn-row button:hover { background: var(--bg2); }
 .wp-row2 { display: flex; gap: var(--sp3); }
@@ -1041,6 +1044,13 @@ body.panning #canvas, body.panning #canvas * { cursor: grabbing !important; }
 #propBody label.chk {
   display: flex; align-items: center; gap: 6px;
 }
+/* 속성창 이름 밑 한 줄 — 왼쪽 「이름 숨기기」 · 오른쪽 「번호 #n 숨기기」 (2026-09-14) */
+.p-hide-row { margin: 0 0 var(--sp3); }
+.p-hide-row label.chk { margin-bottom: 0; white-space: nowrap; }
+/* 「번호 #n 숨기기」는 번호가 없으면 숨긴다 — 바로 위 규칙(#propBody label.chk, 1-1-1)의 display:flex 가
+   hidden 속성(UA 의 display:none)을 이기므로 같은 무게로 뒤에 둔다. #propHideNoWrap[hidden](1-1-0)만으로는
+   져서 속성은 true 인데 화면엔 보였다(검사에서 잡힘, 2026-09-14). */
+#propBody label.chk#propHideNoWrap[hidden] { display: none; }
 #propBody input[type="checkbox"] { width: auto; margin: 0; }
 .row2 { display: flex; gap: 8px; }
 .row2 label, .row2 button { flex: 1; }

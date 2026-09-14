@@ -5378,6 +5378,21 @@ WE.app = (function () {
       c.hideTermLabels = e.target.checked;
       WE.render.renderAll();
     });
+    /* 이름 숨기기 — 도면의 부품 이름표를 감춘다(우클릭 메뉴에서 옮겨 옴, 2026-09-14).
+       ⚠ 이름 자체는 안 지운다. BOM·결선표는 그대로 이 부품을 이름으로 부른다.
+       켠 것만 저장한다(false 를 파일마다 남기지 않게). */
+    document.getElementById("propHideName").addEventListener("change", function (e) {
+      var c = WE.model.getSelectedComponent(); if (!c) return;
+      if (e.target.checked) c.hideName = true; else delete c.hideName;
+      WE.render.renderAll();
+    });
+    // 번호 숨기기 — 도면 이름표에서만 #n 을 뺀다(model.cmpDiagramLabel). 결선표는 그대로.
+    // 켠 것만 저장한다(false 를 파일마다 남기지 않게) — 이름 숨기기(hideName)와 같은 방식.
+    document.getElementById("propHideNo").addEventListener("change", function (e) {
+      var c = WE.model.getSelectedComponent(); if (!c) return;
+      if (e.target.checked) c.hideNo = true; else delete c.hideNo;
+      WE.render.renderAll();
+    });
   }
 
   // ---- 프리셋 관리 모달 ----
@@ -5425,13 +5440,6 @@ WE.app = (function () {
           var 새부품 = saveToLibrary(c.name, function () { return 부품자료(c); });
           if (새부품) c.libraryId = 새부품.id;
         }
-      } else if (act === "hidename") {
-        /* 부품 이름표 감추기/보이기 — 토글이다. 감춘 것을 되돌릴 길이 없으면 안 된다.
-           ⚠ 이름 자체는 안 지운다. BOM·결선표는 그대로 이 부품을 이름으로 부른다. */
-        if (c.hideName) delete c.hideName; else c.hideName = true;
-        WE.render.renderAll();
-        setHint(c.hideName ? WE.i18n.t("부품 이름을 숨겼습니다 — 우클릭에서 다시 켤 수 있습니다")
-                           : WE.i18n.t("부품 이름을 다시 보입니다"));
       } else if (act === "front" || act === "forward" || act === "backward" || act === "back") {
         // 겹침 순서 — 캔바 류의 네 동작. 부품이 서로 겹칠 때 위아래를 바꿀 방법이 없었다(2026-09-03).
         var 바뀜 = act === "front" ? WE.model.bringToFront(c.id)
@@ -5499,9 +5507,6 @@ WE.app = (function () {
   function openComponentMenuAt(clientX, clientY, cmp) {
     _menuCmpId = cmp.id;
     var menu = document.getElementById("cmpMenu");
-    // 토글이므로 지금 상태를 글자로 알려준다 — 누르기 전에 무엇이 될지 보여야 한다
-    var 이름버튼 = menu.querySelector('[data-act="hidename"]');
-    if (이름버튼) 이름버튼.textContent = cmp.hideName ? "이름 다시 보이기" : "이름 숨기기";
     menu.hidden = false;
     menu.style.left = Math.max(8, Math.min(clientX, window.innerWidth - menu.offsetWidth - 8)) + "px";
     menu.style.top = Math.max(8, Math.min(clientY, window.innerHeight - menu.offsetHeight - 8)) + "px";
@@ -5896,6 +5901,11 @@ WE.app = (function () {
     setIfNotFocused("propRot", Math.round(c.rotation));
     document.getElementById("propLockAspect").checked = WE.model.ui.lockAspect;
     document.getElementById("propHideTermLabels").checked = !!c.hideTermLabels;
+    document.getElementById("propHideName").checked = !!c.hideName;
+    // 번호 숨기기 — 번호가 붙은 부품(같은 품목이 여럿)에만 칸이 보인다.
+    // (처음엔 "번호 #2 숨기기" 처럼 실제 번호를 넣었는데 "굳이" 라는 판단 — 2026-09-14 고원빈)
+    document.getElementById("propHideNoWrap").hidden = !(WE.model.cmpSeq(c) > 0);
+    document.getElementById("propHideNo").checked = !!c.hideNo;
     renderCompElec(c);
   }
 

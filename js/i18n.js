@@ -257,8 +257,8 @@ WE.i18n = (function () {
     "⊘ 숨기기": "⊘ Hide unconnected",
     "이름 숨기기": "Hide name",
     "이름 다시 보이기": "Show name",
-    "부품 이름을 숨겼습니다 — 우클릭에서 다시 켤 수 있습니다": "Component name hidden — turn it back on from the right-click menu",
-    "부품 이름을 다시 보입니다": "Component name shown again",
+    // 이름 숨기기는 2026-09-14 에 우클릭 메뉴 → 속성창 체크박스로 옮겼다 (아래 "이름 숨기기" 키를 그대로 쓴다)
+    "도면의 부품 이름표를 감춥니다. 이름 자체는 그대로라 BOM·결선표에는 나옵니다.": "Hides this part's name label on the diagram. The name itself stays, so the BOM and connection table still show it.",
     "숨겼던 단자 ": "Restored ",
     "개를 도로 켰습니다": " hidden terminals",
     "이 버튼으로 숨긴 것만 되돌립니다. 직접 끄신 단자는 그대로 둡니다.": "Only terminals hidden by this button are restored. Ones you turned off yourself stay off.",
@@ -364,6 +364,9 @@ WE.i18n = (function () {
     "단자": "Terminals",
     "🔍 단자 배치 편집…": "🔍 Edit terminal layout…",
     "단자 이름 숨기기 (도면에서)": "Hide terminal names (on diagram)",
+    // 부품별 번호 숨기기 (2026-09-14) — 속성창 이름 칸 밑, 「이름 숨기기」 옆
+    "번호 숨기기": "Hide number",
+    "같은 부품이 여럿이라 붙은 번호입니다. 도면에서만 숨기고 결선표에는 그대로 나옵니다.": "This number marks one of several identical parts. Hiding it affects the diagram only — the connection table keeps it.",
     "이미지 편집…": "Edit image…",
     "복제": "Duplicate",
     "전기 정보": "Electrical info",

@@ -201,12 +201,25 @@ WE.model = (function () {
   }
   function cmpLabel(cmp) {
     if (!cmp) return "";
-    /* 이름표를 감춘 부품은 빈 문자열을 준다 (2026-09-08).
-       ⚠ 이름 자체(cmp.name)는 그대로 둔다 — BOM·결선표·라이브러리 연결이 다 그 이름을 쓴다.
-          감추는 것은 **도면에 그리는 이름표**뿐이다. 지우는 것이 아니다. */
-    if (cmp.hideName) return "";
+    /* ⚠ 여기서는 이름 숨김(hideName)을 보지 않는다. 결선표·CSV 가 이 함수를 쓰는데, 예전에는 여기서
+       빈 문자열을 줘서 **이름을 숨긴 부품이 결선표에서 빈칸**으로 나왔다(2026-09-14 실행으로 확인).
+       숨기는 것은 도면의 이름표뿐이다 — 그 판정은 아래 cmpDiagramLabel 에만 있다. */
     var s = cmpSeq(cmp);
     return (s > 0 ? "#" + s + " " : "") + (cmp.name || "");
+  }
+  /* 도면 이름표 전용 표기 — 결선표는 위 cmpLabel 을 그대로 쓴다.
+     같은 부품이 여럿이라 붙는 번호(#n)를 **이 부품의 도면 이름표에서만** 뺀다(cmp.hideNo).
+     2026-09-14 사용자 피드백 "자동 #1 #2 는 필요할 때만" — 상황에 따라 어떤 부품은 번호를 보이고
+     어떤 부품은 감추고 싶다고 해서 프로젝트 스위치가 아니라 부품별 플래그로 했다(이름 숨기기·
+     단자 숨기기와 같은 자리). 번호 자체(cmp.no)와 결선표 표기는 손대지 않는다 — 종이에서 같은
+     부품을 가릴 길(#1·#2)은 결선표에 남겨 둔다. */
+  function cmpDiagramLabel(cmp) {
+    if (!cmp) return "";
+    /* 이름표를 감춘 부품은 빈 문자열 (2026-09-08). 이름 자체(cmp.name)는 그대로 — BOM·결선표·
+       라이브러리 연결이 다 그 이름을 쓴다. 감추는 것은 **도면에 그리는 이름표**뿐이다. */
+    if (cmp.hideName) return "";
+    if (cmp.hideNo) return cmp.name || "";
+    return cmpLabel(cmp);
   }
   function allWires() { return allOf("wires"); }
   function allAnnotations() { return allOf("annotations"); }
@@ -1008,6 +1021,7 @@ WE.model = (function () {
     allComponents: allComponents,
     ensureCmpNos: ensureCmpNos,
     cmpLabel: cmpLabel,
+    cmpDiagramLabel: cmpDiagramLabel,
     cmpSeq: cmpSeq,
     cmpGroupKey: cmpGroupKey,
     maxCmpNo: maxCmpNo,

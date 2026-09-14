@@ -28,7 +28,7 @@
           데이터시트(1400) · 공용부품 게시(680) · 환영(500) 창도 같이 560px 이 됐다.
           (2026-09-02 고원빈 보고 — "공용 부품 창이 갑자기 작아져서 내용이 안 보인다") -->
   <link rel="stylesheet" href="auth.css?v=0880ba8a" />
-  <link rel="stylesheet" href="styles.css?v=32fdae9c" />
+  <link rel="stylesheet" href="styles.css?v=31e7e9f1" />
   <!-- 방문 통계는 Cloudflare Web Analytics 를 쓴다 (Pages 대시보드에서 켜면 비콘이 자동 주입된다).
        GA4 를 걷어낸 이유: 동의 화면보다 먼저 실행돼 브라우저 식별자가 미국으로 나갔다
        (개인정보보호법 제28조의8 국외이전). CF 는 쿠키를 안 써서 동의가 필요 없다. -->
@@ -637,6 +637,25 @@
           <label>이름
             <input type="text" id="propName" />
           </label>
+          <!-- 이름 밑 한 줄 — 왼쪽 「이름 숨기기」 · 오른쪽 「번호 #n 숨기기」. 둘 다 도면 이름표에만 영향을 주는
+               부품별 플래그(hideName · hideNo, 파일에 저장)이고 BOM·결선표는 그대로다.
+               · 이름 숨기기는 원래 우클릭 메뉴에 있었다(2026-09-08). "그 정도 기능을 우클릭에 두긴 아깝다"
+                 (2026-09-14 고원빈) → 속성창으로 옮기고 메뉴에서는 뺐다.
+               · 번호 숨기기 — 같은 부품이 여럿이라 붙은 번호(#n)를 이 부품에서만 뺀다(2026-09-14 사용자
+                 피드백 "자동 #1 #2 는 필요할 때만"). 번호가 붙은 부품에만 나타난다 — 하나뿐인 부품엔
+                 번호가 없으니 칸 자체가 없다. 결선표에는 번호가 남아 종이에서 가릴 길을 지킨다.
+               이름 칸 바로 밑에 둔 이유: 둘 다 도면에서 이름표에 찍히는 글자라 이름의 일부다.
+               단자 섹션의 「숨기기」 옆에 두면 무엇을 숨기는지 헷갈린다. -->
+          <div class="row2 p-hide-row">
+            <label class="chk" id="propHideNameWrap"
+                   title="도면의 부품 이름표를 감춥니다. 이름 자체는 그대로라 BOM·결선표에는 나옵니다.">
+              <input type="checkbox" id="propHideName" /> 이름 숨기기
+            </label>
+            <label class="chk" id="propHideNoWrap" hidden
+                   title="같은 부품이 여럿이라 붙은 번호입니다. 도면에서만 숨기고 결선표에는 그대로 나옵니다.">
+              <input type="checkbox" id="propHideNo" /> 번호 숨기기
+            </label>
+          </div>
 
           <!-- 크기·회전·위치는 모두 같은 2열 격자(.g-row)에 얹는다.
                행마다 폭이 제각각이면 기준이 없어 보인다 — 세로로 줄이 맞아야 패널이 정돈돼 보인다.
@@ -684,7 +703,7 @@
             <div class="p-sec-title">단자</div>
             <button id="btnTermEdit" class="p-main">🔍 단자 배치 편집…</button>
             <!-- 이 칸이 이미 '단자' 라서 "이름 숨기기" 라고 하면 무엇의 이름인지 헷갈린다.
-                 (부품 이름표를 감추는 것은 우클릭 메뉴의 「이름 숨기기」다) -->
+                 (부품 이름표를 감추는 것은 위 이름 칸 밑의 「이름 숨기기」다) -->
             <label class="chk"><input type="checkbox" id="propHideTermLabels" /> 숨기기</label>
           </div>
 
@@ -737,9 +756,7 @@
     <button data-act="forward">앞으로 가져오기</button>
     <button data-act="backward">뒤로 보내기</button>
     <button data-act="back">맨 뒤로 보내기</button>
-    <hr />
-    <!-- 부품 이름표를 감춘다. 도면이 빽빽할 때 이름이 오히려 방해가 되는 경우가 있다. -->
-    <button data-act="hidename">이름 숨기기</button>
+    <!-- 「이름 숨기기」는 2026-09-14 에 속성창(이름 칸 밑)으로 옮겼다 — 우클릭에 두기엔 작은 기능. -->
   </div>
 
   <!-- 첫 부품 등록 후: 저장 위치 안내 + 파일 백업 유도 모달 -->
@@ -1356,14 +1373,14 @@
      결제창에서 돌아오는 길이 끊기면(앱 전환·창 닫음·네트워크) 돈만 나가고 끝난다. -->
 <script src="js/payrecover.js?v=43022d21"></script>
   <script src="js/pro.js?v=221b51bb"></script>     <!-- 무료/Pro 경계. LAUNCH 가 꺼져 있으면 제한이 안 걸린다 -->
-  <script src="js/i18n.js?v=24e90038"></script>   <!-- 가장 먼저: DOMContentLoaded 번역이 app.js 초기화보다 앞서야 함 -->
+  <script src="js/i18n.js?v=45654f22"></script>   <!-- 가장 먼저: DOMContentLoaded 번역이 app.js 초기화보다 앞서야 함 -->
   <script src="js/awg.js?v=8af811c8"></script>
-  <script src="js/model.js?v=0228ba34"></script>
+  <script src="js/model.js?v=99a1228f"></script>
   <script src="js/presets.js?v=698b6924"></script>
   <script src="js/presetsets.js?v=07bc4ede"></script>   <!-- 단자 세트: 부품 단자 목록을 이름 붙여 저장·재사용 -->
   <script src="js/presetmodal.js?v=490a73ee"></script>  <!-- 단자 프리셋 관리 모달 — 관리자 페이지와 공유 -->
   <script src="js/geometry.js?v=71c7d93b"></script>
-  <script src="js/render.js?v=d688052a"></script>
+  <script src="js/render.js?v=81ccf08a"></script>
   <script src="js/colorpicker.js?v=e0379158"></script>   <!-- render 다음: 단자 색상 팝오버. termeditor/app 둘 다 이걸 쓴다 -->
   <script src="js/bgremove.js?v=8e7d0005"></script>
   <script src="js/termeditor.js?v=26f12188"></script>
@@ -1379,7 +1396,7 @@
   <script src="js/io.js?v=ff98fa19"></script>
   <script src="js/pdf.js?v=c873b150"></script>
   <script src="js/xlsx.js?v=b4f1d49f"></script>
-  <script src="js/app.js?v=691a3390"></script>
+  <script src="js/app.js?v=e37aaf90"></script>
   <!-- 인쇄 전용: 페이지 전체를 덮는 워터마크. 도면 칸 안에만 찍히던 것을 종이 전체로 넓혔다.
        position:fixed 라 인쇄 시 '모든 장'에 반복해서 나온다(도면 장 · BOM 장 전부). -->
   <div id="pageWatermark" aria-hidden="true"></div>
