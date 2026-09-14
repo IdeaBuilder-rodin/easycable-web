@@ -310,13 +310,23 @@ WE.pdf = (function () {
        나뉘어도 번호는 그 시트 안에서 계속 이어진다 — 2페이지 첫 줄이 다시 1번이면 안 된다.
        ⚠ "번호" 대신 "순번" 을 쓴다 — 도면 위 배선 번호(W1·W2, 개발_기록.md 6.10)와 헷갈리지 않게.
 
-       ⚠ 페이지는 **항상 세로 A4·표 1개**다 (2026-09-13 고원빈 확정 — "결선표는 도면이 가로든
-          세로든 그냥 세로로 고정해버리는 게 어떤가"). 예전엔 좌우 2단으로 지면을 아꼈는데,
+       ⚠ 페이지는 **표 1개(좌우 2단 폐지)**다. 예전엔 좌우 2단으로 지면을 아꼈는데,
           실측해 보니 표 2개의 폭(약 287mm)이 **가로 A4 내용폭(281mm)조차 못 채우고
           세로 A4(194mm)에서는 두 번째 표가 페이지 밖으로 잘렸다** — 규격 열을 더하기 전부터
-          이미 그랬다. 폭을 매번 재서 2단/1단을 가르는 대신, 결선표만 도면 방향과 무관하게
-          **세로로 고정**하는 편이 근본적으로 안전하다. 표 폭은 실측 150mm 안팎이라 세로 A4
-          194mm 안에 항상 들어가고, 남는 폭은 비고 칸에 몰아준다(styles.css .wl-note). */
+          이미 그랬다. 표 1개(실측 폭 150~185mm)는 세로 A4 194mm 안에도 항상 들어가므로
+          이것만으로 폭 문제는 풀린다. 남는 폭은 비고 칸에 몰아준다(styles.css .wl-note).
+
+          ⚠ 2026-09-13에는 여기서 한 걸음 더 나가 "결선표는 도면 방향과 무관하게 항상
+          세로 A4로 고정"(`page: pr-tall`)까지 했었다. 그런데 배포 후 실제로 도면이 가로인
+          단일 시트 프로젝트에서 **PDF 마지막에 빈 페이지가 한 장 더 생기는 문제**가
+          나왔다 — 가로(도면·BOM) → 세로(결선표)로 쪽 방향이 바뀌는 자리에서 브라우저가
+          여분의 빈 쪽을 끼워 넣은 것으로 보인다(이 문서 6절·CLAUDE.md에 이미 있던
+          "쪽 이름이 바뀌면 빈 쪽이 생긴다"는 것과 같은 부류의 문제). 표 1개면 어차피 폭
+          문제가 없으므로(위 문단), **방향을 강제하는 이득이 없다** — 그래서 되돌렸다.
+          결선표는 이제 도면 방향을 그대로 따라간다(BOM과 같은 방식). 페이지 높이 예산은
+          두 방향 중 더 작은 쪽(세로 A4 194mm)을 항상 기준으로 삼아 계산한다 — 실제 방향을
+          매번 판별하지 않아도 절대 넘치지 않는다(도면이 세로라 실제로 281mm를 쓸 수 있는
+          경우엔 페이지를 살짝 더 아낄 여지를 포기하는 정도의 손해만 있다). */
     /* ⚠ 결선표는 **시트마다** 만든다 (2026-09-13 고원빈: "한 프로젝트의 결선표가 전부 나와야 한다").
        netListByComponent() 는 안에서 netFrom · getComponent · getWire 를 쓰는데, 셋 다 '현재 시트' 별칭
        (model.js 의 project.wires / project.components)을 읽는다. 그래서 한 번만 부르면 보고 있던
@@ -450,8 +460,13 @@ WE.pdf = (function () {
            · 표 머리글(thead) = 5.8mm · 결선표 제목줄(.bom-title, 시트의 **첫 페이지에만** 붙는다) = 7.95mm
          ⚠ 한 부품 묶음은 쪼개지 않는다 — 그림과 단자가 다른 페이지로 갈라지면
             "이 단자가 어느 부품 것인지" 를 종이에서 잃는다. 그래서 예산을 넘기기 직전에
-            다음 페이지로 넘긴다(묶음 전체를 통째로 옮긴다). */
-      var ROW_MM = 5.82, MIN_GROUP_MM = 18.94, HEAD_MM = 5.8, TITLE_MM = 7.95, PAGE_MM = 281;
+            다음 페이지로 넘긴다(묶음 전체를 통째로 옮긴다).
+         ⚠ PAGE_MM 은 **세로 A4 높이(194mm)로 고정**한다 — 결선표가 도면 방향을 그대로
+            따라가므로(위 설명 참고) 실제로는 가로 A4(194mm)일 수도 세로 A4(281mm)일 수도
+            있는데, 매번 방향을 판별하는 대신 항상 더 작은 쪽을 기준으로 삼는다. 그러면
+            실제 방향이 무엇이든 절대 넘치지 않는다 — 손해는 세로 도면일 때 페이지를
+            조금 덜 아끼는 정도뿐이다. */
+      var ROW_MM = 5.82, MIN_GROUP_MM = 18.94, HEAD_MM = 5.8, TITLE_MM = 7.95, PAGE_MM = 194;
       function groupCostMM(g) { return Math.max(g.lines * ROW_MM, MIN_GROUP_MM); }
 
       function appendWireList(wl) {
@@ -475,7 +490,7 @@ WE.pdf = (function () {
           wrap.appendChild(wireTable(그룹들, 순번커서));
           // 다음 페이지 시작 번호 — 이 페이지에 실린 넷 개수(그룹마다 rows.length)만큼 이어간다
           그룹들.forEach(function (g) { 순번커서 += g.rows.length; });
-          wlBox.appendChild(wrap);
+          bomBox.appendChild(wrap);
         });
       }
 
@@ -486,11 +501,6 @@ WE.pdf = (function () {
            · 여러 장이면 "결선표-01(전원부)". 시트 이름이 기본값(쪽 번호 "01")과 같으면
              "결선표-01(01)" 이 되어 겹치므로 괄호를 뺀다 → "결선표-01".
          배선이 없는 시트는 결선표를 만들지 않는다(빈 표 한 장이 낭비다). */
-      /* 결선표 전체(모든 시트의 제목+표)를 이 안에 담는다 — .wl-pages 하나에만
-         "page: pr-tall"(세로 A4)을 걸면 안의 모든 요소가 **상속으로** 세로를 따라간다
-         (CSS 'page' 속성은 상속된다). 제목·표 하나하나에 각각 붙이지 않아도 된다. */
-      var wlBox = document.createElement("div");
-      wlBox.className = "wl-pages";
       var sheets = WE.model.project.sheets || [];
       var keepSheet = WE.model.getActiveSheetId();
       var multiSheet = sheets.length > 1;
@@ -502,10 +512,9 @@ WE.pdf = (function () {
         var nm = String(sh.name || "").trim();
         var title = !multiSheet ? WE.i18n.t("결선표")
                   : WE.i18n.t("결선표") + "-" + no + (nm && nm !== no ? "(" + nm + ")" : "");
-        wlBox.appendChild(sectionTitle(title, true));
+        bomBox.appendChild(sectionTitle(title, true));
         appendWireList(wl);
       });
-      if (wlBox.children.length) bomBox.appendChild(wlBox);
       // 보고 있던 시트로 되돌린다 — 인쇄가 화면 상태를 바꾸면 안 된다 (그리기는 안 건드렸으니 다시 그릴 것도 없다)
       WE.model.setActiveSheet(keepSheet);
     }

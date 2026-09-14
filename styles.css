@@ -2108,11 +2108,11 @@ body.pr-multi.pr-first-tall, body.pr-multi.pr-first-tall main { page: pr-tall; }
   /* 여백을 주지 않는다 — BOM·배선 리스트는 저마다 강제로 새 장에서 시작(.pdf-page-break)하므로
      여기 margin은 다음 장으로 넘어가지 않고 1페이지 바닥만 3mm 잡아먹었다(하단 밴드 여유가 그만큼 줄었다). */
   #printBOM { margin-top: 0; }
-  /* 결선표는 항상 세로 A4 · 표 1개 (2026-09-13 고원빈 확정 — pdf.js 위쪽 설명 참고).
-     .wl-pages 하나에만 세로 쪽(pr-tall)을 걸면 안의 제목·표 전부가 **상속**으로 따라간다
-     (CSS 'page' 는 상속 속성) — 하나하나에 따로 붙일 필요가 없다. */
-  .wl-pages { page: pr-tall; }
-  /* .wl-cols: 예전 좌우 2단 시절 이름을 그대로 쓴다(검사·pdf.js 가 이 클래스로 '한 쪽'을 센다).
+  /* 결선표는 표 1개(좌우 2단 폐지) — 실측 폭 150~185mm 라 어느 방향 A4(194/281mm)에도
+     들어간다. 도면 방향을 강제로 바꾸지는 않는다 — 2026-09-13 에 "항상 세로로 고정"까지
+     했다가 가로 도면 뒤에서 빈 페이지가 한 장 더 생기는 문제가 나와 되돌렸다(pdf.js 위쪽
+     설명 참고). 결선표는 이제 BOM 과 같은 방식으로 그때그때 도면의 방향을 따라간다.
+     .wl-cols: 예전 좌우 2단 시절 이름을 그대로 쓴다(검사·pdf.js 가 이 클래스로 '한 쪽'을 센다).
      지금은 표 1개만 담지만, flex 자체는 해가 없어 그대로 둔다(표는 flex:none 이라 안 늘어난다). */
   .wl-cols { display: flex; align-items: flex-start; gap: 8mm; }
   .wl-cols > table { flex: none; }
