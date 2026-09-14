@@ -1367,13 +1367,13 @@
 
   <!-- 스크립트: file:// 호환 위해 일반 script (모듈 아님), 순서 중요 -->
   <script src="js/authmodal.js?v=2bee75f1"></script>  <!-- 로그인 창 마크업. auth.js 보다 먼저 꽂혀 있어야 한다 -->
-  <script src="js/flags.js?v=b0a55adc"></script>   <!-- 맨 앞: 다른 파일이 WE.flags 를 보고 동작을 정한다 -->
+  <script src="js/flags.js?v=d53ae8fb"></script>   <!-- 맨 앞: 다른 파일이 WE.flags 를 보고 동작을 정한다 -->
   <script src="js/auth.js?v=9bc336a0"></script>    <!-- flags 다음. SDK(js/vendor/supabase.js)는 필요할 때만 스스로 불러온다 -->
 <!-- 결제는 됐는데 이용권이 안 붙은 주문을 다음 접속 때 되살린다.
      결제창에서 돌아오는 길이 끊기면(앱 전환·창 닫음·네트워크) 돈만 나가고 끝난다. -->
 <script src="js/payrecover.js?v=43022d21"></script>
   <script src="js/pro.js?v=221b51bb"></script>     <!-- 무료/Pro 경계. LAUNCH 가 꺼져 있으면 제한이 안 걸린다 -->
-  <script src="js/i18n.js?v=9606bb4c"></script>   <!-- 가장 먼저: DOMContentLoaded 번역이 app.js 초기화보다 앞서야 함 -->
+  <script src="js/i18n.js?v=caa2203c"></script>   <!-- 가장 먼저: DOMContentLoaded 번역이 app.js 초기화보다 앞서야 함 -->
   <script src="js/awg.js?v=8af811c8"></script>
   <script src="js/model.js?v=99a1228f"></script>
   <script src="js/presets.js?v=698b6924"></script>
@@ -1388,15 +1388,17 @@
   <script src="js/store.js?v=d0a1ffe1"></script>
   <script src="js/assets.js?v=c14bb23d"></script>   <!-- store.js 다음: 자산 풀이 store의 IndexedDB를 쓴다 -->
   <script src="js/history.js?v=4ba57930"></script>
-  <script src="js/library.js?v=96f16755"></script>
+  <script src="js/library.js?v=7d10f845"></script>
   <script src="js/categories.js?v=a553fee6"></script>   <!-- public-library 앞: 분류 목록을 여기서 읽는다 -->
   <script src="js/public-library.js?v=45999375"></script>
   <script src="js/catalogbackup.js?v=002f523c"></script>   <!-- 게시한 것을 로컬 백업 폴더에도 따라 쓴다 -->
-  <script src="js/public-publisher.js?v=afa0ac52"></script>
+  <script src="js/public-publisher.js?v=27576c1b"></script>
   <script src="js/io.js?v=ff98fa19"></script>
   <script src="js/pdf.js?v=c873b150"></script>
   <script src="js/xlsx.js?v=b4f1d49f"></script>
-  <script src="js/app.js?v=c61afe7c"></script>
+  <script src="js/app.js?v=9ebc31ef"></script>
+  <!-- 라이브러리 부품 자동 수집 — 맨 마지막에 defer. 에디터 로딩에 끼어들지 않는다. 없어도 에디터는 그대로 돈다(library.js 가 있으면 부를 뿐). -->
+  <script src="js/libsync.js?v=4308ef03" defer></script>
   <!-- 인쇄 전용: 페이지 전체를 덮는 워터마크. 도면 칸 안에만 찍히던 것을 종이 전체로 넓혔다.
        position:fixed 라 인쇄 시 '모든 장'에 반복해서 나온다(도면 장 · BOM 장 전부). -->
   <div id="pageWatermark" aria-hidden="true"></div>

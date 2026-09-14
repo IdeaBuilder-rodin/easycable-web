@@ -79,6 +79,9 @@ WE.library = (function () {
     var packed = WE.assets.pack({ folders: folders, parts: parts });
     WE.assets.flush();
     WE.store.putRaw(KEY2, JSON.stringify(packed));
+    /* 서버 수집(js/libsync.js) — 저장이 **끝난 뒤** 타이머만 건다. 저장 자체는 위에서 이미 끝났고,
+       libsync 가 없거나 무슨 오류를 내도 여기서 삼킨다. 에디터가 이 줄 때문에 달라지면 안 된다(2026-09-14). */
+    try { if (WE.libsync && WE.libsync.touch) WE.libsync.touch(); } catch (e) { /* 무시 */ }
   }
 
   // ---- 폴더 ----

@@ -188,6 +188,161 @@
     .adm-gate h2 { margin: 0; font-size: 18px; color: var(--tx); }
     .adm-gate p { margin: 0; max-width: 420px; color: var(--tx3); font-size: var(--fs); line-height: 1.7; }
     .adm-gate a { margin-top: 8px; color: var(--primary-d); font-size: var(--fs); }
+
+    /* ── 화면 전환 버튼 (머리줄) ── */
+    .adm-mode { display: flex; gap: 2px; margin-left: auto; margin-right: 12px; padding: 2px; border: 1px solid var(--bd); border-radius: 999px; background: var(--bg2, #f4f5f7); }
+    .adm-mode-btn { padding: 4px 12px; border: 0; border-radius: 999px; background: transparent; color: var(--tx2); font: inherit; font-size: var(--fs-sm); cursor: pointer; }
+    .adm-mode-btn.on { background: var(--bg); color: var(--primary-d); box-shadow: 0 1px 2px rgba(0,0,0,.12); }
+    .adm-mode-btn:not(.on):hover { color: var(--tx); }
+
+    /* ── 일괄 등록 ──
+       표 한 줄 = 부품 하나. 입력칸은 테두리를 옅게 해 표가 어지럽지 않게, 고를 때만 파란 테두리.
+       세로 중심은 모두 맞춘다(개발_기록 11장 — 같은 줄의 조작기는 높이·중심을 맞춘다). */
+    /* ── 사용자 부품 탭 (2026-09-14) — 줄은 styles.css 의 .lib-item 을 그대로 쓴다 ── */
+    .adm-collect { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+    .adm-col-search { width: 220px; height: 30px; padding: 0 10px; border: 1px solid var(--bd); border-radius: var(--r); font: inherit; }
+    .adm-col-sort { height: 30px; border: 1px solid var(--bd); border-radius: var(--r); font: inherit; background: #fff; }
+    .adm-col-stats { color: var(--tx3); font-size: var(--fs-sm); margin-left: 6px; }
+    .adm-col-body { flex: 1; min-height: 0; display: flex; }
+    .adm-col-list-wrap { flex: 1; min-width: 0; overflow: auto; padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; border-right: 1px solid var(--bd2); }
+    .adm-col-new { align-self: center; padding: 5px 14px; border-radius: 999px; border: 1px solid var(--primary); background: var(--primary-bg); color: var(--primary-d); font: inherit; font-size: var(--fs-sm); cursor: pointer; }
+    .adm-col-list { display: flex; flex-direction: column; gap: 6px; }
+    .adm-col-list .lib-item { cursor: pointer; }
+    .adm-col-list .lib-item.on { border-color: var(--primary); background: var(--primary-bg); }
+    .adm-col-list .lib-item.is-public { opacity: .55; }        /* 공용 부품에서 가져온 것 — 우리 것 */
+    .adm-col-list .lib-item input[type=checkbox] { margin: 0 2px 0 4px; }
+    .adm-col-meta { font-size: 11px; color: var(--tx3); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .adm-col-count { flex: none; padding: 2px 8px; border-radius: 999px; background: #eef2f7; color: var(--tx2); font-size: 11px; font-weight: 600; }
+    .adm-col-count.many { background: #e8f5e9; color: #2e7d32; }
+    .adm-col-users { width: 230px; flex: none; overflow: auto; padding: 10px 8px; border-right: 1px solid var(--bd2); display: flex; flex-direction: column; gap: 4px; }
+    .adm-col-user { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 7px 10px; border: 1px solid transparent; border-radius: var(--r); background: none; font: inherit; text-align: left; cursor: pointer; }
+    .adm-col-user:hover { background: var(--bg2); }
+    .adm-col-user.on { background: var(--primary-bg); border-color: #c9d8ec; }
+    .adm-col-user b { font-size: 13px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .adm-col-user span { font-size: 11px; color: var(--tx3); }
+    .adm-col-user span i { font-style: normal; color: #9aa4b2; }
+    .adm-col-note { margin: 10px 0 0; font-size: 11px; color: var(--tx3); line-height: 1.5; }
+    .adm-col-edited { font-style: normal; font-size: 10px; color: var(--primary-d); background: var(--primary-bg); padding: 1px 5px; border-radius: 999px; margin-left: 4px; }
+    .adm-col-detail { width: 400px; flex: none; overflow: auto; padding: 14px 16px; font-size: var(--fs-sm); }
+    .adm-col-noimg { height: 120px; display: flex; align-items: center; justify-content: center; color: var(--tx3); }
+    .adm-col-tools { display: flex; gap: 6px; margin: 10px 0; }
+    .adm-col-form { display: flex; flex-direction: column; gap: 8px; }
+    .adm-col-f { display: flex; flex-direction: column; gap: 2px; font-size: 11px; color: var(--tx3); }
+    .adm-col-f input { height: 28px; padding: 0 8px; border: 1px solid var(--bd); border-radius: var(--r); font: inherit; font-size: var(--fs-sm); color: var(--tx); }
+    .adm-col-buy { display: flex; flex-direction: column; gap: 4px; }
+    .adm-col-f-title { font-size: 11px; color: var(--tx3); }
+    .adm-col-f-title em { font-style: normal; font-size: 10px; margin-left: 4px; }
+    .adm-col-buy-item { display: flex; align-items: center; gap: 5px; }
+    .adm-col-buy-item input[type=text] { height: 26px; padding: 0 6px; border: 1px solid var(--bd); border-radius: var(--r); font: inherit; font-size: var(--fs-sm); flex: 1; min-width: 0; }
+    .adm-col-buy-item input.adm-col-price { flex: none; width: 76px; }
+    .adm-col-buy-item .buy-link-tag { width: 26px; font-size: 11px; color: var(--tx3); }
+    .adm-col-actions { display: flex; flex-direction: column; gap: 6px; margin-top: 14px; }
+    .adm-col-actions button { width: 100%; }
+    .adm-col-detail .adm-col-empty { color: var(--tx3); }
+    .adm-col-figure { position: relative; width: 100%; background: #f4f6f8; border: 1px solid var(--bd2); border-radius: var(--r); overflow: hidden; }
+    .adm-col-figure img { display: block; width: 100%; height: auto; }
+    .adm-col-figure svg { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+    .adm-col-detail h4 { margin: 12px 0 2px; font-size: 15px; }
+    .adm-col-detail dl { display: grid; grid-template-columns: 64px 1fr; gap: 3px 8px; margin: 8px 0; }
+    .adm-col-detail dt { color: var(--tx3); }
+    .adm-col-detail dd { margin: 0; word-break: break-all; }
+    .adm-col-detail .adm-col-terms { display: flex; flex-wrap: wrap; gap: 4px; }
+    .adm-col-detail .adm-col-terms span { padding: 1px 6px; border-radius: 4px; background: #eef2f7; font-size: 11px; }
+    .adm-col-detail .adm-col-terms i { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 4px; vertical-align: -1px; }
+    .adm-col-sources { margin-top: 8px; color: var(--tx2); }
+    .adm-col-rank { flex: none; border-top: 1px solid var(--bd2); padding: 6px 16px; max-height: 32vh; overflow: auto; font-size: var(--fs-sm); }
+    .adm-col-rank summary { cursor: pointer; color: var(--tx2); }
+    .adm-col-rank ol { margin: 6px 0 0; padding-left: 22px; columns: 2; }
+    .adm-batch { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+    .adm-batch-bar { flex: none; display: flex; align-items: center; gap: 10px; padding: 8px 16px; border-bottom: 1px solid var(--bd2); background: var(--bg); }
+    .adm-batch-hint { color: var(--tx3); font-size: var(--fs-sm); }
+    .adm-batch-saved { margin-left: auto; font-size: var(--fs-sm); white-space: nowrap; }
+    .adm-batch-publish-all { flex: none; padding: 6px 14px; border: 1px solid var(--primary-d); border-radius: var(--r); background: var(--primary); color: #fff; font: inherit; font-size: var(--fs-sm); font-weight: 600; cursor: pointer; }
+    .adm-batch-publish-all:hover:not(:disabled) { background: var(--primary-d); }
+    .adm-batch-publish-all:disabled { border-color: #ccc; background: #ddd; color: #888; cursor: default; }
+    .adm-batch-wrap { flex: 1; min-height: 0; overflow: auto; padding: 0 16px 16px; }
+    .adm-batch-wrap.dragover { outline: 2px dashed var(--primary); outline-offset: -6px; background: var(--primary-bg); }
+    .adm-batch-table { width: 100%; border-collapse: collapse; font-size: var(--fs-sm); }
+    .adm-batch-table th { position: sticky; top: 0; z-index: 1; padding: 6px 6px; border-bottom: 1px solid var(--bd); background: var(--bg); color: var(--tx3); font-weight: 600; text-align: left; white-space: nowrap; }
+    .adm-batch-table td { padding: 5px 6px; vertical-align: middle; }
+    /* 부품 하나 = 두 줄(.adm-batch-r1 + .adm-batch-r2). 1줄 아래엔 선을 안 긋고 2줄 아래에 그어 한 덩어리로 보이게 */
+    .adm-batch-table tr.adm-batch-r1 td { padding-top: 8px; padding-bottom: 3px; }
+    .adm-batch-table tr.adm-batch-r2 td { padding-top: 0; padding-bottom: 8px; border-bottom: 1px solid var(--bd2); }
+    .adm-batch-table tr.adm-batch-r1 td.c-no { border-bottom: 1px solid var(--bd2); vertical-align: top; padding-top: 12px; }
+    .adm-batch-table tr.selected td { background: var(--primary-bg); }
+    .adm-batch-table tr.done td { opacity: .55; }
+    .adm-batch-table .c-no { width: 28px; color: var(--tx3); text-align: right; font-variant-numeric: tabular-nums; }
+    .adm-batch-table .c-img { width: 64px; }
+    /* 이름·스펙은 필요한 만큼만 — 화면 폭에 맞춰 늘리면 불필요하게 길어진다(고원빈 지적) */
+    .adm-batch-table .c-name { width: 240px; }
+    .adm-batch-table .c-spec { width: 220px; }
+    .adm-batch-table .c-cat { width: 230px; }
+    .adm-batch-table .c-term { width: 70px; white-space: nowrap; }
+    .adm-batch-table .c-act { white-space: nowrap; text-align: left; }
+    .adm-batch-done { display: inline-block; margin-right: 6px; padding: 3px 8px; border-radius: 999px; background: var(--primary-bg); color: var(--primary-d); font-size: 12px; font-weight: 600; }
+    /* 2줄 안쪽 — 묶음(그룹)들이 한 줄에 흐르고, 좁으면 접힌다 */
+    /* 폭은 1400px 화면에서 2줄이 한 줄로 들어가게 잡았다 — 더 좁으면 자연히 접힌다 */
+    .adm-batch-r2-in { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 6px 10px; }
+    .adm-batch-g { display: inline-flex; align-items: center; gap: 4px; padding: 3px 7px; border: 1px solid var(--bd2); border-radius: var(--r); background: var(--bg); }
+    .adm-batch-g-label { color: var(--tx3); font-size: 11px; margin-right: 2px; }
+    .adm-batch-g label { display: inline-flex; align-items: center; gap: 3px; font-size: var(--fs-sm); color: var(--tx); cursor: pointer; }
+    .adm-batch-g input[type=checkbox] { margin: 0; }
+    .adm-batch-g .adm-batch-btn { margin-left: 0; }
+    .adm-batch-same { border-color: #c9d8ec; background: #f5f9ff; }
+    /* 구매 링크·단가 — 에디터 부품 편집 창(.buy-link-row)과 같은 구성. 라디오로 고른 쪽만 BOM에 나간다 */
+    .adm-batch-buy { flex-direction: column; align-items: stretch; gap: 3px; }
+    .adm-batch-buy .adm-batch-g-label em { color: var(--tx3); font-style: normal; font-size: 10px; margin-left: 4px; }
+    .adm-batch-buy-item { display: flex; align-items: center; gap: 5px; }
+    .adm-batch-buy-item input[type=radio] { margin: 0; }
+    .adm-batch-buy-item .buy-link-tag { width: 26px; font-size: 11px; color: var(--tx3); }
+    .adm-batch-buy-item input[type=text] { height: 24px !important; }
+    .adm-batch-buy-item input[data-k=link], .adm-batch-buy-item input[data-k=linkKr] { width: 220px !important; }
+    .adm-batch-buy-item input[data-k=price], .adm-batch-buy-item input[data-k=priceKr] { width: 72px !important; }
+    /* 데이터시트 — 에디터 .ds-section 과 같은 목록(.ds-item 은 styles.css 의 것을 그대로 쓴다) */
+    .adm-batch-ds { flex-direction: column; align-items: stretch; gap: 3px; min-width: 220px; }
+    .adm-batch-ds .adm-batch-g-label { display: block; }
+    .adm-batch-ds .adm-batch-btn { margin-right: 4px; }
+    .adm-batch-ds-list { max-width: 320px; }
+    .adm-batch-ds-list .ds-item { padding: 2px 6px; font-size: 12px; }
+    .adm-batch-ds-list .ds-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .adm-batch-err { flex-basis: 100%; color: var(--danger-d); font-size: var(--fs-sm); }
+    /* 「위 줄과 같음」 표시 — 이미지 칸·단자 수 옆의 작은 ↑ */
+    .adm-batch-img { position: relative; }
+    .adm-batch-img.same { border-style: solid; border-color: #9dbce5; background: #f5f9ff; cursor: default; }
+    .adm-batch-samebadge { position: absolute; right: 2px; bottom: 1px; padding: 0 4px; border-radius: 3px; background: var(--primary); color: #fff; font-size: 10px; line-height: 14px; }
+    .adm-batch-term .adm-batch-samebadge { position: static; margin-left: 4px; }
+    /* 줄 안 입력칸 — 높이 28px 로 통일 */
+    .adm-batch-table input[type=text], .adm-batch-table select {
+      width: 100%; height: 28px; padding: 3px 6px; border: 1px solid var(--bd2); border-radius: 4px;
+      background: var(--bg); color: var(--tx); font: inherit; font-size: var(--fs-sm); box-sizing: border-box;
+    }
+    .adm-batch-table input[type=text]:focus, .adm-batch-table select:focus { outline: 2px solid rgba(30,136,229,.22); border-color: var(--primary); }
+    .adm-batch-table input.bad { border-color: #e57373; }
+    .adm-batch-table .c-cat-in { display: flex; gap: 4px; }
+    .adm-batch-table .c-cat-in select { min-width: 0; }
+    /* 이미지 칸 — 놓거나 누르면 고른다 */
+    .adm-batch-img {
+      display: flex; align-items: center; justify-content: center; width: 56px; height: 44px;
+      border: 1px dashed var(--bd); border-radius: 4px; background: #f7f9fb; color: var(--tx3); font-size: 18px; cursor: pointer;
+      overflow: hidden;
+    }
+    .adm-batch-img:hover, .adm-batch-img.dragover { border-color: var(--primary); background: var(--primary-bg); color: var(--primary-d); }
+    .adm-batch-img img { width: 100%; height: 100%; object-fit: contain; display: block; }
+    .adm-batch-img.has { border-style: solid; }
+    /* 단자·상태·동작 */
+    .adm-batch-term { display: inline-flex; align-items: center; gap: 6px; }
+    .adm-batch-term b { min-width: 24px; text-align: right; font-variant-numeric: tabular-nums; }
+    .adm-batch-term b.zero { color: var(--danger-d); }
+    .adm-batch-btn {
+      padding: 4px 8px; margin-left: 4px; border: 1px solid var(--bd); border-radius: 4px;
+      background: var(--bg); color: var(--tx2); font: inherit; font-size: 12px; line-height: 1; cursor: pointer;
+    }
+    .adm-batch-btn:hover:not(:disabled) { border-color: var(--primary); color: var(--primary-d); background: var(--primary-bg); }
+    .adm-batch-btn:disabled { color: #bbb; cursor: default; }
+    .adm-batch-btn.go { border-color: var(--primary-d); background: var(--primary); color: #fff; }
+    .adm-batch-btn.go:hover:not(:disabled) { background: var(--primary-d); color: #fff; }
+    .adm-batch-btn.del:hover:not(:disabled) { border-color: #e57373; color: var(--danger-d); background: #fff5f5; }
+    .adm-batch-empty { padding: 40px 20px; color: var(--tx3); text-align: center; font-size: var(--fs); }
     [hidden] { display: none !important; }
   </style>
 </head>
@@ -197,6 +352,13 @@
       <div>
         <h3>관리자</h3>
         <span class="public-library-badge">공용 부품 카탈로그</span>
+      </div>
+      <!-- 화면 전환 — 「게시된 부품」(지금까지의 관리 화면) / 「일괄 등록」(2026-09-14, js/admin-batch.js).
+           탭이 아니라 버튼 둘로 둔 이유: 화면이 둘뿐이고, 탭 줄을 만들면 머리줄이 한 줄 더 는다. -->
+      <div class="adm-mode" id="admMode" role="group" aria-label="화면 전환" hidden>
+        <button type="button" class="adm-mode-btn on" data-mode="parts">게시된 부품</button>
+        <button type="button" class="adm-mode-btn" data-mode="batch">일괄 등록</button>
+        <button type="button" class="adm-mode-btn" data-mode="collect">사용자 부품</button>
       </div>
       <a class="public-library-close" href="app.html" title="에디터로 돌아가기" aria-label="에디터로 돌아가기">×</a>
     </header>
@@ -263,6 +425,81 @@
 
       <aside id="admDetail" class="public-library-detail" aria-label="선택한 부품 정보"></aside>
     </div>
+
+    <!-- ── 일괄 등록 (2026-09-14, js/admin-batch.js) ──────────────────────────────
+         부품 하나 = 두 줄. 1줄에 이미지·이름·스펙/설명·분류·단자 수·동작, 2줄에 「위 줄과 같음」 체크·
+         이미지/단자 편집·구매 링크·단가(해외/국내, 에디터 부품 편집 창과 같은 라디오)·데이터시트(파일/링크).
+         부품 정보는 전부 줄에서 바로 친다. 역할·전기값은 안 다룬다(에디터 기본값으로 저장).
+         「위 줄과 같음」(이미지·크기 / 단자)에 체크하면 위 줄 것을 그대로 쓴다 — 다이오드처럼 그림·단자가
+         똑같고 이름·스펙·단가만 다른 부품을 체크만으로 만든다(고원빈 요청). [복제]는 전부 복사.
+         게시는 에디터 게시 창과 **같은 함수**(WE.publicPublisher.publishPart)를 쓴다.
+         ⚠ 이 화면에서는 '새 부품' 만 만든다. 기존 항목 갱신은 게시된 부품 화면에서. -->
+    <section id="admBatch" class="adm-batch" aria-label="공용 부품 일괄 등록" hidden>
+      <div class="adm-batch-bar">
+        <button type="button" class="adm-edit-btn" id="admBatchAdd">＋ 행 추가</button>
+        <span class="adm-batch-hint">이미지는 줄에 끌어다 놓거나 칸을 눌러 고릅니다 · 붙여넣기(Ctrl+V)는 선택한 줄에 · 그림·단자가 같은 부품은 「위 줄과 같음」에 체크</span>
+        <span id="admBatchSaved" class="adm-batch-saved muted" aria-live="polite"></span>
+        <button type="button" class="adm-edit-btn adm-batch-clear" id="admBatchClearDone" hidden>게시된 줄 치우기</button>
+        <button type="button" class="adm-batch-publish-all" id="admBatchPublishAll" disabled>전체 게시</button>
+      </div>
+      <div class="adm-batch-wrap">
+        <table class="adm-batch-table" id="admBatchTable">
+          <thead>
+            <tr>
+              <th class="c-no">#</th>
+              <th class="c-img">이미지</th>
+              <th class="c-name">이름</th>
+              <th class="c-spec">스펙/설명</th>
+              <th class="c-cat">분류</th>
+              <th class="c-term">단자</th>
+              <th class="c-act"></th>
+            </tr>
+          </thead>
+          <tbody id="admBatchRows"></tbody>
+        </table>
+        <div id="admBatchEmpty" class="adm-batch-empty">
+          아직 줄이 없습니다. <b>＋ 행 추가</b>를 누르거나 이미지 파일을 이 영역에 끌어다 놓으세요.
+        </div>
+      </div>
+      <input type="file" id="admBatchFile" accept="image/*" hidden />
+      <input type="file" id="admBatchDsFile" accept="application/pdf,image/*" multiple hidden />   <!-- 데이터시트 파일 (에디터 #libDsInput 과 같은 조건) -->
+    </section>
+
+    <!-- ── 사용자 부품 (2026-09-14, js/admin-collect.js) ─────────────────────────────
+         에디터가 자동으로 보내온 사용자 라이브러리 부품(collect_parts). 왼쪽은 에디터 라이브러리 창과 같은 줄(.lib-item),
+         오른쪽은 상세(이미지 위에 단자 그림) + [일괄 등록으로 보내기]. 새 부품은 Realtime 으로 위에 붙는다.
+         "같은 부품" = rev(내용 해시)가 같은 것 — 내용이 하나라도 다르면 다른 부품(고원빈). 관리자만 읽는다(RLS). -->
+    <section id="admCollect" class="adm-collect" aria-label="사용자 부품" hidden>
+      <div class="adm-batch-bar">
+        <input type="search" id="admColSearch" class="adm-col-search" placeholder="이름·스펙 검색" autocomplete="off" />
+        <select id="admColSort" class="adm-col-sort" title="정렬">
+          <option value="recent">최근 순</option>
+          <option value="devices">기기 수 순</option>
+          <option value="name">이름 순</option>
+        </select>
+        <label class="chk"><input type="checkbox" id="admColGroup" checked /> 같은 부품 묶기</label>
+        <label class="chk"><input type="checkbox" id="admColPublic" /> 공용 출처 포함</label>
+        <span class="adm-col-stats adm-batch-saved" id="admColStats"></span>
+        <button type="button" class="adm-edit-btn" id="admColCsv" title="부품별 통계(이름·스펙별 기기 수)를 CSV 로">⤓ CSV</button>
+        <button type="button" class="adm-edit-btn" id="admColXlsx" title="부품별 통계 + 원본 목록을 엑셀(시트 2개)로">⤓ 엑셀</button>
+        <button type="button" class="adm-edit-btn" id="admColRefresh" title="서버에 모인 것을 다시 읽습니다">↻ 새로 읽기</button>
+        <button type="button" class="adm-batch-publish-all" id="admColSend" disabled>일괄 등록으로 보내기</button>
+      </div>
+      <div class="adm-col-body">
+        <!-- 왼쪽: 사용자(기기) 목록 — "몇 명이 어떤 부품을 쓰나" 는 사람 단위로 봐야 보인다 (2026-09-15 고원빈) -->
+        <nav id="admColUsers" class="adm-col-users" aria-label="사용자 목록"></nav>
+        <div class="adm-col-list-wrap">
+          <button type="button" id="admColNew" class="adm-col-new" hidden>▲ 새 부품 <b>0</b>개</button>
+          <div id="admColList" class="adm-col-list" role="list"></div>
+          <div id="admColEmpty" class="adm-batch-empty">아직 모인 부품이 없습니다. 에디터에서 라이브러리에 부품을 추가하면 30초 뒤 여기에 나타납니다.</div>
+        </div>
+        <aside id="admColDetail" class="adm-col-detail"></aside>
+      </div>
+      <details class="adm-col-rank" id="admColRankBox">
+        <summary>이름+스펙별 등록 기기 수 (상위 30)</summary>
+        <ol id="admColRank"></ol>
+      </details>
+    </section>
 
     <!-- 단자 배치 편집 모달 — index.html 의 것을 그대로 가져왔다.
          관리자가 게시된 부품의 단자를 여기서 바로 고칠 수 있어야 하기 때문이다
@@ -594,6 +831,12 @@
   <script src="js/presetmodal.js"></script>
   <script src="js/termeditor.js"></script>
   <script src="js/bgremove.js"></script>
+  <!-- 게시 파이프라인(publishPart) — 에디터의 게시 창과 같은 파일. init() 은 부르지 않는다
+       (게시 창 DOM 이 여기 없다). 일괄 등록이 publishPart 만 쓴다. -->
+  <script src="js/public-publisher.js"></script>
   <script src="js/admin.js"></script>
+  <script src="js/admin-batch.js"></script>   <!-- 일괄 등록. admin.js 다음 — 단자 편집기 저장 훅을 감싼다 -->
+  <script src="js/xlsx.js"></script>          <!-- 사용자 부품 통계 엑셀 내보내기 (에디터의 BOM 엑셀과 같은 작성기) -->
+  <script src="js/admin-collect.js"></script> <!-- 사용자 부품 (수집). admin-batch 다음 — 「일괄 등록으로 보내기」가 그 API 를 쓴다 -->
 </body>
 </html>

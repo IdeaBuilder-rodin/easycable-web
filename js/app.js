@@ -95,6 +95,7 @@ WE.app = (function () {
         WE.history.start();
         updateHistoryButtons();
         requestAnimationFrame(fitZoom);   // 최초 화면은 현재 크기에 '맞춤'으로 시작
+        setTimeout(applyAdminInbox, 300);  // 관리자 페이지가 넘긴 부품이 있으면 넣고 배치 (없으면 아무 일 없음)
         WE.store.pruneDrafts(20);         // 문서 슬롯이 무한정 쌓이지 않게 (현재·타 탭 문서는 제외)
         // 쓰이지 않는 첨부물 정리 — 시작 직후 화면을 방해하지 않도록 조금 뒤로 미룬다
         setTimeout(function () { WE.assets.sweepIfDue(); }, 4000);
@@ -943,6 +944,33 @@ WE.app = (function () {
     renderLibrary();
     WE.render.renderAll(); refreshProps();
     return cmp;
+  }
+
+  /* 관리자 페이지 「사용자 부품」의 [에디터에 배치] — 같은 브라우저의 localStorage 우편함(we_admin_inbox)으로 넘어온다.
+     (관리자 페이지에는 캔버스가 없어서 이렇게 건넨다. 2026-09-15)
+     시작이 끝난 뒤 한 번 읽고 바로 지운다. 무슨 오류가 나도 에디터 시작을 막지 않는다. */
+  function applyAdminInbox() {
+    var raw = null;
+    try { raw = localStorage.getItem("we_admin_inbox"); } catch (e) { return; }
+    if (!raw) return;
+    try { localStorage.removeItem("we_admin_inbox"); } catch (e) { /* 무시 */ }
+    try {
+      var box = JSON.parse(raw);
+      if (!box || !Array.isArray(box.parts) || Date.now() - (box.at || 0) > 10 * 60 * 1000) return;   // 10분 지난 우편은 버린다
+      var n = 0;
+      box.parts.forEach(function (p) {
+        if (!p || !p.name) return;
+        var part = WE.library.addPart({
+          name: p.name, spec: p.spec || "", image: p.image || "",
+          defaultWidth: p.defaultWidth || p.width, defaultHeight: p.defaultHeight || p.height,
+          terminals: p.terminals || [], terminalPlacementQueue: p.terminalPlacementQueue, terminalPlacementQueueVersion: p.terminalPlacementQueueVersion,
+          link: p.link, linkKr: p.linkKr, linkPref: p.linkPref, price: p.price, priceKr: p.priceKr, datasheets: p.datasheets || [],
+          role: p.role, volt: p.volt, current: p.current, power: p.power
+        });
+        if (part && placeLibraryPart(part)) n++;
+      });
+      if (n) setHint(WE.i18n.t("관리자 페이지에서 보낸 부품 ") + n + WE.i18n.t("개를 라이브러리에 넣고 배치했습니다."));
+    } catch (e) { try { console.warn("[inbox] 관리자 우편함 처리 실패", e && e.message); } catch (x) { /* 무시 */ } }
   }
 
   function componentPart(c) {
@@ -6075,6 +6103,7 @@ WE.app = (function () {
     // 검사가 '표에 보이는 것' 과 '내보내는 것' 이 같은지 맞춰 볼 때 쓴다
     wireListExportRows: wireListExportRows,
     _테스트_csvCell: csvCell,
+    _테스트_우편함: applyAdminInbox,
     // 인쇄용 결선표(js/pdf.js)도 화면과 **같은 비고**를 찍어야 한다
     wireNoteOf: function (net) { return 비고읽기(비고키(net)); },
     renderWireListView: renderWireListView,

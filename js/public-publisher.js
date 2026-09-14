@@ -110,16 +110,39 @@ WE.publicPublisher = (function () {
         cmp.publicId && !/^sample:/.test(cmp.publicId)) return cmp.publicId;
     return 새키();
   }
-  function publish() {
-    if (busy || !admin || !current) return;
-    var error = validate(current); if (error) { setStatus(error, true); return; }
-    var c = client(), user = WE.auth.user(), meta = sourceMeta(current), key = makeKey(current);
-    if (!c || !user) { setStatus("관리자 로그인이 필요합니다.", true); return; }
-    busy = true; document.getElementById("publicPublishSubmit").disabled = true;
-    setStatus("게시용 파일을 준비하는 중입니다.");
-    var existingVersion = Number(current.publicVersion || 0);
+  /* BOM 에 나가는 단가 — library.js 의 bomPrice 와 같은 규칙.
+     에디터에서는 WE.library 가 있으니 그걸 쓰고, 관리자 페이지(library.js 를 안 싣는다)에서는
+     같은 규칙을 여기서 계산한다. 규칙이 바뀌면 library.js 쪽을 고치고 여기도 맞출 것. */
+  function bomPriceOf(p) {
+    if (WE.library && WE.library.bomPrice) return WE.library.bomPrice(p);
+    if (!p) return "";
+    var kr = p.priceKr, global = p.price;
+    function has(v) { return v != null && String(v).trim() !== ""; }
+    if (p.linkPref !== "kr" && p.linkPref !== "global") return has(global) ? global : (has(kr) ? kr : "");
+    var v = p.linkPref === "kr" ? kr : global;
+    return has(v) ? v : "";
+  }
+
+  /* ---- 게시 파이프라인 — 화면과 무관한 순수 함수 (2026-09-14) ----
+     부품 객체 하나를 카탈로그에 올린다. 에디터의 게시 창(publish)과 관리자 페이지의
+     일괄 등록(js/admin-batch.js)이 **같은 함수**를 부른다. 운영규칙(경로 재사용 금지·
+     새 키·썸네일·데이터시트 업로드, _ai/공용부품_운영규칙.md)이 두 벌이 되면 한쪽만 고쳐진다.
+
+     part = { key?, existingVersion?, name, spec, categoryId, image(dataURL 또는 URL), width, height,
+              terminals[], datasheets[], link, linkKr, linkPref, price, priceKr,
+              role, volt, current, power, capacityAh, dod, minPerHour, efficiency,
+              terminalPlacementQueue, terminalPlacementQueueVersion }
+     onStatus(문구) — 진행 상황을 화면에 알릴 때. 없어도 된다.
+     돌려주는 것: Promise<{ publicId, publicVersion }>. 실패하면 reject(Error). */
+  function publishPart(part, onStatus) {
+    var c = client(), user = WE.auth.user && WE.auth.user();
+    if (!c || !user) return Promise.reject(new Error("관리자 로그인이 필요합니다."));
+    var say = typeof onStatus === "function" ? onStatus : function () {};
+    var key = part.key || 새키();
+    say("게시용 파일을 준비하는 중입니다.");
+    var existingVersion = Number(part.existingVersion || 0);
     var existing = c.from("public_components").select("version").eq("public_key", key).maybeSingle();
-    existing.then(function (res) {
+    return existing.then(function (res) {
       if (res.error) throw res.error;
       var version = Math.max(existingVersion, res.data ? Number(res.data.version || 0) : 0) + 1;
       /* 파일 경로에 매번 새 값을 섞는다 — **경로는 절대 재사용하지 않는다.**
@@ -131,7 +154,7 @@ WE.publicPublisher = (function () {
       var 회차 = (window.crypto && crypto.randomUUID) ? crypto.randomUUID().slice(0, 8)
                  : Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
       var base = key + "/v" + version + "-" + 회차 + "/";
-      return Promise.all([blobFrom(current.image), thumbnailBlob(current.image).catch(function () { return blobFrom(current.image); })])
+      return Promise.all([blobFrom(part.image), thumbnailBlob(part.image).catch(function () { return blobFrom(part.image); })])
         .then(function (blobs) {
           return Promise.all([
             upload("public-components", base + "image." + extFor(blobs[0], "webp"), blobs[0]),
@@ -139,8 +162,8 @@ WE.publicPublisher = (function () {
           ]).then(function (urls) { return { version: version, base: base, image: urls[0], thumb: urls[1] }; });
         });
     }).then(function (files) {
-      setStatus("데이터시트를 업로드하는 중입니다.");
-      var sheets = meta.datasheets || [];
+      say("데이터시트를 업로드하는 중입니다.");
+      var sheets = part.datasheets || [];
       return Promise.all(sheets.map(function (d, i) {
         // 링크 데이터시트는 올릴 파일이 없다. 주소를 그대로 실어 보낸다 —
         // 여기서 fetch 하면 남의 사이트라 CORS 로 막히고, 게시가 통째로 실패한다.
@@ -157,14 +180,15 @@ WE.publicPublisher = (function () {
         });
       })).then(function (datasheets) { files.datasheets = datasheets; return files; });
     }).then(function (files) {
-      var name = document.getElementById("publicPublishName").value.trim();
-      var spec = document.getElementById("publicPublishSpec").value.trim();
+      say("카탈로그에 기록하는 중입니다.");
+      var name = String(part.name || "").trim();
+      var spec = String(part.spec || "").trim();
       // 분류는 소분류 id 로 저장한다. 이름(category)도 같이 넣어 두는 이유는
       // 예전 버전이 그 칸을 읽기 때문이다(04_category_tree.sql 참고).
-      var categoryId = document.getElementById("publicPublishCategory").value || null;
+      var categoryId = part.categoryId || null;
       var categoryNode = categoryId ? WE.categories.get(categoryId) : null;
       var category = categoryNode ? categoryNode.name : "";
-      var terminals = current.terminals.map(function (t) {
+      var terminals = (part.terminals || []).map(function (t) {
         var out = { name: t.name, color: t.color, rx: t.rx, ry: t.ry };
         if (t.visible === false) out.visible = false;
         if (t.labelSide) out.labelSide = t.labelSide;
@@ -174,15 +198,15 @@ WE.publicPublisher = (function () {
       var data = {
         publicId: key, publicVersion: files.version, name: name, spec: spec,
         category: category, categoryId: categoryId,
-        image: files.image, defaultWidth: current.width, defaultHeight: current.height, terminals: terminals,
-        link: meta.link || "", linkKr: meta.linkKr || "",
-        linkPref: meta.linkPref === "kr" ? "kr" : "global",
+        image: files.image, defaultWidth: part.width, defaultHeight: part.height, terminals: terminals,
+        link: part.link || "", linkKr: part.linkKr || "",
+        linkPref: part.linkPref === "kr" ? "kr" : "global",
         // 단가도 해외(price)·국내(priceKr) 두 벌. part_data jsonb 안이라 DB 스키마는 그대로다.
-        price: meta.price || "", priceKr: meta.priceKr || "", datasheets: files.datasheets,
-        role: meta.role || "load", volt: meta.volt || "", current: meta.current || "", power: meta.power || "",
-        capacityAh: meta.capacityAh || "", dod: meta.dod || "", minPerHour: meta.minPerHour || "", efficiency: meta.efficiency || "",
-        terminalPlacementQueue: current.terminalPlacementQueue || [],
-        terminalPlacementQueueVersion: current.terminalPlacementQueueVersion
+        price: part.price || "", priceKr: part.priceKr || "", datasheets: files.datasheets,
+        role: part.role || "load", volt: part.volt || "", current: part.current || "", power: part.power || "",
+        capacityAh: part.capacityAh || "", dod: part.dod || "", minPerHour: part.minPerHour || "", efficiency: part.efficiency || "",
+        terminalPlacementQueue: part.terminalPlacementQueue || [],
+        terminalPlacementQueueVersion: part.terminalPlacementQueueVersion
       };
       var search = [name, spec, category, categoryNode ? WE.categories.pathOf(categoryId) : ""].concat(terminals.map(function (t) { return t.name; })).join(" ").toLowerCase();
       return c.from("public_components").upsert({
@@ -190,12 +214,36 @@ WE.publicPublisher = (function () {
         category: category, category_id: categoryId,
         search_text: search, thumbnail_url: files.thumb, image_url: files.image, terminal_count: terminals.length,
         // 목록에 보이는 단가는 **BOM 에 나가는 쪽**과 같아야 한다 — 어긋나면 사용자가 헷갈린다
-        price: Number(WE.library.bomPrice(meta)) || null, has_datasheet: files.datasheets.length > 0, part_data: data,
+        price: Number(bomPriceOf(part)) || null, has_datasheet: files.datasheets.length > 0, part_data: data,
         created_by: user.id, updated_by: user.id, updated_at: new Date().toISOString(), published_at: new Date().toISOString()
       }, { onConflict: "public_key" }).select("public_key,version").single().then(function (res) {
         if (res.error) throw res.error; return { publicId: res.data.public_key, publicVersion: res.data.version };
       });
-    }).then(function (result) {
+    });
+  }
+
+  /* 게시 창의 [게시] — 창의 칸과 캔버스 부품(current)·라이브러리 정보(meta)에서 부품 객체를 만들어
+     publishPart 에 넘긴다. 실제 업로드·기록은 전부 저 함수 안이다. */
+  function publish() {
+    if (busy || !admin || !current) return;
+    var error = validate(current); if (error) { setStatus(error, true); return; }
+    var meta = sourceMeta(current), key = makeKey(current);
+    if (!client() || !WE.auth.user()) { setStatus("관리자 로그인이 필요합니다.", true); return; }
+    busy = true; document.getElementById("publicPublishSubmit").disabled = true;
+    var part = {
+      key: key, existingVersion: Number(current.publicVersion || 0),
+      name: document.getElementById("publicPublishName").value,
+      spec: document.getElementById("publicPublishSpec").value,
+      categoryId: document.getElementById("publicPublishCategory").value || null,
+      image: current.image, width: current.width, height: current.height,
+      terminals: current.terminals, datasheets: meta.datasheets || [],
+      link: meta.link, linkKr: meta.linkKr, linkPref: meta.linkPref, price: meta.price, priceKr: meta.priceKr,
+      role: meta.role, volt: meta.volt, current: meta.current, power: meta.power,
+      capacityAh: meta.capacityAh, dod: meta.dod, minPerHour: meta.minPerHour, efficiency: meta.efficiency,
+      terminalPlacementQueue: current.terminalPlacementQueue || [],
+      terminalPlacementQueueVersion: current.terminalPlacementQueueVersion
+    };
+    publishPart(part, function (t) { setStatus(t); }).then(function (result) {
       setStatus("공용 부품으로 게시했습니다.");
       if (done) done(result);
       backupAfterPublish();
@@ -337,5 +385,6 @@ WE.publicPublisher = (function () {
     document.getElementById("publicPublishModal").addEventListener("click", function (e) { if (e.target === e.currentTarget) close(); });
     document.getElementById("publicPublishModal").addEventListener("keydown", function (e) { if (e.key === "Escape") close(); });
   }
-  return { init: init, open: open, isAdmin: function () { return admin; }, refresh: checkAdmin };
+  return { init: init, open: open, isAdmin: function () { return admin; }, refresh: checkAdmin,
+           publishPart: publishPart };
 })();

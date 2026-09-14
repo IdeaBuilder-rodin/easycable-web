@@ -366,6 +366,7 @@ WE.i18n = (function () {
     "단자 이름 숨기기 (도면에서)": "Hide terminal names (on diagram)",
     // 부품별 번호 숨기기 (2026-09-14) — 속성창 이름 칸 밑, 「이름 숨기기」 옆
     "번호 숨기기": "Hide number",
+    "관리자 페이지에서 보낸 부품 ": "Placed ", "개를 라이브러리에 넣고 배치했습니다.": " part(s) sent from the admin page into the library and onto the canvas.",
     "같은 부품이 여럿이라 붙은 번호입니다. 도면에서만 숨기고 결선표에는 그대로 나옵니다.": "This number marks one of several identical parts. Hiding it affects the diagram only — the connection table keeps it.",
     "이미지 편집…": "Edit image…",
     "복제": "Duplicate",

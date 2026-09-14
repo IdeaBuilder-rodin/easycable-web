@@ -76,6 +76,10 @@
     $("admDenied").hidden = which !== "denied";
     $("admBody").hidden = which !== "body";
     $("admSearchForm").hidden = which !== "body";
+    // 화면 전환 버튼(게시된 부품 / 일괄 등록)은 권한 확인이 끝난 뒤에만 보인다.
+    // 일괄 등록 화면 자체는 js/admin-batch.js 가 이 버튼으로 켜고 끈다.
+    if ($("admMode")) $("admMode").hidden = which !== "body";
+    if (which !== "body" && $("admBatch")) $("admBatch").hidden = true;
     if (why) $("admDeniedWhy").textContent = why;
   }
 
@@ -1286,6 +1290,8 @@
   // (auth.js 의 _테스트_상태, categories.js 의 _테스트_주입 과 같은 목적. 앱 코드에서는 쓰지 않는다)
   WE.adminPage = { _테스트_시작: start, _테스트_그리기: function () { renderCats(); bind(); },
     _테스트_전체접기: toggleAllCats,
+    // 일괄 등록(js/admin-batch.js)이 게시를 마친 뒤 목록·개수를 다시 읽게 한다
+    refresh: function () { return refresh(); },
     // 검사에서 부품 목록을 직접 넣어 그린다(서버·로그인 없이 목록 UI 만 보려는 것)
     _테스트_부품목록: function (list) { rows = list || []; total = rows.length; partsError = ""; renderParts(); } };
 })();
