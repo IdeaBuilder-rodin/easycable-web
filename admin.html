@@ -200,6 +200,7 @@
        세로 중심은 모두 맞춘다(개발_기록 11장 — 같은 줄의 조작기는 높이·중심을 맞춘다). */
     /* ── 사용자 부품 탭 (2026-09-14) — 줄은 styles.css 의 .lib-item 을 그대로 쓴다 ── */
     .adm-collect { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+    #admFooter[hidden] { display: none; }   /* .public-library-footer 의 display:flex 가 hidden 을 이기므로 명시 */
     .adm-col-search { width: 220px; height: 30px; padding: 0 10px; border: 1px solid var(--bd); border-radius: var(--r); font: inherit; }
     .adm-col-sort { height: 30px; border: 1px solid var(--bd); border-radius: var(--r); font: inherit; background: #fff; }
     .adm-col-stats { color: var(--tx3); font-size: var(--fs-sm); margin-left: 6px; }
@@ -801,7 +802,7 @@
     </div>
   </div>
 
-    <footer class="public-library-footer">
+    <footer class="public-library-footer" id="admFooter" hidden>
       <span id="admMsg" class="muted"></span>
       <!-- 카탈로그 백업 — 서버 한 군데에만 있으면 사고 한 번에 전부 잃는다.
            이미지까지 폴더에 통째로 떠 둬야 복원이 된다. -->
