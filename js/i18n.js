@@ -1499,6 +1499,17 @@ WE.i18n = (function () {
     "이용약관에 동의해 주세요.": "Please agree to the Terms of Service.",
     "[필수] 이용약관(환불 규정 포함)에 동의합니다": "[Required] I agree to the Terms of Service (including the refund policy)",
     "약관 보기": "View terms",
+    // ===== 2026-09-15 영어판 1단계 — 9/14 검토(_ai/검토_영어판_2026-09-14.md)에서 빠진 것. 새 문구는 tests/verify_i18n 이 잡는다 =====
+    // ===== 결제 페이지 개편 — 카드·표 (2026-09-15) =====
+    "주문번호": "Order no.",
+    "보기 →": "View →",
+    "서버 응답": "Server response",
+    "고객센터에 문의": "Contact support",
+    "다시 로그인": "Sign in again",
+    "<b>로그인이 풀렸습니다</b>": "<b>You were signed out</b>",
+    "<p>결제는 완료되었습니다. 다시 로그인하시면 이용권이 자동으로 적용됩니다.</p>": "<p>Your payment went through. Sign in again and your pass will be applied automatically.</p>",
+    "오류 코드": "Error code",
+    "다시 시도하기": "Try again",
   };
 
   var MAPS = { en: EN };

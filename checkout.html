@@ -24,7 +24,36 @@
   <style>
     /* landing.css 를 건드리지 않는다 — 랜딩·요금 페이지가 같이 쓰는 파일이라
        여기서 손대면 그쪽이 따라 바뀐다. 이 페이지에만 필요한 것만 여기 둔다. */
-    .co-wrap   { max-width: 560px; margin: 0 auto; padding: 32px 20px 64px; }
+    /* 틀 (2026-09-15 개편) — 헤더·본문·푸터. 본문이 짧아도 푸터가 **화면 바닥**에 붙는다.
+       예전엔 .co-wrap 하나뿐이라 오류 한 줄만 뜨면 푸터가 화면 중간에 떴다(고원빈 지적). */
+    body { min-height: 100vh; display: flex; flex-direction: column; }
+    body > footer { margin-top: auto; }
+    .co-wrap   { max-width: 560px; width: 100%; box-sizing: border-box; margin: 0 auto; padding: 32px 20px 64px; }
+    /* 카드 — 상태 안내·완료·이미 이용 중이 전부 이 한 모양을 쓴다. 머리(아이콘+제목) / 몸통(표 또는 문단) / 발(단추).
+       주문 상자(.co-order)와 같은 테두리·모서리라 한 양식으로 읽힌다. */
+    .co-card { border: 1px solid var(--line, #e5e7eb); border-radius: 12px; background: #fff; overflow: hidden; margin-bottom: 24px; }
+    .co-card-head { display: flex; align-items: center; gap: 12px; padding: 18px 20px; border-bottom: 1px solid var(--line, #e5e7eb); }
+    .co-card-head .ic { width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 18px; flex: none; }
+    .co-card-head h2 { margin: 0; font-size: 18px; line-height: 1.3; }
+    .co-card.ok   .co-card-head { background: #f0fdf4; } .co-card.ok   .ic { background: #0f9d58; color: #fff; }
+    .co-card.err  .co-card-head { background: #fef2f2; } .co-card.err  .ic { background: #fde2e1; color: #c62828; }
+    .co-card.wait .co-card-head { background: #f8fafc; } .co-card.wait .ic { background: #e2e8f0; color: #475569; }
+    .co-card.info .co-card-head { background: #eef4ff; } .co-card.info .ic { background: #dbe7fd; color: #1e6fd9; }
+    .co-card-body { padding: 16px 20px; font-size: 14px; line-height: 1.75; }
+    .co-card-body p { margin: 10px 0; }
+    .co-card-body p:first-child { margin-top: 0; }
+    .co-card-body p:last-child { margin-bottom: 0; }
+    /* 구획 — 카드 안에서 "지금 상태" 와 "제안" 처럼 성격이 다른 내용을 구분선으로 뗀다 (2026-09-15 고원빈: 줄이 붙어 안 읽힌다) */
+    .co-card-sect { padding: 18px 20px 20px; border-top: 1px solid var(--line, #e5e7eb); font-size: 14px; line-height: 1.75; }
+    .co-card-body code { font-size: 13px; background: #f3f4f6; padding: 1px 6px; border-radius: 4px; }
+    .co-card-foot { display: flex; gap: 10px; flex-wrap: wrap; padding: 14px 20px 18px; border-top: 1px solid var(--line, #e5e7eb); }
+    .co-card-foot .btn { flex: 1; min-width: 150px; text-align: center; display: block; padding: 12px; font-weight: 600; }
+    /* 표 한 줄 — 항목 | 값. 완료·오류 카드의 주문번호·금액·기간이 이걸로 정렬된다 */
+    .co-kv { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; padding: 8px 0; border-bottom: 1px dashed var(--line, #e5e7eb); }
+    .co-kv:last-child { border-bottom: 0; }
+    .co-kv .k { color: var(--dim, #6b7280); font-size: 13px; flex: none; }
+    .co-kv .v { font-weight: 600; text-align: right; word-break: break-all; }
+    .co-kv .v.big { font-size: 18px; }
     .co-order  { border: 1px solid var(--line, #e5e7eb); border-radius: 12px;
                  padding: 18px 20px; margin-bottom: 24px; }
     .co-order h2 { font-size: 15px; margin: 0 0 12px; color: var(--dim, #6b7280); font-weight: 600; }
@@ -59,54 +88,54 @@
                  padding: 14px; font-size: 16px; font-weight: 600; text-align: center; }
     .co-pay[disabled] { opacity: .5; cursor: not-allowed; }
 
-    .co-msg    { padding: 16px; border-radius: 10px; margin-bottom: 20px; font-size: 14px;
-                 line-height: 1.6; }
-    .co-msg.err  { background: #fef2f2; color: #991b1b; }
-    .co-msg.ok   { background: #f0fdf4; color: #166534; }
-    .co-msg.wait { background: #f8fafc; color: #475569; }
+    /* .co-msg 는 이제 카드(.co-card)다 — 색은 카드 머리에만, 글은 검정(예전엔 문단 전체가 색글자였다) */
+    .co-msg .co-kv-list { margin-top: 10px; }
 
     .co-hide   { display: none !important; }
 
     /* ── 결제 완료 화면 ──────────────────────────────────────────────
        초록 배경 박스 하나로 끝내지 않는다. 손님이 "돈이 나갔다"는 확신을
        얻는 자리라, 성공 표시 → 이용 기간 → 다음 행동 순으로 위계를 준다. */
-    .co-done-mark  { width: 56px; height: 56px; margin: 8px auto 18px; border-radius: 50%;
-                     background: #0f9d58; color: #fff; font-size: 30px; line-height: 56px;
-                     text-align: center; font-weight: 700; }
-    .co-done-title { font-size: 22px; text-align: center; margin: 0 0 24px; }
-    .co-done-card  { text-align: center; }
-    .co-done-plan  { font-weight: 600; margin: 0 0 14px; }
-    .co-done-term  { border-top: 1px solid var(--line, #e5e7eb); padding-top: 14px; }
-    .co-done-term .k { display: block; font-size: 13px; color: var(--dim, #6b7280);
-                       margin-bottom: 6px; }
-    .co-done-term b  { font-size: 18px; }          /* 가장 알고 싶은 값 — 제일 크게 */
-    .co-second     { margin-top: 10px; }
+    /* 완료 화면은 카드(.co-card.ok) — 상품·이용 기간·금액·주문번호·영수증을 표로, 단추 둘을 발에 (2026-09-15 개편) */
+    .co-page-title { font-size: 22px; margin: 0 0 16px; }
     /* ── 이미 이용 중 화면 ───────────────────────────────────────────
        ⚠ 여기서 손님이 할 결정은 '1년권으로 바꿀까' 하나뿐이다.
           그래서 카드도 하나, 버튼도 하나만 둔다.
           처음에는 완료 화면 구조를 그대로 베껴서 카드 + 버튼 3개가 됐는데,
           무엇을 눌러야 할지 안 보였다 (2026-08-26 고침). */
-    .co-active-until { text-align: center; font-size: 15px; color: var(--dim, #4b5563);
-                       margin: 0 0 28px; }
-    .co-up-title   { font-weight: 600; font-size: 16px; margin: 0 0 8px; }
-    .co-upsell     { font-size: 14px; line-height: 1.7; color: var(--dim, #4b5563);
-                     margin: 0 0 16px; }
-    .co-active-note{ text-align: center; font-size: 14px; color: var(--dim, #6b7280);
-                     margin: 0 0 8px; }
-    .co-backlink   { text-align: center; margin-top: 24px; }
-    .co-backlink a { font-size: 14px; }
+    .co-up-title   { font-weight: 600; font-size: 16px; margin: 0 0 10px; }
+    .co-upsell     { font-size: 14px; line-height: 1.8; color: var(--dim, #4b5563); margin: 0 0 18px; }
+    .co-active-note{ font-size: 14px; color: var(--dim, #6b7280); margin: 0; }
   </style>
 </head>
 <body>
 
-<div class="co-wrap">
+<!-- 헤더 — 요금제·계정과 같은 것(로고·메뉴·🌐). 로그인 묶음(top-auth)은 뺐다 — authmodal.js 를 안 싣는 페이지라 상태 표시가 안 된다.
+     2026-09-15 개편: 결제 페이지만 헤더 없이 상자 하나였는데 다른 페이지와 틀이 달라 허술해 보였다(고원빈). -->
+<header class="top">
+  <div class="wrap">
+    <a class="logo" href="index.html"><img class="brand-mark" src="assets/logo.svg" alt="" />이지케이블</a>
+    <nav>
+      <a href="index.html#outputs" class="hide-sm">기능</a>
+      <a href="pricing.html" class="hide-sm">요금제</a>
+      <a href="index.html#faq" class="hide-sm">자주 묻는 질문</a>
+      <a href="mailto:easycableinfo@gmail.com" class="hide-sm">문의</a>
+      <a class="btn btn-main btn-sm" href="app.html">배선 그리기</a>
+      <span class="lang-switch" aria-label="Language">
+        <button type="button" data-setlang="ko" lang="ko" data-short="KO">한국어</button><i aria-hidden="true">·</i><button type="button" data-setlang="en" lang="en" data-short="EN">English</button>
+      </span>
+    </nav>
+  </div>
+</header>
 
-  <p style="margin-bottom:24px">
+<main class="co-wrap">
+
+  <p style="margin-bottom:20px">
     <a href="pricing.html" style="font-size:14px">← 요금제로 돌아가기</a>
   </p>
 
-  <!-- 상태 안내 (로그인 필요 · 오류 · 결제 완료) -->
-  <div id="msg" class="co-msg co-hide"></div>
+  <!-- 상태 안내 카드 (로그인 필요 · 오류 · 확인 중 · 무료 기간) — 알림() 이 카드 모양으로 채운다 -->
+  <div id="msg" class="co-card co-msg co-hide"></div>
 
   <!-- ── 결제 진행 화면 ─────────────────────────────── -->
   <div id="pay" class="co-hide">
@@ -180,52 +209,55 @@
        여기서 길을 안 보여 주면 손님은 "환불하고 다시 사야겠다" 고 생각하는데,
        그건 남은 기간을 잃는 손해다. -->
   <div id="active" class="co-hide">
-    <h1 class="co-done-title" style="margin-bottom:6px">이미 이용 중입니다</h1>
-    <p class="co-active-until" id="aTerm">—</p>
-
-    <!-- 월권 이용자에게만 보인다. 이 화면에서 결정할 것은 이것 하나뿐이라 카드도 하나다. -->
-    <div id="aUpgrade" class="co-order co-hide">
-      <p class="co-up-title">1년 이용권으로 바꾸시겠어요?</p>
-      <p class="co-upsell">
-        지금 이용 기간은 그대로 두고 <b>12개월이 더해집니다.</b><br />
-        환불하고 다시 결제하실 필요가 없습니다.
-      </p>
-      <a class="btn btn-main co-pay" href="checkout.html?plan=year">1년 이용권 · ₩46,800</a>
+    <h1 class="co-page-title">결제</h1>
+    <div class="co-card info">
+      <div class="co-card-head"><span class="ic" aria-hidden="true">i</span><h2>이미 이용 중입니다</h2></div>
+      <!-- 지금 상태 — 표 한 줄. 완료 카드의 「이용 기간」과 같은 모양 -->
+      <div class="co-card-body">
+        <div class="co-kv"><span class="k">이용 기간</span><span class="v big" id="aTerm">—</span></div>
+      </div>
+      <!-- 제안 — 구분선 아래 별도 구획. 월권 이용자에게만 보인다. 이 화면에서 결정할 것은 이것 하나뿐이다. -->
+      <div id="aUpgrade" class="co-card-sect co-hide">
+        <p class="co-up-title">1년 이용권으로 바꾸시겠어요?</p>
+        <p class="co-upsell">
+          지금 이용 기간은 그대로 두고 <b>12개월이 더해집니다.</b><br />
+          환불하고 다시 결제하실 필요가 없습니다.
+        </p>
+        <a class="btn btn-main co-pay" href="checkout.html?plan=year">1년 이용권 · ₩46,800</a>
+      </div>
+      <!-- 1년권 이용자에게만 보인다 — 더 살 것이 없으므로 안내 한 줄이면 끝이다 -->
+      <div id="aWait" class="co-card-sect co-hide"><p class="co-active-note">이용 기간이 끝난 뒤에 다시 결제하실 수 있습니다.</p></div>
+      <div class="co-card-foot">
+        <a class="btn btn-sub" href="app.html">에디터로 돌아가기</a>
+        <a class="btn btn-sub" href="account.html">내 계정</a>
+      </div>
     </div>
-
-    <!-- 1년권 이용자에게만 보인다 — 더 살 것이 없으므로 안내 한 줄이면 끝이다 -->
-    <p class="co-active-note co-hide" id="aWait">
-      이용 기간이 끝난 뒤에 다시 결제하실 수 있습니다.
-    </p>
-
-    <p class="co-backlink"><a href="app.html">에디터로 돌아가기</a></p>
   </div>
 
   <!-- ── 결제 완료 화면 ───────────────────────────────
        손님이 가장 알고 싶은 것은 '언제까지 쓰는가' 하나다. 그것을 가장 크게 둔다.
        나머지는 덜어냈다 — 확신과 다음 행동만 남긴다. -->
   <div id="done" class="co-hide">
-    <div class="co-done-mark" aria-hidden="true">✓</div>
-    <h1 class="co-done-title">결제가 완료되었습니다</h1>
-
-    <div class="co-order co-done-card">
-      <p class="co-done-plan" id="dName">—</p>
-      <div class="co-done-term">
-        <span class="k">이용 기간</span>
-        <b id="dTerm">—</b>
+    <h1 class="co-page-title">결제 완료</h1>
+    <div class="co-card ok">
+      <div class="co-card-head"><span class="ic" aria-hidden="true">✓</span><h2>결제가 완료되었습니다</h2></div>
+      <div class="co-card-body">
+        <!-- 손님이 가장 알고 싶은 것은 '언제까지 쓰는가' — 그 값만 크게(.big) -->
+        <div class="co-kv"><span class="k">상품</span><span class="v" id="dName">—</span></div>
+        <div class="co-kv"><span class="k">이용 기간</span><span class="v big" id="dTerm">—</span></div>
+        <div class="co-kv"><span class="k">결제 금액</span><span class="v" id="dAmount">—</span></div>
+        <!-- 주문번호·영수증 (2026-09-15) — 8/24 엔 "내 계정에 있으니 뺀다" 였는데, 문의할 때 바로 보여야 해서 넣었다(고원빈) -->
+        <div class="co-kv"><span class="k">주문번호</span><span class="v"><code id="dOrder">—</code></span></div>
+        <div class="co-kv co-hide" id="dReceiptRow"><span class="k">영수증</span><span class="v"><a id="dReceipt" href="#" target="_blank" rel="noopener">보기 →</a></span></div>
+      </div>
+      <div class="co-card-foot">
+        <a class="btn btn-main" href="app.html">에디터로 돌아가기</a>
+        <a class="btn btn-sub" href="account.html">내 계정에서 확인</a>
       </div>
     </div>
-
-    <a class="btn btn-main co-pay" href="app.html">에디터로 돌아가기</a>
-    <a class="btn btn-sub co-pay co-second" href="account.html">내 계정에서 확인</a>
-
-    <!-- ⚠ 주문번호·환불 안내를 두지 않는다 (2026-08-24 정리).
-         둘 다 법적 의무가 아니고, 「내 계정」과 약관에 이미 있다.
-         완료 화면은 '됐다'는 확신과 다음 행동만 남긴다.
-         영수증도 여기 두지 않는다 — 실결제 영수증은 「내 계정」 결제 내역에서 본다. -->
   </div>
 
-</div>
+</main>
 
 <script src="js/flags.js"></script>
 <script src="js/auth.js"></script>
@@ -306,10 +338,20 @@
     }
   }
 
-  function 알림(종류, html) {
+  /* 알림 카드 — 종류: err(빨강 !) · ok(초록 ✓) · wait(회색 …) · info(파랑 i).
+     html 의 첫 <b>…</b> 를 제목(머리)으로 빼고 나머지를 몸통에 둔다 — 부르는 쪽들이 그 형식으로 넘긴다.
+     actions(선택): 발에 넣을 단추 HTML. 2026-09-15 개편 전엔 색 배경 문단 하나였다. */
+  function 알림(종류, html, actions) {
     var m = $("msg");
-    m.className = "co-msg " + 종류;
-    m.innerHTML = html;
+    m.className = "co-card co-msg " + 종류;
+    var 제목 = "", 몸통 = html;
+    var mm = /^\s*<b>([\s\S]*?)<\/b>\s*/.exec(html);
+    if (mm) { 제목 = mm[1]; 몸통 = html.slice(mm[0].length); }
+    var 아이콘 = { err: "!", ok: "✓", wait: "…", info: "i" }[종류] || "";
+    m.innerHTML =
+      (제목 ? '<div class="co-card-head"><span class="ic" aria-hidden="true">' + 아이콘 + '</span><h2>' + 제목 + '</h2></div>' : "") +
+      '<div class="co-card-body">' + (몸통 || "") + '</div>' +
+      (actions ? '<div class="co-card-foot">' + actions + '</div>' : "");
     launch링크보정(m);        // 안내문 안에서 새로 만든 링크도 보정한다
     보이기(m);
     /* ⚠ 오류면 결제 상자를 반드시 감춘다.
@@ -375,7 +417,7 @@
     var 끝 = 날짜글(본문 && 본문.expiresAt);
     var 올릴수있나 = !!(본문 && 본문.canUpgrade);
 
-    $("aTerm").textContent = 끝 ? tr("{끝} 까지 이용하실 수 있습니다").replace("{끝}", 끝) : "";   // 영어는 어순이 달라 자리표시 키로
+    $("aTerm").textContent = 끝 ? tr("{끝} 까지").replace("{끝}", 끝) : tr("확인 중");   // 표 한 줄 — 항목 이름(이용 기간)이 문장을 대신한다. 영어는 어순이 달라 자리표시 키
 
     보이기($(올릴수있나 ? "aUpgrade" : "aWait"));
 
@@ -394,18 +436,33 @@
     알림("ok",
       tr("<b>지금은 무료 이용 기간입니다.</b>") +
       tr("<p style='margin-top:8px'>모든 기능을 결제 없이 쓸 수 있어, 지금은 이용권을 판매하지 않습니다.</p>") +
-      tr("<p style='margin-top:6px'>판매를 시작하면 에디터의 🔔 출시 알림으로 알려 드립니다.</p>") +
-      "<p style='margin-top:10px'><a href='" + 에디터주소() + tr("'>에디터로 돌아가기</a></p>"));
+      tr("<p style='margin-top:6px'>판매를 시작하면 에디터의 🔔 출시 알림으로 알려 드립니다.</p>"),
+      "<a class='btn btn-main' href='" + 에디터주소() + "'>" + tr("에디터로 돌아가기") + "</a>");
   }
 
   /* 오류를 화면에 띄운다. 상태코드를 함께 보여 줘야 원인을 가릴 수 있다. */
-  function 오류알림(제목, 정보) {
-    알림("err", "<b>" + 제목 + "</b>" +
-                "<p style='margin-top:8px'></p>" +
-                "<p style='margin-top:6px;font-size:12px;opacity:.7'></p>");
-    var ps = $("msg").querySelectorAll("p");
-    ps[0].textContent = 정보.문구;
-    ps[1].textContent = 정보.상태 ? tr("(서버 응답 ") + 정보.상태 + ")" : "";
+  function 오류알림(제목, 정보, 주문번호) {
+    /* 401 = 서버가 로그인 토큰을 거절 — 결제가 실패한 게 아니다. 다시 로그인하면 이용권은 자동으로 붙는다(payrecover).
+       "결제 확인 실패 · 서버 응답 401" 로 보여 주면 손님은 돈만 나갔다고 생각한다(2026-09-15 실제로 그렇게 보였다). */
+    if (정보 && 정보.상태 === 401) {
+      알림("info",
+        tr("<b>로그인이 풀렸습니다</b>") +
+        tr("<p>결제는 완료되었습니다. 다시 로그인하시면 이용권이 자동으로 적용됩니다.</p>") +
+        (주문번호 ? '<div class="co-kv-list"><div class="co-kv"><span class="k">' + tr("주문번호") + '</span><span class="v"><code></code></span></div></div>' : ""),
+        '<a class="btn btn-main" href="' + 에디터주소().replace(/\?.*$/, "") + '?auth=login">' + tr("다시 로그인") + '</a>' +
+        '<a class="btn btn-sub" href="account.html">' + tr("내 계정") + '</a>');
+      if (주문번호) $("msg").querySelector("code").textContent = 주문번호;
+      return;
+    }
+    알림("err", "<b>" + 제목 + "</b><p></p>" +
+      '<div class="co-kv-list">' +
+      (주문번호 ? '<div class="co-kv"><span class="k">' + tr("주문번호") + '</span><span class="v"><code></code></span></div>' : "") +
+      (정보.상태 ? '<div class="co-kv"><span class="k">' + tr("서버 응답") + '</span><span class="v"></span></div>' : "") +
+      '</div>',
+      '<a class="btn btn-sub" href="mailto:easycableinfo@gmail.com">' + tr("고객센터에 문의") + '</a>');
+    $("msg").querySelector("p").textContent = 정보.문구;
+    var codeEl = $("msg").querySelector("code"); if (codeEl) codeEl.textContent = 주문번호;
+    var kv = $("msg").querySelectorAll(".co-kv .v"); if (정보.상태) kv[kv.length - 1].textContent = String(정보.상태);
   }
 
   /* ── 로그인·클라이언트가 준비될 때까지 기다린다 ────────────────────
@@ -450,15 +507,14 @@
     var p = document.createElement("p");
     p.appendChild(안전);
 
-    알림("err", tr("<b>결제가 취소되었습니다</b>"));
-    $("msg").appendChild(p);
-    if (코드 === "PAY_PROCESS_CANCELED") {
-      $("msg").insertAdjacentHTML("beforeend",
-        tr('<p style="margin-top:10px"><a href="pricing.html">다시 시도하기</a></p>'));
-    } else {
-      $("msg").insertAdjacentHTML("beforeend",
-        tr('<p style="margin-top:10px">코드: ') + (코드 || "-") +
-        tr(' · 계속 실패하면 <a href="mailto:easycableinfo@gmail.com">고객센터</a>로 알려 주세요.</p>'));
+    알림("err", tr("<b>결제가 취소되었습니다</b>"),
+      '<a class="btn btn-main" href="pricing.html">' + tr("다시 시도하기") + '</a>' +
+      (코드 === "PAY_PROCESS_CANCELED" ? "" : '<a class="btn btn-sub" href="mailto:easycableinfo@gmail.com">' + tr("고객센터에 문의") + '</a>'));
+    $("msg").querySelector(".co-card-body").appendChild(p);
+    if (코드 !== "PAY_PROCESS_CANCELED") {
+      $("msg").querySelector(".co-card-body").insertAdjacentHTML("beforeend",
+        '<div class="co-kv-list"><div class="co-kv"><span class="k">' + tr("오류 코드") + '</span><span class="v"><code></code></span></div></div>');
+      $("msg").querySelector("code").textContent = 코드 || "-";
     }
   }
 
@@ -488,10 +544,7 @@
         if (res && res.error) {
           try { console.error("[checkout] payment-confirm 오류:", res.error); } catch (e) {}
           return 서버오류(res.error).then(function (정보) {
-            오류알림(tr("결제 확인에 실패했습니다"), 정보);
-            $("msg").insertAdjacentHTML("beforeend",
-              tr("<p style='margin-top:10px'>주문번호 <code>") +
-              (파라미터.get("paymentId") || "") + "</code></p>");
+            오류알림(tr("결제 확인에 실패했습니다"), 정보, 파라미터.get("paymentId") || "");
           });
         }
         var 결과 = res && res.data;
@@ -556,6 +609,11 @@
                                : 오늘부터 ? tr("{끝} 까지").replace("{끝}", 끝)
                                : tr("{시작} 부터 {끝} 까지").replace("{시작}", 시작).replace("{끝}", 끝);   // 어순 — 자리표시 키
 
+        $("dAmount").textContent = 결과.amount != null ? 원(결과.amount) : "—";
+        $("dOrder").textContent  = 결과.orderId || 파라미터.get("paymentId") || "—";
+        // 영수증 — 서버가 주소를 준 경우만 줄을 보인다(이미 처리된 주문의 재확인 응답엔 없다 → 「내 계정」 결제 내역에서)
+        if (결과.receipt) { $("dReceipt").href = 결과.receipt; 보이기($("dReceiptRow")); } else { 숨기기($("dReceiptRow")); }
+
         숨기기($("msg"));
         launch링크보정($("done"));   // 로컬 시험용 — 완료 화면 버튼들도 보정
         보이기($("done"));
@@ -586,6 +644,10 @@
     return d.length === 10 ? d.replace(/^(\d{3})(\d{3})(\d{4})$/, "$1-$2-$3") : d.replace(/^(\d{3})(\d{4})(\d{4})$/, "$1-$2-$3");
   }
 
+  // 시험 고리 — 로컬(127.0.0.1)에서만. 다섯 상태 화면을 서버 없이 눌러 본다(스크린샷·수동 확인). 라이브에선 만들지 않는다.
+  if (location.hostname === "127.0.0.1" || location.hostname === "localhost") {
+    window.__checkout시험 = { 알림: 알림, 오류알림: 오류알림, 이용중안내: 이용중안내, 무료기간안내: 무료기간안내, 실패처리: 실패처리, 보이기: 보이기, 숨기기: 숨기기 };
+  }
   function 결제시작() {
     var plan = 파라미터.get("plan");
     if (plan !== "month" && plan !== "year") {
