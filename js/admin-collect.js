@@ -18,7 +18,9 @@
               그 사람이 그 부품을 고치거나 브라우저를 초기화하면 다시 온다. hidden_at 은 함수가 안 건드려 다시 와도 계속 숨김.
               기기 숨김(collect_devices.hidden_at)은 그 기기의 부품 전부 + **앞으로 올 것**까지 목록에서 뺀다(시험 기기용).
               통계(CSV·엑셀·순위·머리 숫자)는 숨긴 것도 **포함**(고원빈: 1년 모아 통계). 「숨긴 것 보기」로 다시 보고 복원.
-              이 파일에서 표에 직접 쓰는 코드는 여전히 없다 — 쓰기는 RPC 하나뿐(verify_admincollect 가 본다).
+              이 파일에서 표에 직접 쓰는 코드는 여전히 없다 — 쓰기는 RPC 뿐(verify_admincollect 가 본다).
+   기기 삭제(09-15 낮 2차) — 왼쪽 목록에서 고른 기기 항목 안 [삭제]. 시험 기기(고원빈 휴대폰·시크릿 창)용 — 통계에서도 사라지고
+              못 되돌린다(confirm). Storage 이미지 → RPC collect_delete_device(행, cascade) 순. 그 브라우저가 다시 오면 기기 행이 새로 생긴다.
    ⚠ 이 파일은 에디터에 실리지 않는다(관리자 페이지만). 수집하는 쪽은 js/libsync.js. */
 var WE = window.WE || {};
 window.WE = WE;
@@ -93,21 +95,21 @@ WE.adminCollect = (function () {
     var ids = Object.keys(devices).filter(function (id) { return withHidden || !devHidden(id) || id === userFilter; })
       .sort(function (a, b) { return (latest[b] || "") < (latest[a] || "") ? -1 : 1; });
     function 개수(n, pub) { return n + "개" + (pub && !withPublic ? " <i>(공용 " + pub + ")</i>" : ""); }
-    var html = '<button type="button" class="adm-col-user' + (userFilter === "" ? " on" : "") + '" data-user=""><b>전체</b><span>' + ids.length + "명 · " + 개수(total, totalPub) + "</span></button>";
+    // 항목은 <div role="button"> — 안에 [숨기기] [삭제] 단추를 넣어야 해서(<button> 안에 <button> 은 안 된다). 키보드는 아래 keydown 이 받는다.
+    var html = '<div role="button" tabindex="0" class="adm-col-user' + (userFilter === "" ? " on" : "") + '" data-user=""><b>전체</b><span>' + ids.length + "명 · " + 개수(total, totalPub) + "</span></div>";
     ids.forEach(function (id) {
-      var d = devices[id] || {};
-      html += '<button type="button" class="adm-col-user' + (userFilter === id ? " on" : "") + (d.hidden_at ? " is-hidden" : "") + '" data-user="' + esc(id) + '" title="' + esc(id) + '">' +
+      var d = devices[id] || {}, on = userFilter === id;
+      html += '<div role="button" tabindex="0" class="adm-col-user' + (on ? " on" : "") + (d.hidden_at ? " is-hidden" : "") + '" data-user="' + esc(id) + '" title="' + esc(id) + '">' +
         "<b>" + esc(d.user_email || "기기 " + id.slice(0, 8)) + (d.hidden_at ? ' <em class="adm-col-hidden-tag">숨김</em>' : "") + "</b>" +
-        "<span>" + 개수(counts[id] || 0, pubs[id] || 0) + " · " + esc(ago(latest[id] || d.last_sync_at)) + (d.user_email ? "" : " · 로그인 안 함") + "</span></button>";
+        "<span>" + 개수(counts[id] || 0, pubs[id] || 0) + " · " + esc(ago(latest[id] || d.last_sync_at)) + (d.user_email ? "" : " · 로그인 안 함") + "</span>" +
+        // 고른 기기에만 단추 — 숨기기(복원)는 되돌릴 수 있고, 삭제는 못 되돌린다(confirm). 삭제는 다시 안 올 시험 기기용
+        (on ? '<span class="adm-col-user-acts">' +
+                '<button type="button" data-devact="' + (d.hidden_at ? "unhide" : "hide") + '" title="목록에서만 치웁니다. 통계에는 남고 되돌릴 수 있습니다">' + (d.hidden_at ? "복원" : "숨기기") + "</button>" +
+                '<button type="button" class="danger" data-devact="delete" title="서버에서 완전히 지웁니다(부품·이미지 포함, 통계에서도 사라짐). 시험 기기용">삭제</button>' +
+              "</span>" : "") +
+        "</div>";
     });
     box.innerHTML = html;
-    renderHideDevButton();
-  }
-  // 「이 기기 숨기기 / 복원」 — 왼쪽에서 기기를 골랐을 때만 보인다
-  function renderHideDevButton() {
-    var b = $("admColHideDev"); if (!b) return;
-    b.hidden = !userFilter;
-    if (userFilter) b.textContent = devHidden(userFilter) ? "이 기기 복원" : "이 기기 숨기기";
   }
 
   // ── 가운데: 묶기 ──────────────────────────────────────────────────────
@@ -378,7 +380,7 @@ WE.adminCollect = (function () {
   /* 기기: p_parts 를 null 로 주면 collect_devices.hidden_at 이 바뀐다. 부품 행은 그대로 — 그래서 복원하면 개별로 숨긴 것만 남는다. */
   function hideDevice(deviceId, hide) {
     var c = client(); if (!c || !c.rpc || !deviceId) return Promise.resolve(0);
-    var b = $("admColHideDev"); if (b) b.disabled = true;
+    setDevActs(deviceId, true);
     return c.rpc("collect_hide", { p_device: deviceId, p_parts: null, p_hide: hide }).then(function (res) {
       if (res && res.error) throw res.error;
       (devices[deviceId] = devices[deviceId] || { device_id: deviceId }).hidden_at = hide ? new Date().toISOString() : null;
@@ -387,8 +389,54 @@ WE.adminCollect = (function () {
       return Number(res && res.data) || 0;
     }).catch(function (e) {
       alert("기기를 " + (hide ? "숨기지" : "복원하지") + " 못했습니다: " + ((e && e.message) || e));
+      setDevActs(deviceId, false);
       return 0;
-    }).then(function (n) { if (b) b.disabled = false; return n; });
+    });
+  }
+  // 고른 기기 항목의 [숨기기][삭제] 를 잠깐 잠근다(서버 왕복 중 두 번 누르지 않게)
+  function setDevActs(deviceId, busy) {
+    var el = document.querySelector('#admColUsers .adm-col-user[data-user="' + CSS.escape(deviceId) + '"]'); if (!el) return;
+    el.querySelectorAll(".adm-col-user-acts button").forEach(function (b) { b.disabled = busy; });
+  }
+
+  // ── 기기 삭제 (2026-09-15 낮 2차) — 시험 기기용. 서버에서 완전히 지운다 ──────────────────────────────
+  /* 순서: confirm → ① Storage 의 이미지(user-libraries/{기기}/…)를 관리자 토큰으로 지운다(SQL 로 storage.objects 를 지우면
+     실제 파일이 남는다) → ② RPC collect_delete_device — collect_devices 행 삭제, collect_parts 는 cascade.
+     ①이 실패하면 아무것도 안 지우고 알린다. ②가 실패하면 이미지는 이미 없어진 상태라 "행이 남았다" 고 알린다(다시 누르면 ②만 다시).
+     ⚠ 되살아남: 그 브라우저가 에디터를 다시 열면 기기 행이 새로 생긴다(옛 부품 전부가 아니라 그 뒤 바뀐 것만) —
+        그래서 이건 다시 안 올 시험 기기용이고, 실제 사용자 기기는 숨기기를 쓴다(confirm 문구에 적었다). */
+  function deleteDevice(deviceId) {
+    var c = client(); if (!c || !c.rpc || !c.storage || !deviceId) return Promise.resolve(false);
+    var d = devices[deviceId] || {}, mine = rows.filter(function (r) { return r.device_id === deviceId; });
+    var label = d.user_email || ("기기 " + deviceId.slice(0, 8));
+    if (!confirm("'" + label + "' 와 부품 " + mine.length + "개를 서버에서 완전히 지웁니다.\n통계에서도 사라지며 되돌릴 수 없습니다.\n\n시험 기기에만 쓰세요 — 실제 사용자 기기는 「숨기기」를 쓰면 통계가 남습니다.")) return Promise.resolve(false);
+    setDevActs(deviceId, true);
+    var store = c.storage.from(BUCKET), 폴더 = deviceId;
+    // ① 이미지 — 폴더를 훑어 있는 것 전부(행에 없는 옛 파일까지). list 는 한 번에 최대 1000개, 기기 하나 라이브러리엔 충분하다
+    return store.list(폴더, { limit: 1000 }).then(function (res) {
+      if (res && res.error) throw res.error;
+      var names = ((res && res.data) || []).map(function (o) { return o && o.name; }).filter(Boolean).map(function (n) { return 폴더 + "/" + n; });
+      if (!names.length) return 0;
+      return store.remove(names).then(function (r) { if (r && r.error) throw r.error; return names.length; });
+    }).then(function (imgN) {
+      // ② 행
+      return c.rpc("collect_delete_device", { p_device: deviceId }).then(function (res) {
+        if (res && res.error) throw Object.assign(new Error(res.error.message || "삭제 실패"), { 이미지지움: imgN });
+        rows = rows.filter(function (r) { return r.device_id !== deviceId; });
+        delete devices[deviceId];
+        Object.keys(urlCache).forEach(function (p) { if (p.indexOf(폴더 + "/") === 0) delete urlCache[p]; });
+        if (userFilter === deviceId) userFilter = "";
+        checked = {}; selectedKey = null;
+        refreshAll();
+        return true;
+      });
+    }).catch(function (e) {
+      var msg = (e && e.message) || e;
+      alert(e && e.이미지지움 != null ? "이미지 " + e.이미지지움 + "개는 지웠지만 기기 행은 지우지 못했습니다: " + msg + "\n다시 「삭제」를 누르면 행만 다시 지웁니다."
+                                        : "기기를 지우지 못했습니다(아무것도 안 지웠습니다): " + msg);
+      setDevActs(deviceId, false);
+      return false;
+    });
   }
 
   // ── 에디터에 배치 — 작업본을 우편함(localStorage)에 넣고 에디터를 연다 ──
@@ -493,11 +541,23 @@ WE.adminCollect = (function () {
     $("admColNew").addEventListener("click", applyPending);
     $("admColSend").addEventListener("click", sendToBatch);
     $("admColHide").addEventListener("click", toggleHideTargets);
-    $("admColHideDev").addEventListener("click", function () { if (userFilter) hideDevice(userFilter, !devHidden(userFilter)); });
+    function pickUser(id) { userFilter = id; selectedKey = null; checked = {}; renderUsers(); build(); render(); renderDetail(); }
     $("admColUsers").addEventListener("click", function (e) {
+      // 항목 안의 [숨기기][복원][삭제] — 항목 클릭(기기 고르기)으로 번지지 않게 먼저 받는다
+      var a = e.target.closest("[data-devact]");
+      if (a) {
+        var id = a.closest("[data-user]").dataset.user;
+        if (a.dataset.devact === "delete") deleteDevice(id); else hideDevice(id, a.dataset.devact === "hide");
+        return;
+      }
       var b = e.target.closest("[data-user]"); if (!b) return;
-      userFilter = b.dataset.user; selectedKey = null; checked = {};
-      renderUsers(); build(); render(); renderDetail();
+      pickUser(b.dataset.user);
+    });
+    // 항목이 <div role=button> 이라 Enter/Space 를 직접 받는다(<button> 이었을 때와 같게)
+    $("admColUsers").addEventListener("keydown", function (e) {
+      if (e.key !== "Enter" && e.key !== " ") return;
+      var b = e.target.closest("[data-user]"); if (!b || e.target.closest("[data-devact]")) return;
+      e.preventDefault(); pickUser(b.dataset.user);
     });
     $("admColList").addEventListener("click", function (e) {
       var cb = e.target.closest("input[data-check]");
@@ -537,6 +597,7 @@ WE.adminCollect = (function () {
     _테스트_새부품적용: applyPending,
     _테스트_숨기기: toggleHideTargets,                 // 체크한(없으면 고른) 부품을 숨기거나 복원 — 서버는 가짜 rpc
     _테스트_기기숨기기: function (id, hide) { return hideDevice(id, hide); },
+    _테스트_기기삭제: deleteDevice,                    // confirm 은 검사가 window.confirm 을 바꿔 끼운다
     _테스트_행: function () { return rows.map(function (r) { return { device_id: r.device_id, part_id: r.part_id, hidden_at: r.hidden_at || null }; }); },
     INBOX_KEY: INBOX_KEY
   };

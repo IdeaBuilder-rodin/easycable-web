@@ -222,7 +222,15 @@
     .adm-col-user { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 7px 10px; border: 1px solid transparent; border-radius: var(--r); background: none; font: inherit; text-align: left; cursor: pointer; }
     .adm-col-user:hover { background: var(--bg2); }
     .adm-col-user.on { background: var(--primary-bg); border-color: #c9d8ec; }
-    .adm-col-user.is-hidden { opacity: .5; }                   /* 기기째 숨김 — 「숨긴 것 보기」를 켰을 때만 목록에 나온다 */
+    /* 기기째 숨김 — 「숨긴 것 보기」를 켰을 때만 목록에 나온다. 글자만 흐리게(항목 전체에 opacity 를 주면 안의 단추까지 흐려진다) */
+    .adm-col-user.is-hidden > b, .adm-col-user.is-hidden > span { opacity: .5; }
+    /* 기기 항목 안의 [숨기기] [삭제] — 고른(.on) 항목에만 그린다(2026-09-15 낮 2차). 항목이 <div role=button> 인 이유:
+       <button> 안에 <button> 은 HTML 이 허용하지 않는다 */
+    .adm-col-user-acts { display: flex; gap: 4px; margin-top: 4px; }
+    .adm-col-user-acts button { font: inherit; font-size: 11px; padding: 2px 8px; border: 1px solid var(--bd2); border-radius: 999px; background: #fff; color: var(--tx2); cursor: pointer; }
+    .adm-col-user-acts button:hover { background: var(--bg2); }
+    .adm-col-user-acts button.danger { color: #c62828; border-color: #f0c9c9; }
+    .adm-col-user-acts button.danger:hover { background: #fdecea; }
     .adm-col-user b { font-size: 13px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .adm-col-user span { font-size: 11px; color: var(--tx3); }
     .adm-col-user span i { font-style: normal; color: #9aa4b2; }
@@ -491,8 +499,7 @@
         <button type="button" class="adm-edit-btn" id="admColCsv" title="부품별 통계(이름·스펙별 기기 수)를 CSV 로 — 숨긴 것도 포함">⤓ CSV</button>
         <button type="button" class="adm-edit-btn" id="admColXlsx" title="부품별 통계 + 원본 목록을 엑셀(시트 2개)로 — 숨긴 것도 포함">⤓ 엑셀</button>
         <button type="button" class="adm-edit-btn" id="admColRefresh" title="서버에 모인 것을 다시 읽습니다">↻ 새로 읽기</button>
-        <!-- 기기째 숨기기 — 왼쪽에서 기기를 골랐을 때만 보인다. 그 기기에서 앞으로 올 부품도 목록에 안 나온다 -->
-        <button type="button" class="adm-edit-btn" id="admColHideDev" hidden>이 기기 숨기기</button>
+        <!-- 기기 단위 숨기기·삭제는 왼쪽 목록의 고른 항목 안에 있다(2026-09-15 낮 2차, 고원빈: "왼쪽 목록에서 바로") -->
         <!-- 체크한(없으면 고른) 부품 숨기기 — 대상이 전부 숨긴 것이면 「복원」으로 바뀐다 -->
         <button type="button" class="adm-edit-btn" id="admColHide" disabled>숨기기</button>
         <button type="button" class="adm-batch-publish-all" id="admColSend" disabled>일괄 등록으로 보내기</button>
