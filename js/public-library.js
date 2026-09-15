@@ -40,7 +40,7 @@ WE.publicLibrary = (function () {
     return {
       id: id, publicId: id,
       version: Number(row.version || p.publicVersion || 1), publicVersion: Number(row.version || p.publicVersion || 1),
-      name: row.name || p.name || "이름 없는 부품", spec: row.spec || p.spec || "",
+      name: row.name || p.name || WE.i18n.t("이름 없는 부품"), spec: row.spec || p.spec || "",
       category: row.category || p.category || inferCategory(p),
       categoryId: row.category_id || p.categoryId || null,
       thumbnail: row.thumbnail_url || p.thumbnail || p.image || "", image: p.image || row.image_url || "",
@@ -105,7 +105,7 @@ WE.publicLibrary = (function () {
       if (res.error) throw res.error;
       var next = (res.data || []).map(function (p, i) { return normalize(p, from + i, "server"); });
       rows = reset ? next : rows.concat(next); total = Number(res.count || 0); provider = "server";
-      setBadge("공식 카탈로그"); return rows;
+      setBadge(WE.i18n.t("공식 카탈로그")); return rows;
     });
   }
   function querySamples(reset) {
@@ -124,11 +124,11 @@ WE.publicLibrary = (function () {
       });
       if (reset) { page = 0; rows = []; }
       total = found.length; rows = found.slice(0, (page + 1) * PAGE_SIZE); provider = "sample";
-      setBadge("샘플 카탈로그"); return rows;
+      setBadge(WE.i18n.t("샘플 카탈로그")); return rows;
     });
   }
   function search(reset) {
-    var seq = ++requestSeq; setStatus("공용 부품을 검색하는 중입니다.");
+    var seq = ++requestSeq; setStatus(WE.i18n.t("공용 부품을 검색하는 중입니다."));
     var localPreview = location.protocol === "file:" || location.hostname === "127.0.0.1" || location.hostname === "localhost";
     var request = queryServer(reset);
     // sample.ezc는 서버 설정 전의 로컬 화면 점검용이다. 운영 장애를 샘플 목록으로 감추지 않는다.
@@ -141,14 +141,14 @@ WE.publicLibrary = (function () {
          (BOM 하단과 **같은 마크업** — 법정 고지가 두 벌로 갈라지면 한쪽만 고쳐진다)
          여기 상태줄은 샘플 모드 경고 전용으로만 남긴다. 운영 중에는 비운다 —
          예전의 「검색 결과는 30개씩…」 안내는 없앴다(고원빈 확정 2026-09-03). */
-      setStatus(provider === "server" ? "" : "서버 스키마 적용 전이라 샘플 카탈로그를 표시합니다.");
+      setStatus(provider === "server" ? "" : WE.i18n.t("서버 스키마 적용 전이라 샘플 카탈로그를 표시합니다."));
       if (selectedId) loadDetail(selectedId);
     }).catch(function () {
       if (seq !== requestSeq) return;
       render();
       setStatus(rows.length
-        ? "공용 카탈로그에 연결하지 못해 이전 검색 결과를 유지합니다."
-        : "공용 카탈로그를 불러오지 못했습니다. 인터넷 연결을 확인해 주세요.", true);
+        ? WE.i18n.t("공용 카탈로그에 연결하지 못해 이전 검색 결과를 유지합니다.")
+        : WE.i18n.t("공용 카탈로그를 불러오지 못했습니다. 인터넷 연결을 확인해 주세요."), true);
     });
   }
   function selectedRow() { return rows.filter(function (p) { return p.id === selectedId; })[0] || null; }
@@ -167,8 +167,8 @@ WE.publicLibrary = (function () {
           var box = document.getElementById("publicLibraryDetail");
           document.getElementById("publicLibraryAdd").disabled = true;
           document.getElementById("publicLibraryPlace").disabled = true;
-          box.innerHTML = '<div class="public-library-detail-empty">부품 상세 정보를 불러오지 못했습니다.</div>';
-          setStatus("부품 상세 정보를 불러오지 못했습니다. 다시 시도해 주세요.", true);
+          box.innerHTML = '<div class="public-library-detail-empty">' + WE.i18n.t("부품 상세 정보를 불러오지 못했습니다.") + '</div>';
+          setStatus(WE.i18n.t("부품 상세 정보를 불러오지 못했습니다. 다시 시도해 주세요."), true);
         }
         return null;
       });
@@ -189,7 +189,7 @@ WE.publicLibrary = (function () {
       publicId: p.id, publicVersion: p.version
     });
     if (callbacks.renderLibrary) callbacks.renderLibrary();
-    setStatus("내 라이브러리에 추가했습니다: " + p.name); render(); return part;
+    setStatus(WE.i18n.t("내 라이브러리에 추가했습니다: ") + p.name); render(); return part;
   }
   /* 그림을 받아 data: 로 바꾼다.
      ⚠ 다른 출처(Supabase Storage)라 <img> 로 캔버스에 그리면 캔버스가 오염돼 못 읽는다.
@@ -221,7 +221,7 @@ WE.publicLibrary = (function () {
       복사.image = dataUrl;
       return 복사;
     }).catch(function () {
-      setStatus("그림을 내려받지 못해 원본 주소로 연결했습니다. 인터넷 연결을 확인해 주세요.");
+      setStatus(WE.i18n.t("그림을 내려받지 못해 원본 주소로 연결했습니다. 인터넷 연결을 확인해 주세요."));
       return p;
     });
   }
@@ -229,8 +229,8 @@ WE.publicLibrary = (function () {
   function withFull(done) {
     if (!selectedId) return;
     loadDetail(selectedId).then(function (p) {
-      if (!p || !p.image) { setStatus("부품 원본을 불러오지 못했습니다."); return; }
-      setStatus("부품을 가져오는 중입니다…");
+      if (!p || !p.image) { setStatus(WE.i18n.t("부품 원본을 불러오지 못했습니다.")); return; }
+      setStatus(WE.i18n.t("부품을 가져오는 중입니다…"));
       return 내것으로(p).then(function (내p) { done(내p); });
     });
   }
@@ -252,14 +252,14 @@ WE.publicLibrary = (function () {
       var 화살 = 자식있음
         ? '<span class="public-library-caret' + (펼침[node.id] ? " open" : "") + '" aria-hidden="true"></span>'
         : "";
-      b.innerHTML = 화살 + '<span class="public-library-category-name">' + esc(node.name) + "</span>";
+      b.innerHTML = 화살 + '<span class="public-library-category-name">' + esc(WE.i18n.t(node.name)) + "</span>";
       if (자식있음) b.setAttribute("aria-expanded", 펼침[node.id] ? "true" : "false");
       box.appendChild(b);
     }
     var allBtn = document.createElement("button"); allBtn.type = "button";
     allBtn.className = "public-library-category" + (categoryId ? "" : " active");
     allBtn.dataset.categoryId = "";
-    allBtn.innerHTML = '<span class="public-library-category-name">' + esc(WE.categories.ALL) + "</span>";
+    allBtn.innerHTML = '<span class="public-library-category-name">' + esc(WE.i18n.t(WE.categories.ALL)) + "</span>";
     box.appendChild(allBtn);
     // 대분류 한 줄씩. **펼친 것만** 그 아래 소분류를 들여쓰기(.sub)로 이어 그린다.
     WE.categories.tree().forEach(function (root) {
@@ -270,42 +270,42 @@ WE.publicLibrary = (function () {
   }
   function renderResults() {
     var list = document.getElementById("publicLibraryResultList");
-    document.getElementById("publicLibraryResultCount").textContent = total.toLocaleString("ko-KR") + "개"; list.innerHTML = "";
-    if (!rows.length) { list.innerHTML = '<div class="public-library-empty">조건에 맞는 공용 부품이 없습니다.</div>'; return; }
+    document.getElementById("publicLibraryResultCount").textContent = total.toLocaleString("ko-KR") + WE.i18n.t("개"); list.innerHTML = "";
+    if (!rows.length) { list.innerHTML = '<div class="public-library-empty">' + WE.i18n.t("조건에 맞는 공용 부품이 없습니다.") + '</div>'; return; }
     rows.forEach(function (p) {
       var b = document.createElement("button"); b.type = "button";
       b.className = "public-library-result" + (p.id === selectedId ? " active" : ""); b.dataset.publicId = p.id;
       b.innerHTML = '<img loading="lazy" src="' + esc(p.thumbnail || p.image) + '" alt="" />' +
         '<span class="public-library-result-info"><span class="public-library-result-name">' + esc(p.name) + '</span>' +
-        '<span class="public-library-result-meta">' + esc(p.spec || p.category) + ' · 단자 ' + p.terminalCount + '개</span></span>' +
-        (findLocal(p) ? '<span class="public-library-added">추가됨</span>' : "");
+        '<span class="public-library-result-meta">' + esc(p.spec || WE.i18n.t(p.category)) + WE.i18n.t(" · 단자 ") + p.terminalCount + WE.i18n.t("개") + '</span></span>' +
+        (findLocal(p) ? '<span class="public-library-added">' + WE.i18n.t("추가됨") + '</span>' : "");
       list.appendChild(b);
     });
     if (rows.length < total) {
       var more = document.createElement("button"); more.type = "button"; more.className = "btn public-library-more"; more.dataset.more = "1";
-      more.textContent = "더 보기 (" + rows.length + " / " + total + ")"; list.appendChild(more);
+      more.textContent = WE.i18n.t("더 보기 (") + rows.length + " / " + total + ")"; list.appendChild(more);
     }
   }
   function renderDetail(p, loading) {
     var box = document.getElementById("publicLibraryDetail"), add = document.getElementById("publicLibraryAdd"), place = document.getElementById("publicLibraryPlace");
-    if (loading) { add.disabled = place.disabled = true; box.innerHTML = '<div class="public-library-detail-empty">상세 정보를 불러오는 중입니다.</div>'; return; }
+    if (loading) { add.disabled = place.disabled = true; box.innerHTML = '<div class="public-library-detail-empty">' + WE.i18n.t("상세 정보를 불러오는 중입니다.") + '</div>'; return; }
     p = p || (selectedId && details[selectedId]) || selectedRow();
     add.disabled = !p || !p.full || !!findLocal(p); place.disabled = !p || !p.full;
-    add.textContent = p && findLocal(p) ? "내 라이브러리에 추가됨" : "내 라이브러리에 추가";
-    if (!p) { box.innerHTML = '<div class="public-library-detail-empty">검색 결과에서 부품을 선택하세요.</div>'; return; }
-    if (!p.full) { box.innerHTML = '<div class="public-library-detail-empty">상세 정보를 불러오는 중입니다.</div>'; return; }
+    add.textContent = p && findLocal(p) ? WE.i18n.t("내 라이브러리에 추가됨") : WE.i18n.t("내 라이브러리에 추가");
+    if (!p) { box.innerHTML = '<div class="public-library-detail-empty">' + WE.i18n.t("검색 결과에서 부품을 선택하세요.") + '</div>'; return; }
+    if (!p.full) { box.innerHTML = '<div class="public-library-detail-empty">' + WE.i18n.t("상세 정보를 불러오는 중입니다.") + '</div>'; return; }
     // 미리보기 단가도 **BOM 에 나가는 쪽**을 보여준다(WE.library.bomPrice 와 같은 규칙)
     var shownPrice = WE.library.bomPrice(p);
-    var price = (shownPrice === "" || shownPrice == null) ? "미입력" : Number(shownPrice).toLocaleString("ko-KR") + "원";
+    var price = (shownPrice === "" || shownPrice == null) ? WE.i18n.t("미입력") : (WE.i18n.lang() === "ko" ? Number(shownPrice).toLocaleString("ko-KR") + "원" : "₩" + Number(shownPrice).toLocaleString("en-US"));
     // BOM 에 실제로 나갈 링크 하나를 그대로 보여준다 — 상세와 BOM 이 어긋나면 안 된다.
     // 해외 링크가 있으면 해외, 없으면 국내가 나온다(위 linkPref 참고).
     var linkUrl = WE.library.bomLink(p);
-    var link = linkUrl ? '<a class="public-library-link" href="' + esc(linkUrl) + '" target="_blank" rel="noopener">구매처 열기</a>' : "없음";
+    var link = linkUrl ? '<a class="public-library-link" href="' + esc(linkUrl) + '" target="_blank" rel="noopener">' + WE.i18n.t("구매처 열기") + '</a>' : WE.i18n.t("없음");
     box.innerHTML = '<img class="public-library-detail-image" src="' + esc(p.image) + '" alt="' + esc(p.name) + '" />' +
-      '<h4>' + esc(p.name) + '</h4><p class="public-library-detail-spec">' + esc(p.spec || "상세 모델명 미입력") + '</p>' +
-      '<dl class="public-library-detail-grid"><dt>분류</dt><dd>' + esc(p.categoryId ? WE.categories.pathOf(p.categoryId) : (p.category || "미분류")) + '</dd>' +
-      '<dt>단가</dt><dd>' + price + '</dd><dt>구매 링크</dt><dd>' + link + '</dd><dt>데이터시트</dt><dd>' + p.datasheets.length +
-      '개</dd></dl>';
+      '<h4>' + esc(p.name) + '</h4><p class="public-library-detail-spec">' + esc(p.spec || WE.i18n.t("상세 모델명 미입력")) + '</p>' +
+      '<dl class="public-library-detail-grid"><dt>' + WE.i18n.t("분류") + '</dt><dd>' + esc(p.categoryId ? WE.categories.pathOf(p.categoryId) : WE.i18n.t(p.category || "미분류")) + '</dd>' +
+      '<dt>' + WE.i18n.t("단가") + '</dt><dd>' + price + '</dd><dt>' + WE.i18n.t("구매 링크") + '</dt><dd>' + link + '</dd><dt>' + WE.i18n.t("데이터시트") + '</dt><dd>' + p.datasheets.length +
+      WE.i18n.t("개") + '</dd></dl>';
   }
   function render() { renderCategories(); renderResults(); renderDetail(); }
   function open() {

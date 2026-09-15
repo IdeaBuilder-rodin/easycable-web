@@ -463,7 +463,7 @@ WE.app = (function () {
       var tip = link ? (d.name + " — " + d.data) : d.name;
       return "<div class='ds-item'><span class='ds-name' title='" + esc(tip) + "'>" + icon + " " + esc(d.name) + "</span>" +
         "<button type='button' class='ds-item-view' data-i='" + i + "'>" + (link ? WE.i18n.t("열기") : WE.i18n.t("보기")) + "</button>" +
-        "<button type='button' class='ds-item-del' data-i='" + i + WE.i18n.t("' title='삭제'>×</button></div>");
+        "<button type='button' class='ds-item-del' data-i='" + i + "' title='" + WE.i18n.t("삭제") + "'>×</button></div>";
     }).join("");
   }
   function updateLibRoleRows() {
@@ -1953,8 +1953,9 @@ WE.app = (function () {
        단자 앞의 색은 **같은 색이 이어지면 한 칸으로 합친다** — #1·#2 스텝다운의 IN- 처럼
        같은 색으로 잇는 경우가 대부분이라, 줄마다 같은 견본을 반복하면 눈만 어지럽다.
        색이 달라지는 자리에서만 칸이 새로 생기므로 **다른 색이 오히려 눈에 띈다.** */
-    var html = WE.i18n.t("<thead><tr><th>순번</th><th>부품</th><th>시작</th><th>연결 부품</th>" +
-      "<th>연결부 단자</th><th>규격</th><th>배선</th><th>비고</th></tr></thead><tbody>");
+    // 표머리는 칸마다 t() — HTML 한 줄을 통째로 키에 넣으면 사전과 절대 안 맞는다(2026-09-14 영어판 검토). pdf.js 의 인쇄 결선표도 같은 목록.
+    var 표머리 = ["순번", "부품", "시작", "연결 부품", "연결부 단자", "규격", "배선", "비고"];
+    var html = "<thead><tr>" + 표머리.map(function (k) { return "<th>" + WE.i18n.t(k) + "</th>"; }).join("") + "</tr></thead><tbody>";
     /* 체크칸(☐)을 순번으로 바꿨다 (2026-09-13 고원빈: "체크박스보다 그냥 번호가 낫겠다").
        빈 칸에 손으로 체크하는 대신, 넷마다 번호를 매겨 종이에서 "몇 번째 넷인지" 로 짚게 한다.
        ⚠ "번호" 대신 "순번" 을 쓴다 — 이 앱에는 이미 "배선 번호"(도면 위 W1·W2 수축튜브 번호,
@@ -3230,10 +3231,9 @@ WE.app = (function () {
   function syncPageSizeBtn() {
     var b = document.getElementById("btnPageSize"); if (!b) return;
     var cur = 지금용지(), sz = WE.model.sheetSize();
-    b.textContent = cur ? (cur.아이콘 + " " + cur.이름)
+    b.textContent = cur ? (cur.아이콘 + " " + WE.i18n.t(cur.이름))
                         : ((sz.height > sz.width ? "▯ " : "▭ ") + sz.width + "×" + sz.height);
-    b.title = "이 페이지의 용지 — " + sz.width + "×" + sz.height +
-              " · 페이지마다 다르게 둘 수 있습니다";
+    b.title = WE.i18n.t("이 페이지의 용지 — ") + sz.width + "×" + sz.height + WE.i18n.t(" · 페이지마다 다르게 둘 수 있습니다");
   }
   function buildPageSizeMenu() {
     var m = document.getElementById("pageSizeMenu"); if (!m) return;
@@ -3247,7 +3247,7 @@ WE.app = (function () {
          사용자에게 의미가 없는 숫자다 — 고르는 기준은 '종이를 눕히나 세우나' 뿐이고,
          두 값의 비율이 서로 달라서(각자 A4 가로·세로를 꽉 채우도록 정한 값이라 그렇다)
          나란히 놓으면 오히려 "왜 다르지?" 하는 의문만 만든다. */
-      b.innerHTML = '<span>' + p.아이콘 + " " + esc(p.이름) + '</span>';
+      b.innerHTML = '<span>' + p.아이콘 + " " + esc(WE.i18n.t(p.이름)) + '</span>';
       b.addEventListener("click", function () { 용지바꾸기(p.w, p.h); closePageSizeMenu(); });
       m.appendChild(b);
     });
@@ -5505,7 +5505,7 @@ WE.app = (function () {
       var btn = document.createElement("button");
       btn.type = "button";
       btn.dataset.act = "publish";
-      btn.textContent = "공용 부품으로 게시…";
+      btn.textContent = WE.i18n.t("공용 부품으로 게시…");
       // 게시는 '이 부품에 대한 정보 작업' 묶음의 끝 — 겹침 순서 divider 바로 위에 둔다.
       var divider = document.getElementById("cmpMenuDivider2") || menu.querySelector("hr");
       menu.insertBefore(btn, divider);

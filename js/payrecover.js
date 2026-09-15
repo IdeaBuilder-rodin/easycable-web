@@ -31,6 +31,8 @@ window.WE = WE;
 
 WE.payRecover = (function () {
   "use strict";
+  // 번역 — 이 파일은 checkout.html 처럼 i18n.js 가 없는 페이지에서도 실리므로 있을 때만 쓴다
+  function tr(s) { return (window.WE && WE.i18n && WE.i18n.t) ? WE.i18n.t(s) : s; }
 
   // 얼마나 지난 주문까지 되살릴까.
   // ⚠ 너무 길면 '그냥 창 닫은' 옛 주문까지 매번 PG 에 물어보게 된다.
@@ -42,7 +44,7 @@ WE.payRecover = (function () {
   function 알림(글) {
     // 화면마다 알리는 방식이 달라서 있는 것만 쓴다. 없으면 조용히 넘어간다.
     try {
-      if (WE.app && WE.app.notice) { WE.app.notice("이용권이 적용되었습니다", 글); return; }
+      if (WE.app && WE.app.notice) { WE.app.notice(tr("이용권이 적용되었습니다"), 글); return; }
       if (WE.app && WE.app.setHint) { WE.app.setHint(글); return; }
     } catch (e) { /* 무시 */ }
   }
@@ -52,7 +54,7 @@ WE.payRecover = (function () {
       if (살아난것 > 0) {
         // ⚠ 조용히 넘어가지 않는다. 손님은 결제가 실패한 줄 알고 있다가
         //   이용권이 생긴 것이므로, 그 사실을 알려야 한다.
-        알림("결제가 확인되어 이용권이 적용되었습니다.");
+        알림(tr("결제가 확인되어 이용권이 적용되었습니다."));
         // 권한이 바뀌었으니 화면이 다시 읽게 한다
         try { if (WE.auth.refreshProfile) WE.auth.refreshProfile(); } catch (e) {}
       }

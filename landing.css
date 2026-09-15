@@ -178,10 +178,28 @@ section > .wrap > h2 {
    ⚠ 색을 --tx3(#8b98a5)로 두지 않는다 — 흰 바탕에 2.9:1 이라 읽기 기준(4.5:1)에 못 미친다.
       --tx2(#55636f)는 6.4:1 로, 회색으로 보이면서도 읽힌다.
       네비에서 대비를 놓쳐 1.68:1 이 나온 적이 있다(2026-08-31). 같은 실수를 반복하지 않는다. */
-.top nav a.nav-auth { font-size: 13px; font-weight: 500; color: var(--tx2); }
+.top nav a.nav-auth { font-size: 13px; font-weight: 500; color: var(--tx2); white-space: nowrap; }   /* 영어 "Sign in" 이 두 줄로 꺾이지 않게 (2026-09-15) */
 .top nav a.nav-auth:hover { color: var(--tx); }
 /* 둘은 한 덩어리다 — 기본 26px 은 남남처럼 보인다 */
 .top-auth { display: flex; align-items: center; gap: 14px; }
+/* 🌐 언어 토글 — 헤더 오른쪽 「한국어 · English」. 링크처럼 보이되 글자만, 고른 쪽은 진하게 (2026-09-15 영어판 2단계).
+   버튼 기본 겉모습(테두리·배경)을 지워 nav 의 다른 글자와 한 줄로 보이게 한다. 모바일에서도 남긴다 — 영어 방문자가 처음 만나는 스위치다. */
+.lang-switch { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--tx3); }
+.lang-switch button { font: inherit; font-size: 13px; padding: 0; border: 0; background: none; color: var(--tx2); cursor: pointer; }
+.lang-switch button:hover { color: var(--tx); }
+.lang-switch button.lang-active { color: var(--tx); font-weight: 700; cursor: default; }
+.lang-switch i { font-style: normal; color: var(--tx3); }
+/* 좁은 화면(≤560px)에선 「KO · EN」 — 헤더에 로고·「배선 그리기」·로그인이 이미 꽉 차서 긴 글자는 가로 스크롤을 만든다(verify_landing 390px) */
+@media (max-width: 560px) {
+  .top nav { gap: 10px; }          /* 토글이 들어온 만큼 간격을 조금 줄인다 — 390px 에서 11px 넘치던 것 */
+  /* 지금 언어 쪽 단추와 가운뎃점은 숨기고 **바꿀 언어** 하나만 「EN」/「KO」 로 보인다 — 아이콘 하나 폭이면 헤더에 들어간다 */
+  .lang-switch button.lang-active, .lang-switch i { display: none; }
+  .lang-switch button { font-size: 0; padding: 2px 6px; border: 1px solid var(--bd2, #d9dee5); border-radius: 999px; }
+  .lang-switch button::after { content: attr(data-short); font-size: 11px; font-weight: 700; }
+}
+
+/* 영어 방문자용 안내 한 줄(약관·방침 맨 위) — 한국어본만 있는 문서라는 표시. i18n.js 가 영어일 때만 hidden 을 푼다 */
+.i18n-notice { margin: 0 0 16px; padding: 10px 14px; border: 1px solid #e5d9a6; background: #fff8dc; border-radius: 8px; font-size: 14px; color: #5f4b00; }
 
 /* 넓은 화면에서는 머리줄 **맨 오른쪽 끝**으로 뺀다 (망고보드 형태).
    가운데 1080px 통(.wrap) 안에 두면 [배선 그리기] 버튼에 붙어 버린다.

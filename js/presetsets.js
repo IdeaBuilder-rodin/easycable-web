@@ -42,11 +42,11 @@ WE.presetSets = (function () {
   // 이름을 다시 쓰는 것이 곧 "이 세트를 지금 목록으로 갱신"이라는 뜻이라 자연스럽다.
   function put(name, items) {
     name = String(name || "").trim();
-    if (!name) throw new Error("세트 이름을 입력하세요");
+    if (!name) throw new Error(WE.i18n.t("세트 이름을 입력하세요"));
     var clean = (items || []).slice(0, MAX_ITEMS).map(function (t) {
       return { label: String(t.label || "").trim(), color: t.color || "#1e88e5" };
     }).filter(function (t) { return t.label; });
-    if (!clean.length) throw new Error("저장할 단자가 없습니다");
+    if (!clean.length) throw new Error(WE.i18n.t("저장할 단자가 없습니다"));
 
     var list = load();
     var found = list.filter(function (s) { return s.name === name; })[0];
@@ -57,7 +57,7 @@ WE.presetSets = (function () {
         name: name, items: clean, updatedAt: Date.now()
       });
     }
-    if (!save(list)) throw new Error("저장 공간을 쓸 수 없습니다");
+    if (!save(list)) throw new Error(WE.i18n.t("저장 공간을 쓸 수 없습니다"));
     return { name: name, count: clean.length, replaced: !!found };
   }
 

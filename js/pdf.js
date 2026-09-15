@@ -338,7 +338,9 @@ WE.pdf = (function () {
         var t = document.createElement("table");
         t.className = "bom wl-table";
         var head = document.createElement("thead");
-        head.innerHTML = WE.i18n.t("<tr><th>순번</th><th>부품</th><th>시작</th><th>연결 부품</th><th>연결부 단자</th><th>규격</th><th>배선</th><th>비고</th></tr>");
+        // 칸마다 t() — 화면 결선표(app.js renderWireList)와 같은 목록. HTML 통째 키는 사전과 안 맞았다(2026-09-14 영어판 검토)
+        var 표머리 = ["순번", "부품", "시작", "연결 부품", "연결부 단자", "규격", "배선", "비고"];
+        head.innerHTML = "<tr>" + 표머리.map(function (k) { return "<th>" + WE.i18n.t(k) + "</th>"; }).join("") + "</tr>";
         t.appendChild(head);
         var body = document.createElement("tbody");
         var no = startNo;   // 이 페이지에서 이어지는 순번 — appendWireList 가 페이지 시작 번호를 넘겨준다

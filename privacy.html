@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="ko">
+<html lang="ko" data-i18n-default="ko">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -69,6 +69,8 @@
     .site-foot .policies { display: flex; flex-wrap: wrap; gap: 0 18px; margin: 0 0 14px; }
     .site-foot .policies a { font-size: 12.5px; }
     .site-foot .copy { margin: 0; color: #6b7987; font-size: 12px; }
+      /* 영어 방문자용 안내 한 줄 — landing.css 의 .i18n-notice 와 같은 규칙(이 문서는 landing.css 를 안 읽는다) */
+    .i18n-notice { margin: 0 0 16px; padding: 10px 14px; border: 1px solid #e5d9a6; background: #fff8dc; border-radius: 8px; font-size: 14px; color: #5f4b00; }
   </style>
 </head>
 <body>
@@ -77,6 +79,8 @@
        푸터까지 내려가야 나갈 길을 찾는다. (2026-08-31) -->
   <div class="doc">
   <a class="brand" href="index.html"><img class="brand-mark" src="assets/logo.svg" alt="" /> 이지케이블 (EasyCable)</a>
+  <!-- 영어 방문자 안내 — 이 문서는 한국어본만 있고 한국어본이 적용된다(2026-09-15 고원빈 결정). i18n.js 가 영어일 때만 보인다 -->
+  <p class="i18n-notice" data-i18n-show="en" hidden lang="en">This Privacy Policy is currently available in Korean only. The Korean text is the legally binding version.</p>
   <h1>개인정보처리방침</h1>
   <p class="updated">시행일자: 2026년 9월 1일 (최초 시행: 2026년 7월 9일)</p>
 
@@ -103,6 +107,8 @@
     <tr><td>비밀번호</td><td>이메일 회원가입 시 이용자가 직접 입력</td><td><b>필수</b>. 복원할 수 없는 형태로 암호화되어 보관되며 운영자도 열람할 수 없음</td></tr>
     <tr><td>동의 기록<br />(동의 시각, 약관 버전, 마케팅 수신 동의 여부)</td><td>회원가입·최초 로그인 시 자동 기록</td><td><b>필수</b>. 법령상 동의를 받은 사실을 증명하기 위함</td></tr>
     <tr><td>이용권 정보<br />(구분, 시작일, 만료일)</td><td>결제 시 자동 기록</td><td><b>필수</b>. 유료 기능 제공 범위를 정하기 위함</td></tr>
+    <!-- 2026-09-15 결제 화면 「구매자 정보」 — KG이니시스 결제창이 이름·휴대폰을 요구하고, 환불·분쟁 연락처로 주문 기록에 남긴다(전자상거래법 5년) -->
+    <tr><td>이름, 휴대폰 번호</td><td>이용권 결제 시 이용자가 직접 입력</td><td><b>필수</b>(결제 시). 결제대행사 결제창 호출과 결제·환불 안내에 사용. 거래기록으로 5년 보관</td></tr>
     <tr><td>이메일 주소</td><td>"출시 알림 받기" 신청 시 이용자가 직접 입력</td><td>선택. 소식 안내에만 사용, 언제든 수신거부 가능</td></tr>
     <tr><td>피드백 내용</td><td>"피드백" 기능으로 이용자가 작성·전송</td><td>선택. 전송 대행 서비스(Web3Forms)를 거쳐 운영자 메일함으로 전달</td></tr>
     <tr><td>방문 통계(비식별)</td><td>Cloudflare Web Analytics(쿠키 미사용)</td><td>페이지 방문 수·재방문 여부·이용 시간·유입 경로 등 통계 목적. 개인을 특정하지 않음</td></tr>
@@ -117,6 +123,7 @@
   <ul>
     <li>회원 식별 및 로그인 상태 유지</li>
     <li>이용권(유료 서비스) 구매·기간 관리 및 유료 기능 제공</li>
+    <li>결제·환불 처리 및 관련 안내(결제 시 입력한 이름·휴대폰 번호)</li>
     <li>법령에 따라 동의를 받은 사실의 증명 및 분쟁 대응</li>
     <li>이용자 문의·피드백에 대한 응답</li>
     <li>서비스 정식 출시·주요 업데이트·정책 변경 안내</li>
@@ -150,10 +157,11 @@
     <tr><td>Google LLC</td><td>소셜 로그인(Google 계정)</td></tr>
     <tr><td>주식회사 카카오</td><td>소셜 로그인(카카오 계정)</td></tr>
     <tr><td>주식회사 코리아포트원</td><td>결제 요청·결제 결과 조회 중개(결제대행)</td></tr>
-    <tr><td>토스페이먼츠(주)</td><td>결제 처리 및 결제 수단 관리</td></tr>
+    <!-- 2026-09-15: PG 를 토스페이먼츠 → KG이니시스로 바꿨다(NHN KCP 는 1년권 때문에 반려, KG이니시스 계약). 채널 키는 checkout.html -->
+    <tr><td>(주)KG이니시스</td><td>결제 처리 및 결제 수단 관리</td></tr>
   </table>
   <p>
-    결제 수단 정보(카드번호 등)는 토스페이먼츠가 직접 처리하며 회사는 수집·보관하지 않습니다.
+    결제 수단 정보(카드번호 등)는 KG이니시스가 직접 처리하며 회사는 수집·보관하지 않습니다.
     회사가 전달받는 것은 결제 성공 여부와 이용권 기간뿐입니다.
   </p>
   <!-- ⚠ 결제대행사도 이 표에 들어간다. 포트원(주식회사 코리아포트원)은 결제 요청과
@@ -170,7 +178,7 @@
 
   <h3>국외 이전</h3>
   <p>
-    위 수탁자 중 <b>주식회사 코리아포트원 · 토스페이먼츠(주) · 주식회사 카카오는 국내 사업자</b>이며,
+    위 수탁자 중 <b>주식회사 코리아포트원 · (주)KG이니시스 · 주식회사 카카오는 국내 사업자</b>이며,
     나머지는 국외에 본사를 둔
     사업자입니다. 회원 계정 정보가 보관되는 데이터베이스는
     <b>대한민국(서울) 리전</b>에 위치하나, 운영·기술 지원 과정에서 국외에서 접근될 수 있으므로
@@ -275,5 +283,6 @@
       <p class="copy">© 2026 EasyCable. All rights reserved.</p>
     </div>
   </footer>
+<script src="js/i18n.js"></script>
 </body>
 </html>

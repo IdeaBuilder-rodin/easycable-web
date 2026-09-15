@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="ko">
+<html lang="ko" data-i18n-default="ko">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -35,6 +35,8 @@
 </header>
 
 <main class="doc">
+  <!-- 영어 방문자 안내 — 이 문서는 한국어본만 있고 한국어본이 적용된다(2026-09-15 고원빈 결정). i18n.js 가 영어일 때만 보인다 -->
+  <p class="i18n-notice" data-i18n-show="en" hidden lang="en">This Terms of Service page is currently available in Korean only. The Korean text is the legally binding version.</p>
   <h1>이용약관</h1>
   <p class="meta">시행일: 2026년 9월 11일</p>
 
@@ -243,5 +245,6 @@
   </div>
 </footer>
 
+<script src="js/i18n.js"></script>
 </body>
 </html>

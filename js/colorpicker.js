@@ -287,7 +287,7 @@ WE.colorPicker = (function () {
     var hash = document.createElement("span"); hash.className = "cc-hash"; hash.textContent = "#";
     var hexInput = document.createElement("input");
     hexInput.type = "text"; hexInput.maxLength = 6; hexInput.autocomplete = "off"; hexInput.spellcheck = false;
-    hexInput.setAttribute("aria-label", "HEX 색상");
+    hexInput.setAttribute("aria-label", t("HEX 색상"));
     hexField.appendChild(hash); hexField.appendChild(hexInput);
     var rgbField = document.createElement("div"); rgbField.className = "cc-field cc-field-rgb"; rgbField.hidden = true;
     var rgbInputs = {};

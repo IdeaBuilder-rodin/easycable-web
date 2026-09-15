@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="ko">
+<html lang="ko" data-i18n-default="ko">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -181,6 +181,10 @@
       <a href="index.html#faq" class="hide-sm">자주 묻는 질문</a>
       <a href="mailto:easycableinfo@gmail.com" class="hide-sm">문의</a>
       <a class="btn btn-main btn-sm" href="app.html">배선 그리기</a>
+      <!-- 🌐 언어 — 한국어 기본, 고르면 저장돼 다음 페이지·에디터까지 이어진다(we_lang). 링크로 보낼 땐 ?lang=en (2026-09-15) -->
+      <span class="lang-switch" aria-label="Language">
+        <button type="button" data-setlang="ko" lang="ko" data-short="KO">한국어</button><i aria-hidden="true">·</i><button type="button" data-setlang="en" lang="en" data-short="EN">English</button>
+      </span>
     </nav>
   </div>
 </header>
@@ -352,6 +356,9 @@
 <script src="js/payrecover.js"></script>
 <script src="js/i18n.js"></script>
 <script>
+  // 번역 — i18n.js 가 실려 있으면 사전으로, 없으면 원문 그대로 (2026-09-15 영어판 2단계)
+  var tr = function (s) { return (window.WE && WE.i18n && WE.i18n.t) ? WE.i18n.t(s) : s; };
+
 /* 내 계정 화면.
    auth.js 는 스스로 시작하고(DOMContentLoaded), 로그인 상태가 바뀌면 onChange 로 알려 준다.
    회원 탈퇴 동작도 auth.js 안에 이미 있다 — 여기서는 화면만 채운다. */
@@ -379,7 +386,7 @@
   /* 로그인 수단.
      identities 에 연결된 것이 모두 들어 있다(구글로 가입한 뒤 카카오를 붙일 수도 있다).
      비어 있으면 app_metadata.provider 로 물러난다. */
-  var 수단표 = { google: "구글", kakao: "카카오", naver: "네이버", email: "이메일" };
+  var 수단표 = { google: tr("구글"), kakao: tr("카카오"), naver: tr("네이버"), email: tr("이메일") };
   function 수단(u) {
     var 목록 = [];
     if (u.identities && u.identities.length) {
@@ -417,8 +424,8 @@
     if (!pro) { 줄.hidden = true; return; }          // 무료면 보여 줄 기간이 없다
     var prof = (WE.auth.profile && WE.auth.profile()) || {};
     $("rowExpires").textContent = prof.expires_at
-      ? 날짜(prof.expires_at) + " 까지"
-      : "기간 제한 없음";
+      ? tr("{날짜} 까지").replace("{날짜}", 날짜(prof.expires_at))   // 어순 — 자리표시 키
+      : tr("기간 제한 없음");
     줄.hidden = false;
     // 구매일은 orders 에서 온다. 조회 전에는 '—' 로 둔다.
   }
@@ -459,17 +466,19 @@
      나머지는 지금 쓰이지 않는다. 그래도 지우지 않는다 —
      가상계좌를 켜거나 조회 조건을 바꿀 때 다시 필요해진다. */
   var 상태표 = {
-    paid:               { 글: "결제 완료", 색: "is-paid" },
-    partially_refunded: { 글: "일부 환불", 색: "is-refunded" },
-    refunded:           { 글: "환불",      색: "is-refunded" },
-    canceled:           { 글: "취소",      색: "is-refunded" },
-    failed:             { 글: "실패",      색: "" },
-    pending:            { 글: "진행 중",   색: "" },
+    paid:               { 글: tr("결제 완료"), 색: "is-paid" },
+    partially_refunded: { 글: tr("일부 환불"), 색: "is-refunded" },
+    refunded:           { 글: tr("환불"),      색: "is-refunded" },
+    canceled:           { 글: tr("취소"),      색: "is-refunded" },
+    failed:             { 글: tr("실패"),      색: "" },
+    pending:            { 글: tr("진행 중"),   색: "" },
   };
-  var 이용권이름 = { month: "1개월 이용권", year: "1년 이용권" };
+  var 이용권이름 = { month: tr("1개월 이용권"), year: tr("1년 이용권") };
 
   function 원(n) {
-    return String(n == null ? 0 : n).replace(/\B(?=(\d{3})+(?!\d))/g, ",") + "원";
+    var s = String(n == null ? 0 : n).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+    // 영어는 앞에 ₩ ("₩46,800"), 한국어는 뒤에 원 — 조각 번역으론 자리가 안 바뀌어서 여기서 가른다
+    return (window.WE && WE.i18n && WE.i18n.lang() !== "ko") ? "₩" + s : s + "원";
   }
 
   function 그리기내역(목록) {
@@ -486,7 +495,7 @@
     if (!목록.length) {
       var p = document.createElement("p");
       p.className = "ord-empty";
-      p.textContent = "결제 내역이 없습니다.";
+      p.textContent = tr("결제 내역이 없습니다.");
       판.appendChild(p);
     } else {
       목록.forEach(function (o) {
@@ -501,7 +510,7 @@
         var 환불있음 = (o.status === "refunded" || o.status === "partially_refunded")
                        && o.refund_amount;
         줄.appendChild(칸("ord-amt", 환불있음
-          ? 원(o.amount) + " (환불 " + 원(o.refund_amount) + ")"
+          ? 원(o.amount) + tr(" (환불 ") + 원(o.refund_amount) + ")"
           : 원(o.amount)));
         줄.appendChild(칸("ord-tag " + st.색, st.글));
 
@@ -517,7 +526,7 @@
           영수증.href = o.receipt_url;
           영수증.target = "_blank";
           영수증.rel = "noopener";
-          영수증.textContent = "영수증";
+          영수증.textContent = tr("영수증");
           줄.appendChild(영수증);
         } else {
           // 자리를 비워 둔다 — 줄마다 칸 수가 다르면 표가 어긋난다
@@ -559,12 +568,12 @@
     $("rowJoined").textContent = 날짜(u.created_at);
 
     var pro = !!(WE.auth.isPro && WE.auth.isPro());
-    $("rowPlan").textContent = pro ? "Pro" : "무료";
-    $("rowPlanTag").textContent = pro ? "✦ 이용 중" : "기본";
+    $("rowPlan").textContent = pro ? "Pro" : tr("무료");
+    $("rowPlanTag").textContent = pro ? tr("✦ 이용 중") : tr("기본");
     $("rowPlanTag").className = "plan-tag" + (pro ? " is-pro" : "");
     $("rowPlanNote").textContent = pro
-      ? "배선 개수 제한 없이 사용하실 수 있습니다."
-      : "무료 요금제는 도면 하나에 배선 30개까지 사용하실 수 있습니다.";
+      ? tr("배선 개수 제한 없이 사용하실 수 있습니다.")
+      : tr("무료 요금제는 도면 하나에 배선 30개까지 사용하실 수 있습니다.");
 
     이용기간(pro);
     결제내역();
