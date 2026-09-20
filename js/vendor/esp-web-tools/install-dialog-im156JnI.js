@@ -605,13 +605,7 @@ import{e,_ as t,o as i,i as r,x as s,a as o,n as a,t as n,m as l,b as d,E as c,c
               ${this._client.state===fa.PROVISIONED?"Change Wi-Fi":"Connect to Wi-Fi"}
             </div>
           </ew-list-item>
-          <ew-list-item
-            type="button"
-            @click=${async()=>{const e=this._client;e&&(await this._closeClientWithoutEvents(e),await xe(100)),this._client=void 0,this._state="LOGS"}}
-          >
-            ${na}
-            <div slot="headline">Logs & Console</div>
-          </ew-list-item>
+          <!-- Logs & Console 항목 제거 (EasyCable 2026-09-21: 시청자에게 필요 없는 시리얼 모니터) -->
           ${this._isSameFirmware&&this._manifest.funding_url?s`
                 <ew-list-item
                   type="link"
@@ -644,13 +638,7 @@ import{e,_ as t,o as i,i as r,x as s,a as o,n as a,t as n,m as l,b as d,E as c,c
             ${oa}
             <div slot="headline">${`Install ${this._manifest.name}`}</div>
           </ew-list-item>
-          <ew-list-item
-            type="button"
-            @click=${async()=>{this._client=void 0,this._state="LOGS"}}
-          >
-            ${na}
-            <div slot="headline">Logs & Console</div>
-          </ew-list-item>
+          <!-- Logs & Console 항목 제거 (EasyCable 2026-09-21) -->
         </ew-list>
       </div>
     `,[e,t,!0]}_renderProvision(){var e;let t,i="Configure Wi-Fi";if(this._busy)return[i,this._renderProgress("Trying to connect")];if(this._client.state===fa.STOPPED)i=void 0,t=s`

@@ -2,3 +2,5 @@ esp-web-tools 10.4.0 (Apache-2.0)
 https://www.npmjs.com/package/esp-web-tools
 받은 날: 2026-09-20, npm pack 으로 받아 dist/web/* 만 복사 (CLAUDE)
 왜 자체 호스팅: 운영 CSP 가 script-src self 라 CDN(unpkg) 을 못 쓴다. 파일명은 그대로 둔다 — install-button.js 가 나머지 조각을 이 이름으로 동적 import 한다.
+
+2026-09-21 EasyCable 수정: install-dialog-*.js 에서 「Logs & Console」 메뉴 항목 한 덩어리 제거(시청자에게 불필요한 시리얼 모니터). 원본은 _backup/2026-09-21_ewt_no_logs/. 라이브러리를 올릴 때 다시 적용할 것.
