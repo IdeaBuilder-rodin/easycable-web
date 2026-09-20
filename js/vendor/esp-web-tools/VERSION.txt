@@ -1,0 +1,4 @@
+esp-web-tools 10.4.0 (Apache-2.0)
+https://www.npmjs.com/package/esp-web-tools
+받은 날: 2026-09-20, npm pack 으로 받아 dist/web/* 만 복사 (CLAUDE)
+왜 자체 호스팅: 운영 CSP 가 script-src self 라 CDN(unpkg) 을 못 쓴다. 파일명은 그대로 둔다 — install-button.js 가 나머지 조각을 이 이름으로 동적 import 한다.

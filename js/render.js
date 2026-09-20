@@ -424,6 +424,40 @@ WE.render = (function () {
   }
 
   // ---- 배선 ----
+  /* ── 배선 긋기 애니메이션 (영상 촬영용 · 관리자 전용, CLAUDE 2026-09-20) ──────────────────
+     단자를 이으면 배선이 한 번에 나타나는 대신, 첫 단자에서 경로를 따라 선이 자라나 끝 단자에 닿는다.
+     방법: 표시 선 path 에 stroke-dasharray = L L, stroke-dashoffset 을 L → 0 (L = 경로 길이) — 경로 순서대로 드러난다.
+     대상: interactions.js 가 markWireDraw(id) 로 표시한 「방금 이은 배선」만. 문서 열기·이동·되돌리기는 대상 아님.
+     켜짐 여부는 WE.app.drawAnimEnabled() (설정 on + 관리자). 꺼져 있으면 markWireDraw 는 아무 일도 안 한다.
+     ⚠ 그리는 도중 renderWires 가 다시 불릴 수 있다(선택·속성창 갱신). 그러면 새 path 에 경과 시간만큼
+        currentTime 을 맞춰 이어 그린다 — 안 그러면 다시 그릴 때마다 처음부터 시작하거나 완성 모양으로 튄다.
+     ⚠ 번호 라벨(수축튜브)·선택 테두리는 끝날 때까지 안 그린다. 그리면 완성 모양이 먼저 드러난다. */
+  var _drawPending = {};   // wireId → 시작 시각(ms)
+  function markWireDraw(id) {
+    if (!id || !(WE.app && WE.app.drawAnimEnabled && WE.app.drawAnimEnabled())) return;
+    _drawPending[id] = Date.now();
+  }
+  function isDrawPending(id) { return Object.prototype.hasOwnProperty.call(_drawPending, id); }
+  function animateWireDraw(wire, path) {
+    var len;
+    try { len = path.getTotalLength(); } catch (e) { len = 0; }
+    if (!(len > 0) || typeof path.animate !== "function") { delete _drawPending[wire.id]; return; }
+    var speed = (WE.app.drawAnimSpeed && WE.app.drawAnimSpeed()) || 500;   // px/s
+    var dur = Math.min(3000, Math.max(400, len / speed * 1000));
+    var elapsed = Date.now() - _drawPending[wire.id];
+    if (elapsed >= dur) { delete _drawPending[wire.id]; return; }   // 이미 끝났어야 할 시간 — 완성 모양으로
+    path.setAttribute("stroke-dasharray", len + " " + len);      // 점선 배선도 그리는 동안은 실선처럼
+    path.setAttribute("stroke-dashoffset", String(len));
+    var anim = path.animate([{ strokeDashoffset: len }, { strokeDashoffset: 0 }], { duration: dur, easing: "linear", fill: "forwards" });
+    anim.currentTime = elapsed;   // 재렌더링이면 이어서
+    anim.onfinish = function () {
+      if (!isDrawPending(wire.id)) return;
+      delete _drawPending[wire.id];
+      // 라벨·선택 테두리·점선을 제 모양으로 — 한 번만 다시 그린다
+      renderWires(); renderOverlay();
+    };
+  }
+
   function renderWire(wire) {
     var d = WE.geometry.wirePath(wire);
     if (!d) return null;
@@ -445,7 +479,9 @@ WE.render = (function () {
       // 둥근 끝(round)은 점선의 빈칸을 메워 거의 실선처럼 보인다 — 점선일 때만 각지게
       선속성["stroke-linecap"] = "butt";
     }
-    g.appendChild(el("path", 선속성));
+    var 표시선 = el("path", 선속성);
+    g.appendChild(표시선);
+    if (isDrawPending(wire.id)) animateWireDraw(wire, 표시선);
     return g;
   }
 
@@ -761,6 +797,7 @@ WE.render = (function () {
     WE.model.project.wires.forEach(function (w) {
       var g = renderWire(w);
       if (g) layerWires.appendChild(g);
+      if (isDrawPending(w.id)) return;   // 긋는 중 — 번호 라벨은 끝나고(onfinish 의 renderWires)
       buildWireLabels(w, labelObs).forEach(function (lbl) {
         layerWireLabels.appendChild(lbl); centerTubeText(lbl);
       });
@@ -1021,6 +1058,7 @@ WE.render = (function () {
 
   // 배선 선택 시: 하이라이트 + waypoint 핸들
   function renderWireOverlay(wire) {
+    if (isDrawPending(wire.id)) return;   // 긋는 중 — 테두리가 완성 경로를 먼저 보여 준다
     // 라벨(수축튜브)을 직접 클릭한 상태면 라벨만 선택된 것처럼 — 배선 하이라이트·꺾임점 핸들 생략
     var labelOnly = WE.model.ui.selectedWireLabel === wire.id;
     var d = WE.geometry.wirePath(wire);
@@ -1357,6 +1395,7 @@ WE.render = (function () {
     renderAll: renderAll,
     renderOverlay: renderOverlay,
     renderWires: renderWires,
+    markWireDraw: markWireDraw,   // 방금 이은 배선을 긋기 애니메이션 대상으로 (interactions.js)
     renderAnnotations: renderAnnotations,
     renderTermLabels: renderTermLabels,
     updateWiresFor: updateWiresFor,

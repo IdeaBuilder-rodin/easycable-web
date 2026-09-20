@@ -267,11 +267,12 @@ WE.io = (function () {
   }
 
   // 바이트로 받아 형식을 가린다: gzip이면 풀고, 아니면 텍스트 그대로 → loadProjectText로 넘긴다
-  function loadProjectBuffer(buf, displayName) {
-    if (typeof buf === "string") return Promise.resolve(loadProjectText(buf, displayName));
+  // opts (선택): { asNew: true, name } — 파일 안의 이름·문서 id 를 버리고 새 이름·새 id 로 연다(예제 「문서 열기」). 아래 loadProjectText 참조.
+  function loadProjectBuffer(buf, displayName, opts) {
+    if (typeof buf === "string") return Promise.resolve(loadProjectText(buf, displayName, opts));
     var p = isGzip(buf) ? gunzip(buf) : Promise.resolve(new TextDecoder().decode(buf));
     return p.then(function (text) {
-      return loadProjectText(text, displayName);
+      return loadProjectText(text, displayName, opts);
     }).catch(function (err) {
       alert(WE.i18n.t("파일을 읽을 수 없습니다: ") + (err && err.message ? err.message : err));
       return false;
@@ -283,7 +284,7 @@ WE.io = (function () {
   //   v2 통합본(format:"easycable")  — 도면 + 부품 + 첨부물(assets)
   //   구 공유본(easycable-share)     — 도면 + 부품(첨부물이 부품 안에 통째로)
   //   구 저장본(도면만)              — 부품 정보 없음(BOM은 로컬 라이브러리에 의존)
-  function loadProjectText(text, displayName) {
+  function loadProjectText(text, displayName, opts) {
     try {
       var data = JSON.parse(text);
       var added = 0, project = data, incomingParts = null;
@@ -311,6 +312,14 @@ WE.io = (function () {
         };
         relink(project.components);
         (project.sheets || []).forEach(function (s) { relink(s.components); });
+      }
+
+      // 예제처럼 "새 문서로" 열 때(opts.asNew) — 파일 안의 이름·문서 id 대신 새 이름·새 id 를 붙인다(2026-09-20).
+      // 왜: 문서 id 가 ☰ → 최근 작업의 칸이다. 같은 파일을 두 번 열거나, 예제 둘이 같은 배선 파일을 쓰면
+      //     id 가 겹쳐 앞서 열어 손대던 초안이 덮인다. 이름도 파일 안 것("거북이컷 배선도V1")이 아니라 예제 이름이어야 한다.
+      //     보통의 파일 열기(opts 없음)는 그대로 — 내 파일은 내 id·내 이름으로 열려야 최근 작업과 이어진다.
+      if (opts && opts.asNew) {
+        project.meta = Object.assign({}, project.meta || {}, { id: WE.model.newDocId(), name: opts.name || (project.meta && project.meta.name) || "" });
       }
 
       WE.model.loadProject(project);

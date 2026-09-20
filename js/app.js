@@ -3447,7 +3447,9 @@ WE.app = (function () {
        ⚠ 도면이 아니라 **작업하는 사람**에게 딸린 값이다 — 20으로 맞춰 쓰는 사람은
           다음 도면에서도 20을 쓴다. 그래서 파일이 아니라 여기(브라우저 설정)에 둔다.
           남에게 파일을 줘도 그 사람이 쓰던 간격을 덮어쓰지 않는다. (2026-09-08) */
-    wireGap: 15
+    wireGap: 15,
+    drawAnim: false,        // 촬영용: 배선을 긋는 모습 보이기 (관리자 전용)
+    drawAnimSpeed: 500      // px/s
   };
   function loadSettings() {
     try {
@@ -3460,6 +3462,8 @@ WE.app = (function () {
         if (typeof s.labelBold === "boolean") _settings.labelBold = s.labelBold;
         if (typeof s.labelBox === "boolean") _settings.labelBox = s.labelBox;
         if (s.wireGap >= 0) _settings.wireGap = s.wireGap;
+        if (typeof s.drawAnim === "boolean") _settings.drawAnim = s.drawAnim;
+        if (s.drawAnimSpeed > 0) _settings.drawAnimSpeed = s.drawAnimSpeed;
       }
     } catch (e) { /* 무시 */ }
   }
@@ -3831,10 +3835,18 @@ WE.app = (function () {
       document.getElementById("setLabelSize").value = _settings.labelFontSize;
       document.getElementById("setLabelBold").checked = _settings.labelBold;
       document.getElementById("setLabelBox").checked = _settings.labelBox;
+      document.getElementById("setDrawAnim").checked = !!_settings.drawAnim;
+      document.getElementById("setDrawAnimSpeed").value = String(_settings.drawAnimSpeed || 500);
       document.getElementById("settingsModal").hidden = false;
     });
     document.getElementById("setClose").addEventListener("click", function () {
       document.getElementById("settingsModal").hidden = true;
+    });
+    document.getElementById("setDrawAnim").addEventListener("change", function (e) {
+      _settings.drawAnim = e.target.checked; persistSettings();
+    });
+    document.getElementById("setDrawAnimSpeed").addEventListener("change", function (e) {
+      _settings.drawAnimSpeed = parseInt(e.target.value, 10) || 500; persistSettings();
     });
     document.getElementById("setAutosave").addEventListener("change", function (e) {
       _settings.autosaveEnabled = e.target.checked;
@@ -5511,7 +5523,16 @@ WE.app = (function () {
       menu.insertBefore(btn, divider);
     } else if (!isAdmin && old) old.remove();
     syncAdminPageMenu(isAdmin);
+    // 설정 창의 「촬영용 (관리자)」 구역 — 배선 긋기 애니메이션. 일반 사용자는 쓸 일이 없다(2026-09-20 고원빈).
+    var demo = document.getElementById("setDemoSection");
+    if (demo) demo.hidden = !isAdmin;
   }
+  /* 배선 긋기 애니메이션이 켜졌나 — 설정이 켜져 있고 **그리고** 관리자일 때만.
+     설정만 보면, 관리자로 켜 두고 로그아웃한 브라우저에서 계속 돌 수 있다. 관리자 판정은 public-publisher 가 캐시해 둔 값. */
+  function drawAnimEnabled() {
+    return !!(_settings.drawAnim && WE.publicPublisher && WE.publicPublisher.isAdmin && WE.publicPublisher.isAdmin());
+  }
+  function drawAnimSpeed() { return _settings.drawAnimSpeed > 0 ? _settings.drawAnimSpeed : 500; }
 
   // 계정 메뉴의 '관리자 페이지' — 관리자일 때만 DOM에 만든다.
   // ⚠ 숨기는 것은 보안이 아니다. admin.html 은 정적 파일이라 주소를 아는 사람은 열 수 있다.
@@ -6125,6 +6146,7 @@ WE.app = (function () {
     // '새 배선도로 시작'. 검사가 이 이름으로 부르고 있었는데 노출이 안 돼 있어서
     // WE.app.newProject ? ... : 1 이 조용히 지나갔다 (2026-08-18).
     newProject: startNewProject,
+    drawAnimEnabled: drawAnimEnabled, drawAnimSpeed: drawAnimSpeed,   // 배선 긋기 애니메이션 (render.js 가 묻는다)
     offerNotifyAfterValue: offerNotifyAfterValue
   };
 })();

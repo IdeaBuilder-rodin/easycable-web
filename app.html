@@ -28,7 +28,7 @@
           데이터시트(1400) · 공용부품 게시(680) · 환영(500) 창도 같이 560px 이 됐다.
           (2026-09-02 고원빈 보고 — "공용 부품 창이 갑자기 작아져서 내용이 안 보인다") -->
   <link rel="stylesheet" href="auth.css?v=0880ba8a" />
-  <link rel="stylesheet" href="styles.css?v=31e7e9f1" />
+  <link rel="stylesheet" href="styles.css?v=9b814547" />
   <!-- 방문 통계는 Cloudflare Web Analytics 를 쓴다 (Pages 대시보드에서 켜면 비콘이 자동 주입된다).
        GA4 를 걷어낸 이유: 동의 화면보다 먼저 실행돼 브라우저 식별자가 미국으로 나갔다
        (개인정보보호법 제28조의8 국외이전). CF 는 쿠키를 안 써서 동의가 필요 없다. -->
@@ -194,6 +194,15 @@
               gap 12px 과 합쳐 24px 을 잡아먹고 있었다. 그것 때문에 ☰ 를 이 줄에
               넣으면 1100px 창에서 툴바가 두 줄로 접혔다(verify_hint 가 잡음).
               빼고 나니 ☰ 34px + gap 12px 이 들어가고도 남는다. -->
+      <!-- 예제 — 완성품을 보고 배선도·설치까지 따라 만드는 예제 라이브러리 입구 (CLAUDE 2026-09-20).
+           자리는 고원빈이 캡처로 지정: 2행 오른쪽, **버튼의 오른쪽 끝이 속성창 경계선에 닿게.**
+           margin-left:auto 로 오른쪽에 붙고, 안내문(.hint)의 폭을 속성창 폭에 맞춰 잘라서 그 경계에 선다 —
+           속성창은 끌어서 폭을 바꿀 수 있으므로 js/examples.js 가 폭을 따라간다(alignToPanel).
+           폴더 아이콘은 2행의 다른 아이콘과 같은 규칙(16 상자·선 1.6·currentColor). 폴더만 있으면 ☰ 「열기」와
+           헷갈려서 「예제」 글자를 같이 둔다. 그리기 도구 묶음에 섞지 않는다 — 도면을 바꾸는 버튼이 아니다. -->
+      <button id="btnExamples" class="ib" title="완성품 예제 — 배선도를 그대로 열고 따라 만들기">
+        <svg class="ico" viewBox="0 0 16 16" aria-hidden="true"><path d="M1.8 3.8h4.4l1.6 1.6h6.4v7H1.8z"/><path d="M1.8 7.4h12.4"/></svg>예제
+      </button>
       <span id="hint" class="hint">부품을 추가해 시작하세요.</span>
     </div>
   </div>
@@ -935,6 +944,21 @@
       </div>
 
       <div class="set-pane" data-setpane="display" hidden>
+        <!-- 촬영용 (관리자) — 배선 긋기 애니메이션. 관리자에게만 보인다(app.js syncPublicPublishMenu 가 hidden 을 푼다).
+             유튜브용으로 "단자를 이으면 선이 경로를 따라 그려지는" 장면을 찍기 위한 것. 일반 사용자는 쓸 일이 없다. -->
+        <div id="setDemoSection" hidden style="margin-bottom:14px">
+          <h4 style="margin:0 0 6px">촬영용 (관리자)</h4>
+          <label class="chk"><input type="checkbox" id="setDrawAnim" /> 배선을 긋는 모습 보이기 — 단자를 이으면 선이 경로를 따라 그려집니다</label>
+          <div style="display:flex;align-items:center;gap:8px;margin-top:6px">
+            <label>속도
+              <select id="setDrawAnimSpeed">
+                <option value="250">느리게</option>
+                <option value="500">보통</option>
+                <option value="1000">빠르게</option>
+              </select>
+            </label>
+          </div>
+        </div>
         <h4 style="margin:0 0 6px">부품 이름표</h4>
         <div class="set-row">
           <label>글자 크기(px)
@@ -1317,6 +1341,116 @@
     </div>
   </div>
 
+  <!-- 💡 예제 창 (CLAUDE 2026-09-20) — 공용 부품 창과 같은 껍데기(public-library-* 클래스)를 그대로 쓴다.
+       왼쪽 분류 · 가운데 목록 · 오른쪽 상세 · 아래 동작. 사용자가 이미 아는 구조라 새 모양을 만들지 않았다.
+       지금은 로컬 시험 단계: 예제 3개가 이 마크업에 박혀 있고, 「배선도 새 문서로 열기」는 examples/ 의
+       실제 .ezc 를 연다(js/examples.js). 예제가 늘면 데이터로 뽑아낸다 — 그때까지는 이게 가장 단순하다.
+       ⚠ 분류·검색 칸은 자리만 있다(예제 3개에 검색은 과하다). 누르면 아무 일도 없다. -->
+  <div id="exampleModal" class="modal" hidden>
+    <div class="modal-box public-library-box" role="dialog" aria-modal="true" aria-labelledby="exampleTitle">
+      <header class="public-library-head">
+        <div>
+          <h3 id="exampleTitle">예제</h3>
+          <span class="public-library-badge">완성품 따라 만들기</span>
+        </div>
+        <button id="exampleClose" type="button" class="public-library-close" title="닫기" aria-label="닫기">×</button>
+      </header>
+      <form class="public-library-search" role="search">
+        <input type="search" placeholder="부품이나 주제로 찾기 — 예: ESP32, LCD, 게임" autocomplete="off" disabled />
+        <button type="submit" class="btn btn-primary" disabled>검색</button>
+      </form>
+      <div class="public-library-body">
+        <nav class="public-library-categories" aria-label="예제 분류">
+          <button type="button" class="public-library-category active" data-cat="all"><span>전체</span><span class="muted">2</span></button>
+          <button type="button" class="public-library-category" data-cat="game"><span>게임</span><span class="muted">1</span></button>
+          <button type="button" class="public-library-category" data-cat="video"><span>영상</span><span class="muted">1</span></button>
+        </nav>
+        <section class="public-library-results" aria-label="예제 목록">
+          <div class="public-library-results-head"><strong>예제</strong><span id="exampleCount">2개</span></div>
+          <div class="public-library-result-list">
+            <button type="button" class="public-library-result active" data-example="wild-trail" data-cat="game">
+              <span class="ex-thumb"><img src="examples/wild-trail/media/jump-device.png" alt="" /></span>
+              <span class="public-library-result-info">
+                <span class="public-library-result-name">파이리와 작은 모험</span>
+                <span class="public-library-result-meta">ESP32-S3 · 원형 LCD · 버튼 1개 · 게임</span>
+              </span>
+              <span class="public-library-added">배선도 있음</span>
+            </button>
+            <!-- 리릭 비디오 — 같은 보드·같은 배선(wiring.ezc 도 같은 파일). 노래는 들어 있지 않고 타임라인만 돈다(영상 편집용). -->
+            <button type="button" class="public-library-result" data-example="lyric-eoreun" data-cat="video">
+              <span class="ex-thumb"><img src="examples/lyric-eoreun/media/smile-240.png" alt="" /></span>
+              <span class="public-library-result-info">
+                <span class="public-library-result-name">애니메이션 비디오</span>
+                <span class="public-library-result-meta">ESP32-S3 · 원형 LCD · 버튼 1개 · 영상</span>
+              </span>
+              <span class="public-library-added">배선도 있음</span>
+            </button>
+          </div>
+        </section>
+        <!-- 상세 — 여기서 답해야 할 건 두 가지뿐: ① 무슨 앱인가 ② 나도 만들 수 있나.
+             그래서 보드·화면·입력·배선 같은 규격 표는 뺐다(2026-09-20 고원빈). 규격은 배선도를 열면 BOM 에 다 있다.
+             ① 은 플레이 장면 슬라이드(js/examples.js 가 1.5초마다 넘김) + 「이런 걸 해요」 세 줄,
+             ② 는 「필요한 부품」 세 줄 — 보드·LCD·스위치. 점퍼선·USB 케이블은 늘 필요한 것이라 안 적는다(고원빈 2026-09-20).
+             슬라이드 틀(#exSlide)은 예제마다 두지 않고 하나만 둔다 — 그림·캡션은 js/examples.js 의 SLIDES[예제] 가 넣는다.
+             예제별로 갈리는 것은 그 아래 [data-example-detail] 글 뭉치뿐(고른 것만 보이고 나머지는 hidden). -->
+        <aside class="public-library-detail" aria-label="선택한 예제">
+          <div class="ex-detail-shot">
+            <img id="exSlide" src="examples/wild-trail/media/jump-device.png" alt="" />
+            <span id="exSlideCap" class="ex-slide-cap">점프</span>
+          </div>
+          <div data-example-detail="wild-trail">
+            <h4>파이리와 작은 모험</h4>
+            <p class="public-library-detail-spec">버튼 하나로 뛰고, 싸우고, 진화하는 손바닥 포켓 게임</p>
+            <ul class="ex-points">
+              <li>짧게 누르면 점프, 공중에서 한 번 더 누르면 2단 점프</li>
+              <li>노란 구간에서 공격, 초록 구간에서 방어 — 타이밍 배틀</li>
+              <li>경험치를 모아 Lv.6 에서 리자드로 진화. 진행은 보드에 남아요</li>
+            </ul>
+            <h5 class="ex-h5">필요한 부품</h5>
+            <ul class="ex-parts">
+              <li><b>ESP32-S3 CAM N16R8</b><span>1개</span></li>
+              <li><b>GC9A01 1.28" 원형 LCD</b><span>1개</span></li>
+              <li><b>마이크로 스위치</b><span>1개</span></li>
+            </ul>
+          </div>
+          <div data-example-detail="lyric-eoreun" hidden>
+            <h4>애니메이션 비디오</h4>
+            <p class="public-library-detail-spec">노래에 맞춰 손그림 졸라맨이 가사를 연기하는 4분짜리 애니메이션 비디오</p>
+            <ul class="ex-points">
+              <li>버튼을 누르면 3초 카운트다운 뒤 시작 — 영상 편집에서 노래와 맞추기 쉬워요</li>
+              <li>가사 40줄이 손글씨로 뜨고, 졸라맨이 주저앉고·안아주고·토닥이는 4막 이야기</li>
+              <li>길게 누르면 처음으로. 브라우저 시제품과 기기 화면이 픽셀까지 같아요</li>
+            </ul>
+            <h5 class="ex-h5">필요한 부품</h5>
+            <ul class="ex-parts">
+              <li><b>ESP32-S3 CAM N16R8</b><span>1개</span></li>
+              <li><b>GC9A01 1.28" 원형 LCD</b><span>1개</span></li>
+              <li><b>마이크로 스위치</b><span>1개</span></li>
+            </ul>
+          </div>
+        </aside>
+      </div>
+      <!-- 바닥 — 상태 · [문서 열기] [업로드] 둘뿐. 닫기 버튼은 헷갈린다고 뺐다(고원빈 2026-09-20) — 닫기는 × · 배경 · Esc.
+           두 버튼 다 흰 바탕이고 마우스를 올리면 파랗게 된다(styles.css 예제 창 블록) — 주 버튼 하나를 파랗게 두지 않는다(고원빈).
+           「문서 열기」는 새 문서로 열고 지금 문서는 남긴다(상태줄이 그걸 말한다). 「업로드」는 펌웨어를 보드에 쓰는 것(Web Serial).
+           아래 data-example-open 과 manifest 는 첫 화면(wild-trail)의 값일 뿐이다 — 목록에서 고르면 js/examples.js select() 가 고른 예제 것으로 바꾼다. -->
+      <footer class="public-library-footer">
+        <span id="exampleStatus" class="muted">새 문서로 열립니다 — 지금 그리던 도면은 ☰ → 최근 작업에 그대로 있어요</span>
+        <button id="exampleOpen" type="button" class="btn" data-example-open="wild-trail">문서 열기</button>
+        <!-- 「업로드」 = 펌웨어를 USB 로 보드에 쓴다 (Web Serial). ESP Web Tools 의 <esp-web-install-button> 이
+             칩 확인·포트 선택·진행·오류 창을 다 갖고 있어 그걸 쓰고, 보이는 버튼만 우리 .btn 으로 slot=activate 에 끼운다.
+             Web Serial 이 없는 브라우저(Safari·Firefox·휴대폰)면 unsupported 슬롯, http 면 not-allowed 슬롯이 대신 보인다.
+             manifest.json 이 어떤 파일을 어느 주소에 쓰는지 정한다(examples/<예제>/firmware/SOURCE.md).
+             라이브러리는 js/vendor/esp-web-tools/ 자체 호스팅 — 운영 CSP 가 script-src 'self' 라 CDN 은 막힌다. -->
+        <esp-web-install-button id="exampleUpload" manifest="examples/wild-trail/firmware/manifest.json">
+          <button slot="activate" type="button" class="btn" title="펌웨어를 USB 로 보드에 씁니다 — Chrome·Edge, 데이터 케이블">업로드</button>
+          <span slot="unsupported" class="ex-slot-note">업로드는 PC 의 Chrome·Edge 에서만 됩니다</span>
+          <span slot="not-allowed" class="ex-slot-note">업로드는 https 주소에서만 됩니다</span>
+        </esp-web-install-button>
+      </footer>
+    </div>
+  </div>
+
   <!-- 관리자 확인이 끝난 계정에서만 컨텍스트 메뉴 진입점이 생성된다. -->
   <div id="publicPublishModal" class="modal" hidden>
     <div class="modal-box public-publish-box" role="dialog" aria-modal="true" aria-labelledby="publicPublishTitle">
@@ -1373,30 +1507,34 @@
      결제창에서 돌아오는 길이 끊기면(앱 전환·창 닫음·네트워크) 돈만 나가고 끝난다. -->
 <script src="js/payrecover.js?v=2990f2e9"></script>
   <script src="js/pro.js?v=221b51bb"></script>     <!-- 무료/Pro 경계. LAUNCH 가 꺼져 있으면 제한이 안 걸린다 -->
-  <script src="js/i18n.js?v=ebad5bc2"></script>   <!-- 가장 먼저: DOMContentLoaded 번역이 app.js 초기화보다 앞서야 함 -->
+  <script src="js/i18n.js?v=00755c38"></script>   <!-- 가장 먼저: DOMContentLoaded 번역이 app.js 초기화보다 앞서야 함 -->
   <script src="js/awg.js?v=8af811c8"></script>
   <script src="js/model.js?v=99a1228f"></script>
   <script src="js/presets.js?v=698b6924"></script>
   <script src="js/presetsets.js?v=c15f089a"></script>   <!-- 단자 세트: 부품 단자 목록을 이름 붙여 저장·재사용 -->
   <script src="js/presetmodal.js?v=490a73ee"></script>  <!-- 단자 프리셋 관리 모달 — 관리자 페이지와 공유 -->
   <script src="js/geometry.js?v=71c7d93b"></script>
-  <script src="js/render.js?v=81ccf08a"></script>
+  <script src="js/render.js?v=9eed19ba"></script>
   <script src="js/colorpicker.js?v=1c21e3c5"></script>   <!-- render 다음: 단자 색상 팝오버. termeditor/app 둘 다 이걸 쓴다 -->
   <script src="js/bgremove.js?v=8e7d0005"></script>
   <script src="js/termeditor.js?v=26f12188"></script>
-  <script src="js/interactions.js?v=c1a7ffad"></script>
+  <script src="js/interactions.js?v=7e9ccf22"></script>
   <script src="js/store.js?v=7b58474c"></script>
   <script src="js/assets.js?v=c14bb23d"></script>   <!-- store.js 다음: 자산 풀이 store의 IndexedDB를 쓴다 -->
   <script src="js/history.js?v=4ba57930"></script>
   <script src="js/library.js?v=7d10f845"></script>
   <script src="js/categories.js?v=a553fee6"></script>   <!-- public-library 앞: 분류 목록을 여기서 읽는다 -->
   <script src="js/public-library.js?v=08f9ef99"></script>
+  <script src="js/examples.js?v=2f2f4d21"></script>   <!-- 예제 창. io.js(loadProjectBuffer)·store.js 를 쓰지만 DOMContentLoaded 뒤에만 부르므로 순서는 자유 -->
+  <!-- ESP Web Tools — 예제 창 「업로드」(<esp-web-install-button>) 를 정의한다. ES 모듈이라 type=module.
+       나머지 조각(install-dialog-*.js 등)은 이 파일이 같은 폴더에서 동적 import 하므로 폴더째 있어야 한다. -->
+  <script type="module" src="js/vendor/esp-web-tools/install-button.js?v=8a55032a"></script>
   <script src="js/catalogbackup.js?v=002f523c"></script>   <!-- 게시한 것을 로컬 백업 폴더에도 따라 쓴다 -->
   <script src="js/public-publisher.js?v=27576c1b"></script>
-  <script src="js/io.js?v=ff98fa19"></script>
+  <script src="js/io.js?v=30fa666a"></script>
   <script src="js/pdf.js?v=39b029e8"></script>
   <script src="js/xlsx.js?v=b4f1d49f"></script>
-  <script src="js/app.js?v=3d5aa244"></script>
+  <script src="js/app.js?v=524b00bd"></script>
   <!-- 라이브러리 부품 자동 수집 — 맨 마지막에 defer. 에디터 로딩에 끼어들지 않는다. 없어도 에디터는 그대로 돈다(library.js 가 있으면 부를 뿐). -->
   <script src="js/libsync.js?v=4308ef03" defer></script>
   <!-- 인쇄 전용: 페이지 전체를 덮는 워터마크. 도면 칸 안에만 찍히던 것을 종이 전체로 넓혔다.

@@ -763,6 +763,7 @@ WE.interactions = (function () {
             w.waypoints = path ? path.slice(1, -1) : wirePending.waypoints;
           }
           if (WE.app.trackOnce) WE.app.trackOnce("create_wire");
+          WE.render.markWireDraw(w.id);   // 촬영용 긋기 애니메이션 대상 (설정 off/비관리자면 아무 일 없음)
         }
         wirePending = null;
         WE.render.clearWirePreview();
@@ -801,6 +802,7 @@ WE.interactions = (function () {
       //   다음 렌더링 때 갑자기 모양이 바뀐다. 그 사이에 내보내면 틀린 경로가 나간다.
       //   (null 크래시를 고치면서 순서를 바꿔 생겼던 문제 — 감사 재리뷰가 찾았다)
       if (wb && bp) wb.waypoints = WE.geometry.simplify(bp).slice(1, -1);
+      if (wb) WE.render.markWireDraw(wb.id);   // 분기도 같은 촬영용 긋기 애니메이션
       wirePending = null;
       WE.render.clearWirePreview();
       WE.render.renderWires();

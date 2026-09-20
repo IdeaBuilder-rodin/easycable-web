@@ -1,0 +1,29 @@
+{
+  "name": "파이리와 작은 모험",
+  "version": "4.1 (2026-09-21)",
+  "new_install_prompt_erase": false,
+  "new_install_improv_wait_time": 0,
+  "builds": [
+    {
+      "chipFamily": "ESP32-S3",
+      "parts": [
+        {
+          "path": "bootloader.bin",
+          "offset": 0
+        },
+        {
+          "path": "partitions.bin",
+          "offset": 32768
+        },
+        {
+          "path": "boot_app0.bin",
+          "offset": 57344
+        },
+        {
+          "path": "wild-trail.bin",
+          "offset": 65536
+        }
+      ]
+    }
+  ]
+}
