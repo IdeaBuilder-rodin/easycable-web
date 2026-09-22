@@ -244,6 +244,51 @@
     .adm-col-f input { height: 28px; padding: 0 8px; border: 1px solid var(--bd); border-radius: var(--r); font: inherit; font-size: var(--fs-sm); color: var(--tx); }
     .adm-col-buy { display: flex; flex-direction: column; gap: 4px; }
     .adm-col-f-title { font-size: 11px; color: var(--tx3); }
+
+    /* ── 회원·결제 화면 (2026-09-22) ────────────────────────────────────────
+       틀은 「사용자 부품」과 같은 3열이다 — 왼쪽 회원 / 가운데 그 사람의 주문 / 오른쪽 주문 상세+환불.
+       같은 모양을 쓰는 이유: 관리자가 화면마다 다른 조작법을 외우지 않게. */
+    /* ⚠ 섹션 자체가 남은 높이를 다 가져가야 3열이 화면 끝까지 선다.
+       .adm-collect·.adm-batch 와 같은 값이다 — 이걸 빠뜨리면 내용 높이(172px)로 쪼그라든다(실측으로 잡음). */
+    .adm-members { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+    .adm-mem-body { flex: 1; min-height: 0; display: flex; }
+    .adm-mem-users { width: 300px; flex: none; overflow: auto; padding: 10px 8px; border-right: 1px solid var(--bd2); display: flex; flex-direction: column; gap: 4px; }
+    .adm-mem-user { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 7px 10px; border: 1px solid transparent; border-radius: var(--r); background: none; font: inherit; text-align: left; cursor: pointer; width: 100%; }
+    .adm-mem-user:hover { background: var(--bg2); }
+    .adm-mem-user.on { background: var(--primary-bg); border-color: #c9d8ec; }
+    .adm-mem-user b { font-weight: 600; font-size: var(--fs-sm); word-break: break-all; }
+    .adm-mem-tags { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 2px; }
+    /* 이용권 배지 — Pro 는 초록, 무료는 회색. 만료가 지났으면 Pro 라도 회색이다(판정은 JS 가 한다) */
+    .adm-mem-tag { font-size: 10px; padding: 1px 6px; border-radius: 999px; background: #eceff3; color: #6b7280; }
+    .adm-mem-tag.pro { background: #e8f5e9; color: #2e7d32; font-weight: 600; }
+    /* 미완료 주문이 있는 회원 — 「돈은 받고 이용권은 못 준」 후보라 눈에 띄어야 한다 */
+    .adm-mem-tag.warn { background: #fff3e0; color: #e65100; font-weight: 600; }
+    .adm-mem-list-wrap { flex: 1; min-width: 0; overflow: auto; padding: 10px 12px; border-right: 1px solid var(--bd2); }
+    .adm-mem-order { display: block; width: 100%; text-align: left; font: inherit; cursor: pointer; padding: 8px 10px; margin-bottom: 6px; border: 1px solid var(--bd); border-radius: var(--r); background: #fff; }
+    .adm-mem-order:hover { background: var(--bg2); }
+    .adm-mem-order.on { border-color: var(--primary); background: var(--primary-bg); }
+    .adm-mem-order-top { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+    .adm-mem-order-top b { font-size: var(--fs-sm); }
+    .adm-mem-amt { font-weight: 600; white-space: nowrap; }
+    .adm-mem-st { font-size: 10px; padding: 1px 6px; border-radius: 999px; background: #eceff3; color: #6b7280; }
+    .adm-mem-st.paid { background: #e8f5e9; color: #2e7d32; }
+    .adm-mem-st.pending { background: #fff3e0; color: #e65100; }
+    .adm-mem-st.refunded { background: #ede7f6; color: #5e35b1; }
+    .adm-mem-st.failed { background: #fdecea; color: #c62828; }
+    .adm-mem-detail { width: 420px; flex: none; overflow: auto; padding: 14px 16px; font-size: var(--fs-sm); }
+    .adm-mem-kv { display: flex; justify-content: space-between; gap: 10px; padding: 5px 0; border-bottom: 1px dashed var(--bd2); }
+    .adm-mem-kv .k { color: var(--tx3); flex: none; }
+    .adm-mem-kv .v { text-align: right; word-break: break-all; }
+    .adm-mem-refund { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--bd); }
+    .adm-mem-refund h4 { margin: 0 0 8px; font-size: var(--fs-sm); }
+    .adm-mem-amt-in { width: 110px; height: 28px; padding: 0 8px; border: 1px solid var(--bd); border-radius: var(--r); font: inherit; font-size: var(--fs-sm); }
+    /* 환불 결과 상자 — 상태마다 색이 다르다. 409(미확정)와 500(원장 불일치)을 같은 색으로 두면
+       "돈은 나갔는데 장부가 안 맞는" 상황을 그냥 지나친다 */
+    .adm-mem-res { margin-top: 10px; padding: 10px 12px; border-radius: var(--r); font-size: 12px; line-height: 1.6; white-space: pre-wrap; }
+    .adm-mem-res.ok   { background: #e8f5e9; color: #1b5e20; }
+    .adm-mem-res.info { background: #eef4ff; color: #1a3f7a; }
+    .adm-mem-res.warn { background: #fff3e0; color: #7a3d00; }
+    .adm-mem-res.err  { background: #fdecea; color: #8e1b14; }
     .adm-col-f-title em { font-style: normal; font-size: 10px; margin-left: 4px; }
     .adm-col-buy-item { display: flex; align-items: center; gap: 5px; }
     .adm-col-buy-item input[type=text] { height: 26px; padding: 0 6px; border: 1px solid var(--bd); border-radius: var(--r); font: inherit; font-size: var(--fs-sm); flex: 1; min-width: 0; }
@@ -372,6 +417,7 @@
         <button type="button" class="adm-mode-btn on" data-mode="parts">게시된 부품</button>
         <button type="button" class="adm-mode-btn" data-mode="batch">일괄 등록</button>
         <button type="button" class="adm-mode-btn" data-mode="collect">사용자 부품</button>
+        <button type="button" class="adm-mode-btn" data-mode="members">회원·결제</button>
       </div>
       <a class="public-library-close" href="app.html" title="에디터로 돌아가기" aria-label="에디터로 돌아가기">×</a>
     </header>
@@ -518,6 +564,26 @@
         <summary>이름+스펙별 등록 기기 수 (상위 30)</summary>
         <ol id="admColRank"></ol>
       </details>
+    </section>
+
+    <!-- ── 회원·결제 (2026-09-22) ──────────────────────────────────────────
+         왜 만들었나 — 환불을 브라우저 콘솔에 명령을 쳐서 하고 있었고(payment-cancel 머리말),
+         회원이 몇 명인지·누가 결제했는지 볼 화면이 아예 없었다.
+         ⚠ 목록에는 이름·휴대폰을 두지 않는다. 그 둘은 개인정보처리방침 2장에 「결제·환불 안내」
+            목적으로 적혀 있어, 환불을 처리하는 맥락(오른쪽 상세)에서만 보인다. -->
+    <section id="admMembers" class="adm-members" aria-label="회원·결제" hidden>
+      <div class="adm-batch-bar">
+        <input type="search" id="admMemSearch" class="adm-col-search" placeholder="이메일 검색" autocomplete="off" />
+        <span class="adm-col-stats adm-batch-saved" id="admMemStats"></span>
+        <button type="button" class="adm-edit-btn" id="admMemRefresh" title="서버에서 다시 읽습니다">↻ 새로 읽기</button>
+      </div>
+      <div class="adm-mem-body">
+        <nav id="admMemUsers" class="adm-mem-users" aria-label="회원 목록"></nav>
+        <div class="adm-mem-list-wrap">
+          <div id="admMemOrders" role="list"></div>
+        </div>
+        <aside id="admMemDetail" class="adm-mem-detail"></aside>
+      </div>
     </section>
 
     <!-- 단자 배치 편집 모달 — index.html 의 것을 그대로 가져왔다.
@@ -857,5 +923,6 @@
   <script src="js/admin-batch.js"></script>   <!-- 일괄 등록. admin.js 다음 — 단자 편집기 저장 훅을 감싼다 -->
   <script src="js/xlsx.js"></script>          <!-- 사용자 부품 통계 엑셀 내보내기 (에디터의 BOM 엑셀과 같은 작성기) -->
   <script src="js/admin-collect.js"></script> <!-- 사용자 부품 (수집). admin-batch 다음 — 「일괄 등록으로 보내기」가 그 API 를 쓴다 -->
+  <script src="js/admin-members.js"></script> <!-- 회원·결제·환불 (2026-09-22). 앞의 것들과 독립이지만 순서를 지켜 admin.js 의 esc·msg 관례를 따라 쓴다 -->
 </body>
 </html>

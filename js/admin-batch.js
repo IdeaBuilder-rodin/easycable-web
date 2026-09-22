@@ -548,14 +548,19 @@ WE.adminBatch = (function () {
 
   // ── 화면 전환 ─────────────────────────────────────────────────────────────
   function setMode(next) {
-    mode = next === "batch" ? "batch" : next === "collect" ? "collect" : "parts";
-    var body = $("admBody"), search = $("admSearchForm"), batch = $("admBatch"), collect = $("admCollect");
+    mode = next === "batch" ? "batch" : next === "collect" ? "collect"
+         : next === "members" ? "members" : "parts";
+    var body = $("admBody"), search = $("admSearchForm"), batch = $("admBatch"),
+        collect = $("admCollect"), members = $("admMembers");
     if (body) body.hidden = mode !== "parts";
     if (search) search.hidden = mode !== "parts";
     if (batch) batch.hidden = mode !== "batch";
     if (collect) collect.hidden = mode !== "collect";
+    if (members) members.hidden = mode !== "members";
     // 사용자 부품 탭 — 들어갈 때 읽는다 (admin-collect.js). 없어도(옛 배포) 조용히 넘어간다
     if (mode === "collect" && WE.adminCollect && WE.adminCollect.enter) { try { WE.adminCollect.enter(); } catch (e) { /* 무시 */ } }
+    // 회원·결제 탭도 같은 방식 — 들어갈 때 읽는다 (admin-members.js, 2026-09-22)
+    if (mode === "members" && WE.adminMembers && WE.adminMembers.enter) { try { WE.adminMembers.enter(); } catch (e) { /* 무시 */ } }
     Array.prototype.forEach.call(document.querySelectorAll("#admMode .adm-mode-btn"), function (b) {
       b.classList.toggle("on", b.dataset.mode === mode);
     });

@@ -81,6 +81,7 @@
     if ($("admMode")) $("admMode").hidden = which !== "body";
     if (which !== "body" && $("admBatch")) $("admBatch").hidden = true;
     if (which !== "body" && $("admCollect")) $("admCollect").hidden = true;
+    if (which !== "body" && $("admMembers")) $("admMembers").hidden = true;   // 회원·결제 (2026-09-22)
     /* 아래 백업·복원 단추도 권한이 확인된 뒤에만. 눌러도 서버(RLS)가 막지만, "권한이 없습니다" 화면에
        관리 단추가 같이 보이면 뚫린 것처럼 보인다(2026-09-15 고원빈 스크린샷). */
     if ($("admFooter")) $("admFooter").hidden = which !== "body";
