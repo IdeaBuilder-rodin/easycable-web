@@ -75,11 +75,13 @@
     .co-field .v-static { font-weight: 600; padding: 4px 0; }
     .co-field small { color: var(--dim, #6b7280); font-size: 12px; }
     .co-field .err { color: #d32f2f; font-size: 12px; }
-    /* 약관 동의 — 결제 단추 바로 위. 국내 결제 화면 관행(위노트·PG 심사 체크리스트 "결제 전 약관 동의") */
-    .co-agree { display: flex; align-items: flex-start; gap: 8px; margin: 16px 0 4px; font-size: 14px; cursor: pointer; }
-    .co-agree input { margin-top: 3px; }
+    /* 약관 안내 한 줄 — 결제 단추 바로 위 (2026-09-22 체크박스 → 문장).
+       9/15 엔 「[필수] 이용약관 동의」 체크박스였다(PG 심사 체크리스트 대비). 카드사 심사가 끝나고 고원빈이 뺐다 —
+       국내 SaaS(미리캔버스·노션·채널톡)도 체크박스 없이 문장으로 한다. 진짜 동의 기록은 가입 때 record_consent 로
+       이미 남기고(js/auth.js), 이 체크박스는 서버에 기록되지도 않았다. 문장은 남긴다 — 전자상거래법 제13조 2항의
+       '청약 전 거래조건 확인 절차'는 링크 달린 안내 한 줄로 충족되고, 환불 규정으로 바로 가는 길이 필요하다. */
+    .co-agree { margin: 16px 0 12px; font-size: 13px; line-height: 1.6; color: #6b7280; }
     .co-agree a { color: var(--primary, #1e6fd9); }
-    .co-agree-help { display: block; min-height: 16px; margin-bottom: 8px; color: #d32f2f; font-size: 12px; }
 
 
     /* ⚠ display·text-align 을 명시하는 이유 — 이 클래스를 <button> 과 <a> 가 함께 쓴다.
@@ -173,12 +175,8 @@
       </label>
     </div>
 
-    <!-- 약관 동의 — 안 켜면 결제창을 열지 않는다. 약관 제8조(환불)로 바로 간다 -->
-    <label class="co-agree">
-      <input type="checkbox" id="coAgree" />
-      <span>[필수] 이용약관(환불 규정 포함)에 동의합니다 <a href="terms.html" target="_blank" rel="noopener">약관 보기</a> · <a href="terms.html#refund" target="_blank" rel="noopener">환불 규정</a></span>
-    </label>
-    <small id="coAgreeHelp" class="co-agree-help"></small>
+    <!-- 약관 안내 — 체크박스 없이 문장 하나(위 .co-agree 주석). 약관 제8조(환불)로 바로 가는 링크는 남긴다 -->
+    <p class="co-agree">결제하기를 누르면 <a href="terms.html" target="_blank" rel="noopener">이용약관</a>과 <a href="terms.html#refund" target="_blank" rel="noopener">환불 규정</a>에 동의한 것으로 봅니다.</p>
 
     <!-- ⚠ 결제수단 선택칸을 두지 않는다 (2026-08-31 확정).
          처음엔 카드·간편결제·계좌이체 라디오를 뒀는데, 눌러 보니 **허들만 하나 더**였다:
@@ -684,7 +682,6 @@
     // 고치기 시작하면 빨간 표시를 거둔다
     $("coPhone").addEventListener("input", function () { this.classList.remove("is-bad"); $("coPhoneHelp").className = ""; $("coPhoneHelp").textContent = tr("결제·환불 안내에 쓰이며 전자상거래법에 따라 5년 보관합니다."); });
     $("coName").addEventListener("input", function () { this.classList.remove("is-bad"); $("coNameHelp").className = ""; $("coNameHelp").textContent = ""; });
-    $("coAgree").addEventListener("change", function () { $("coAgreeHelp").textContent = ""; });
 
     준비되면(function () {
       var client = WE.auth && WE.auth._client && WE.auth._client();
@@ -773,8 +770,9 @@
     버튼.disabled = false;
     버튼.textContent = tr("결제하기");   // 준비 중 문구를 되돌린다
     버튼.addEventListener("click", function () {
-      /* 구매자 정보 검사 — 이름·휴대폰은 필수(KG이니시스: fullName 필수, PC 는 phoneNumber 필수 — 비우면 창이 안 뜬다, 2026-09-15 실측),
-         약관 동의도 필수. 틀리면 결제창을 열지 않고 그 칸으로 돌려보낸다(서버 주문은 이미 있으니 다시 누르면 된다). */
+      /* 구매자 정보 검사 — 이름·휴대폰은 필수(KG이니시스: fullName 필수, PC 는 phoneNumber 필수 — 비우면 창이 안 뜬다, 2026-09-15 실측).
+         틀리면 결제창을 열지 않고 그 칸으로 돌려보낸다(서버 주문은 이미 있으니 다시 누르면 된다).
+         (약관 동의 체크는 2026-09-22 에 뺐다 — 위 .co-agree 주석) */
       var 이름 = String(($("coName") || {}).value || "").trim().slice(0, 40);
       if (!이름) {
         var ni = $("coName"); ni.classList.add("is-bad"); ni.focus();
@@ -785,11 +783,6 @@
       if (!전화) {
         var inp = $("coPhone"); inp.classList.add("is-bad"); inp.focus();
         $("coPhoneHelp").className = "err"; $("coPhoneHelp").textContent = tr("휴대폰 번호를 확인해 주세요 (예: 010-1234-5678)");
-        return;
-      }
-      if (!$("coAgree").checked) {
-        $("coAgreeHelp").textContent = tr("이용약관에 동의해 주세요.");
-        $("coAgree").focus();
         return;
       }
       버튼.disabled = true;                       // 두 번 눌러 두 건이 생기지 않게

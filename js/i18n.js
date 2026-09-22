@@ -1554,9 +1554,12 @@ WE.i18n = (function () {
     "영수증과 이용권 안내가 이 주소로 갑니다.": "Receipts and pass notices go to this address.",
     "결제·환불 안내에 쓰이며 전자상거래법에 따라 5년 보관합니다.": "Used for payment and refund notices; kept for 5 years under the Korean E-Commerce Act.",
     "환불 규정": "Refund policy",
-    "이용약관에 동의해 주세요.": "Please agree to the Terms of Service.",
-    "[필수] 이용약관(환불 규정 포함)에 동의합니다": "[Required] I agree to the Terms of Service (including the refund policy)",
-    "약관 보기": "View terms",
+    // 2026-09-22 체크박스 → 문장 「결제하기를 누르면 [이용약관]과 [환불 규정]에 동의한 것으로 봅니다.」
+    //   링크가 둘이라 텍스트 노드 세 조각으로 번역된다. translateDom 은 키를 trim 해서 찾고 앞뒤 공백은 원문 것을 지키므로
+    //   키에는 공백을 안 두고, 영어 쪽 띄어쓰기는 값 안에 넣는다(" and the"). "이용약관"·"환불 규정" 은 이미 사전에 있다.
+    "결제하기를 누르면": "By pressing Pay, you agree to the",
+    "과": " and the",
+    "에 동의한 것으로 봅니다.": ".",
     // ===== 2026-09-15 영어판 1단계 — 9/14 검토(_ai/검토_영어판_2026-09-14.md)에서 빠진 것. 새 문구는 tests/verify_i18n 이 잡는다 =====
     // ===== 결제 페이지 개편 — 카드·표 (2026-09-15) =====
     "주문번호": "Order no.",

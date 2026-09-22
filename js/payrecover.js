@@ -39,6 +39,20 @@ WE.payRecover = (function () {
   //   결제가 끊긴 사람은 대개 그날 안에 다시 들어온다. 하루면 넉넉하다.
   var 되살릴시간 = 24 * 60 * 60 * 1000;
 
+  /* ⚠⚠ 만든 지 이만큼 안 된 주문은 **건드리지 않는다** (2026-09-22 추가).
+     왜 — 주문은 결제 화면에 들어가는 순간 생기는데, 그 번호는 **결제창을 열기 전까지
+     포트원에 없다.** 그 상태로 payment-confirm 을 부르면 포트원이 404 를 주고,
+     예전에는 그걸 '결제 기록 없음' 으로 보고 주문을 **failed 로 바꿔 버렸다.**
+     그 뒤 손님이 진짜로 결제를 끝내도 「이미 종료된 주문」이 되어
+     **돈은 나갔는데 이용권이 없는** 상태가 된다.
+
+     실제로 이 경로는 쉽게 열린다 — 결제 화면을 띄워 둔 채 에디터나 내 계정 탭을
+     하나 더 열면 그 탭에서 이 파일이 돌기 때문이다(app.html·account.html·admin.html·checkout.html).
+
+     서버(payment-confirm)에도 같은 유예를 뒀다. 둘 다 두는 이유는, 여기만 막으면
+     다른 경로로 들어온 호출을 못 막고, 서버만 막으면 쓸데없는 호출이 계속 나가서다. */
+  var 갓만든것_유예 = 15 * 60 * 1000;
+
   var 돌았다 = false;   // 한 화면에서 한 번만
 
   function 알림(글) {
@@ -81,6 +95,7 @@ WE.payRecover = (function () {
     돌았다 = true;
 
     var 기준 = new Date(Date.now() - 되살릴시간).toISOString();
+    var 최소경과 = new Date(Date.now() - 갓만든것_유예).toISOString();   // 이보다 **오래된** 것만 본다
 
     // ⚠ 본인 주문만 읽는다. RLS 가 막아 주지만 조건도 같이 건다 —
     //   나중에 정책이 느슨해져도 여기서 한 번 더 걸린다.
@@ -88,6 +103,7 @@ WE.payRecover = (function () {
       .eq("user_id", WE.auth.user().id)
       .eq("status", "pending")
       .gte("created_at", 기준)
+      .lte("created_at", 최소경과)   // ★ 갓 만든 주문은 제외 (위 갓만든것_유예 주석)
       .then(function (res) {
         var 목록 = (res && res.data) || [];
         if (!목록.length) return;
