@@ -1768,6 +1768,10 @@ WE.app = (function () {
     box.addEventListener("click", function (e) {
       if (e.target.closest("#sheetAdd")) {
         var s = WE.model.addSheet();
+        /* 무료 한도(페이지 1장)에 막히면 null 이 온다 — 안내는 model 쪽 deny 가 이미 띄웠다.
+           복제(아래 "dup")는 처음부터 if (cp) 로 막아뒀는데 여기만 빠져서,
+           한도를 켜면 null.id 로 예외가 났다(2026-09-21 발견). */
+        if (!s) return;
         WE.model.setActiveSheet(s.id);
         WE.model.clearSelection();
         switchView("wiring");
@@ -1799,7 +1803,9 @@ WE.app = (function () {
         var tab = document.querySelector('.sheet-tab[data-sid="' + sid + '"]');
         if (tab) beginRenameSheet(tab);
       } else if (act === "add") {
-        var ns = WE.model.addSheet(); WE.model.setActiveSheet(ns.id);
+        var ns = WE.model.addSheet();
+        if (!ns) return;   // 무료 한도(페이지 1장)에 막힘 — 안내는 model 쪽 deny 가 띄웠다
+        WE.model.setActiveSheet(ns.id);
         WE.model.clearSelection(); switchView("wiring");
         afterSheetChange(WE.i18n.t("배선도 추가: ") + ns.name);
       } else if (act === "dup") {

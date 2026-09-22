@@ -1361,12 +1361,14 @@
       </form>
       <div class="public-library-body">
         <nav class="public-library-categories" aria-label="예제 분류">
-          <button type="button" class="public-library-category active" data-cat="all"><span>전체</span><span class="muted">2</span></button>
+          <button type="button" class="public-library-category active" data-cat="all"><span>전체</span><span class="muted">3</span></button>
           <button type="button" class="public-library-category" data-cat="game"><span>게임</span><span class="muted">1</span></button>
           <button type="button" class="public-library-category" data-cat="video"><span>영상</span><span class="muted">1</span></button>
+          <!-- 세 번째 예제 「불멍」의 분류. 게임·영상이 아닌, 책상 위에 켜 두는 물건 (CLAUDE 2026-09-22) -->
+          <button type="button" class="public-library-category" data-cat="deco"><span>장식</span><span class="muted">1</span></button>
         </nav>
         <section class="public-library-results" aria-label="예제 목록">
-          <div class="public-library-results-head"><strong>예제</strong><span id="exampleCount">2개</span></div>
+          <div class="public-library-results-head"><strong>예제</strong><span id="exampleCount">3개</span></div>
           <div class="public-library-result-list">
             <button type="button" class="public-library-result active" data-example="wild-trail" data-cat="game">
               <span class="ex-thumb"><img src="examples/wild-trail/media/jump-device.png" alt="" /></span>
@@ -1382,6 +1384,15 @@
               <span class="public-library-result-info">
                 <span class="public-library-result-name">애니메이션 비디오</span>
                 <span class="public-library-result-meta">ESP32-S3 · 원형 LCD · 버튼 1개 · 영상</span>
+              </span>
+              <span class="public-library-added">배선도 있음</span>
+            </button>
+            <!-- 불멍 — 같은 보드·같은 배선. 그림은 클로드 디자인이 그린 것(examples/campfire/source/art/), 불꽃 8장 루프 + 불똥·불빛 시뮬레이션. (CLAUDE 2026-09-22) -->
+            <button type="button" class="public-library-result" data-example="campfire" data-cat="deco">
+              <span class="ex-thumb"><img src="examples/campfire/media/fire-240.png" alt="" /></span>
+              <span class="public-library-result-info">
+                <span class="public-library-result-name">불멍</span>
+                <span class="public-library-result-meta">ESP32-S3 · 원형 LCD · 버튼 1개 · 장식</span>
               </span>
               <span class="public-library-added">배선도 있음</span>
             </button>
@@ -1420,6 +1431,21 @@
               <li>버튼을 누르면 3초 카운트다운 뒤 시작 — 영상 편집에서 노래와 맞추기 쉬워요</li>
               <li>가사 40줄이 손글씨로 뜨고, 졸라맨이 주저앉고·안아주고·토닥이는 4막 이야기</li>
               <li>길게 누르면 처음으로. 브라우저 시제품과 기기 화면이 픽셀까지 같아요</li>
+            </ul>
+            <h5 class="ex-h5">필요한 부품</h5>
+            <ul class="ex-parts">
+              <li><b>ESP32-S3 CAM N16R8</b><span>1개</span></li>
+              <li><b>GC9A01 1.28" 원형 LCD</b><span>1개</span></li>
+              <li><b>마이크로 스위치</b><span>1개</span></li>
+            </ul>
+          </div>
+          <div data-example-detail="campfire" hidden>
+            <h4>불멍</h4>
+            <p class="public-library-detail-spec">책상 위에 켜 두는 손바닥 모닥불 — 가만두면 잔불이 되고, 누르면 장작이 들어가요</p>
+            <ul class="ex-points">
+              <li>짧게 누르면 장작 — 확 타오르고 불똥이 튀어요. 12분쯤 두면 숯불만 남아요</li>
+              <li>2초 누르면 불 색이 바뀌어요 — 장작불 · 푸른 불 · 보랏빛 불. 보드가 기억해요</li>
+              <li>그림은 일러스트, 불빛·불똥은 시뮬레이션. 브라우저 시제품과 기기 화면이 같아요</li>
             </ul>
             <h5 class="ex-h5">필요한 부품</h5>
             <ul class="ex-parts">
@@ -1505,9 +1531,9 @@
   <script src="js/auth.js?v=9bc336a0"></script>    <!-- flags 다음. SDK(js/vendor/supabase.js)는 필요할 때만 스스로 불러온다 -->
 <!-- 결제는 됐는데 이용권이 안 붙은 주문을 다음 접속 때 되살린다.
      결제창에서 돌아오는 길이 끊기면(앱 전환·창 닫음·네트워크) 돈만 나가고 끝난다. -->
-<script src="js/payrecover.js?v=2990f2e9"></script>
+<script src="js/payrecover.js?v=da314bdc"></script>
   <script src="js/pro.js?v=221b51bb"></script>     <!-- 무료/Pro 경계. LAUNCH 가 꺼져 있으면 제한이 안 걸린다 -->
-  <script src="js/i18n.js?v=00755c38"></script>   <!-- 가장 먼저: DOMContentLoaded 번역이 app.js 초기화보다 앞서야 함 -->
+  <script src="js/i18n.js?v=c68f4d01"></script>   <!-- 가장 먼저: DOMContentLoaded 번역이 app.js 초기화보다 앞서야 함 -->
   <script src="js/awg.js?v=8af811c8"></script>
   <script src="js/model.js?v=99a1228f"></script>
   <script src="js/presets.js?v=698b6924"></script>
@@ -1525,7 +1551,7 @@
   <script src="js/library.js?v=7d10f845"></script>
   <script src="js/categories.js?v=a553fee6"></script>   <!-- public-library 앞: 분류 목록을 여기서 읽는다 -->
   <script src="js/public-library.js?v=08f9ef99"></script>
-  <script src="js/examples.js?v=2f2f4d21"></script>   <!-- 예제 창. io.js(loadProjectBuffer)·store.js 를 쓰지만 DOMContentLoaded 뒤에만 부르므로 순서는 자유 -->
+  <script src="js/examples.js?v=b93d321d"></script>   <!-- 예제 창. io.js(loadProjectBuffer)·store.js 를 쓰지만 DOMContentLoaded 뒤에만 부르므로 순서는 자유 -->
   <!-- ESP Web Tools — 예제 창 「업로드」(<esp-web-install-button>) 를 정의한다. ES 모듈이라 type=module.
        나머지 조각(install-dialog-*.js 등)은 이 파일이 같은 폴더에서 동적 import 하므로 폴더째 있어야 한다. -->
   <script type="module" src="js/vendor/esp-web-tools/install-button.js?v=8a55032a"></script>
@@ -1534,7 +1560,7 @@
   <script src="js/io.js?v=30fa666a"></script>
   <script src="js/pdf.js?v=39b029e8"></script>
   <script src="js/xlsx.js?v=b4f1d49f"></script>
-  <script src="js/app.js?v=524b00bd"></script>
+  <script src="js/app.js?v=e516d31b"></script>
   <!-- 라이브러리 부품 자동 수집 — 맨 마지막에 defer. 에디터 로딩에 끼어들지 않는다. 없어도 에디터는 그대로 돈다(library.js 가 있으면 부를 뿐). -->
   <script src="js/libsync.js?v=4308ef03" defer></script>
   <!-- 인쇄 전용: 페이지 전체를 덮는 워터마크. 도면 칸 안에만 찍히던 것을 종이 전체로 넓혔다.

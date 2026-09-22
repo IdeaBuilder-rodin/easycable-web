@@ -6,7 +6,7 @@
 //   「업로드」는 <esp-web-install-button>(js/vendor/esp-web-tools) 이 그 예제의 firmware/manifest.json 대로 보드에 쓴다.
 //   예제 폴더 하나(examples/<id>/)에 배선도·펌웨어·캡처·소스(source/)가 다 있다 — 폴더째 옮겨도 된다.
 //
-// 예제가 둘 이상이면 (2026-09-20 lyric-eoreun 추가)
+// 예제가 둘 이상이면 (2026-09-20 lyric-eoreun 추가 · 2026-09-22 campfire 추가)
 //   첫 예제 때는 슬라이드·「문서 열기」·업로드 manifest 가 전부 wild-trail 로 박혀 있어서, 목록에서 다른 것을
 //   골라도 오른쪽 글만 바뀌고 열기·업로드는 여전히 wild-trail 을 했다. 지금은 select(id) 가 셋을 함께 바꾼다.
 //   상세 글(무슨 앱·필요한 부품)은 여전히 마크업(app.html [data-example-detail])이고, 파일 경로·슬라이드만 아래 표다.
@@ -35,7 +35,8 @@ WE.examples = (function () {
 
   var WIRING = {
     "wild-trail":   { file: "examples/wild-trail/wiring.ezc",   manifest: "examples/wild-trail/firmware/manifest.json",   name: "파이리와 작은 모험" },
-    "lyric-eoreun": { file: "examples/lyric-eoreun/wiring.ezc", manifest: "examples/lyric-eoreun/firmware/manifest.json", name: "애니메이션 비디오" }
+    "lyric-eoreun": { file: "examples/lyric-eoreun/wiring.ezc", manifest: "examples/lyric-eoreun/firmware/manifest.json", name: "애니메이션 비디오" },
+    "campfire":     { file: "examples/campfire/wiring.ezc",     manifest: "examples/campfire/firmware/manifest.json",     name: "불멍" }
   };
 
   // 플레이 장면 슬라이드 — 창이 열려 있는 동안만 1.5초마다 넘긴다(닫히면 멈춤).
@@ -57,6 +58,14 @@ WE.examples = (function () {
       ["examples/lyric-eoreun/media/crowd-240.png", "웃는 사람들"],
       ["examples/lyric-eoreun/media/pat-240.png", "토닥토닥"],
       ["examples/lyric-eoreun/media/smile-240.png", "웃음"]
+    ],
+    // 불멍 — 활활 → 장작 넣기 → 잔불 → 푸른 불 → 보랏빛 불. 불이 잦아들고 색이 바뀌는 앱이라는 게 다섯 장으로 보인다 (2026-09-22)
+    "campfire": [
+      ["examples/campfire/media/fire-240.png", "활활"],
+      ["examples/campfire/media/log-240.png", "장작 넣기"],
+      ["examples/campfire/media/embers-240.png", "잔불"],
+      ["examples/campfire/media/blue-240.png", "푸른 불"],
+      ["examples/campfire/media/purple-240.png", "보랏빛 불"]
     ]
   };
   var current = "wild-trail";        // 지금 고른 예제 — init 에서 마크업의 .active 행으로 맞춘다
