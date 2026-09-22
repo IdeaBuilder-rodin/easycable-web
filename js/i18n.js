@@ -1384,6 +1384,8 @@ WE.i18n = (function () {
     "추천": "Recommended",
     "Pro · 1년": "Pro · 1 year",
     "/ 1년": "/ 1 year",
+    "출시 기념가": "Launch price",   // 1년권 카드 윗변 배지(.plan-promo) (2026-09-22). 정가로 넘기는 날 배지와 함께 뺀다
+    "월 4,900원": "₩4,900/month",   // 1년권 정가 월 환산 — 취소선 (2026-09-22)
     "월 3,900원": "₩3,900/month",
     "배선도 작업이 꾸준히 이어지는 경우에 가장 저렴합니다.": "The best value if you draw diagrams regularly.",
     "12개월 동안": "For 12 months",

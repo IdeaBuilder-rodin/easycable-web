@@ -20,9 +20,9 @@
        브라우저 탭에서 브랜드가 일정하지 않았다. (2026-08-24 교체) -->
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml" />
   <link rel="apple-touch-icon" href="assets/icon-180.png" />
-  <link rel="stylesheet" href="landing.css?v=d2db2a6f" />
+  <link rel="stylesheet" href="landing.css" />
 <!-- 로그인 창의 겉모습. 에디터와 **같은 파일**을 읽는다(복사본 없음). -->
-<link rel="stylesheet" href="auth.css?v=0880ba8a" />
+<link rel="stylesheet" href="auth.css" />
   <!-- 「로그인 확인 중」 표시를 첫 페인트 전에 건다. (2026-09-10)
        겉모습은 auth.css 의 html[data-auth="pending"] 규칙에 있다.
        자세한 이유는 pricing.html 의 같은 자리에 적어 두었다. 요점만:
@@ -468,6 +468,8 @@
               '추천' 표는 1년권을 가리켜 화면이 서로 다른 말을 한다. -->
       <article class="plan is-paid is-pick">
         <span class="plan-tag">추천</span>
+        <!-- 「출시 기념가」 — 카드 윗변 가운데, 테두리에 걸친 배지. 위치·색 이유는 .plan-promo 주석(pricing.html) -->
+        <span class="plan-promo">출시 기념가</span>
         <p class="plan-name">Pro · 1년</p>
         <p class="plan-price">
           <span class="num">₩46,800</span>
@@ -475,8 +477,11 @@
         </p>
         <!-- 이 카드에서 손님을 멈춰 세우는 것은 '월 3,900원' 하나다.
              ₩46,800 은 얼핏 큰 돈으로 보이지만, 월로 나누면 1개월권(6,900원)의 절반이다.
-             그 숫자만 키워서 눈이 먼저 닿게 한다. -->
-        <p class="plan-sub"><span class="strike">₩82,800</span><span class="save"><b>월 3,900원</b></span></p>
+             그 숫자만 키워서 눈이 먼저 닿게 한다.
+             ⚠ 2026-09-22 — 46,800 은 정가가 아니라 **출시 기념가**다(정가 58,800 = 월 4,900원).
+                「출시 기념가」 배지를 카드 윗변에 달고, 기한·정가는 적지 않는다. 자세한 이유는 pricing.html 의
+                .plan-promo 주석 — 이 카드는 pricing.html 1년권 카드와 **마크업이 같아야 한다.** -->
+        <p class="plan-sub is-deal"><span class="strike">월 4,900원</span><span class="save"><b>월 3,900원</b></span></p>
         <p class="plan-desc">배선도 작업이 꾸준히 이어지는 경우에 가장 저렴합니다.</p>
         <a class="btn btn-main" href="checkout.html?plan=year">결제하기</a>
 
@@ -623,11 +628,11 @@
 <!-- 로그인·회원가입을 이 화면에서 바로 처리한다. 순서가 중요하다 —
      flags(동작 스위치) → authmodal(창 마크업) → auth(동작). -->
 <!-- 결제하기 앞에서 한 번 묻는 창 — 무료 이용 기간 동안만. 결제를 여는 날 이 줄을 지운다(pricing.html 도). -->
-<script src="js/freegate.js?v=bd5fbcf6"></script>
-<script src="js/flags.js?v=d53ae8fb"></script>
-<script src="js/i18n.js?v=00755c38"></script>
-<script src="js/authmodal.js?v=2bee75f1"></script>
-<script src="js/auth.js?v=9bc336a0"></script>
+<script src="js/freegate.js"></script>
+<script src="js/flags.js"></script>
+<script src="js/i18n.js"></script>
+<script src="js/authmodal.js"></script>
+<script src="js/auth.js"></script>
 <script>
   /* 로그인·회원가입 — 이 화면에서 바로 연다.
      실패하면 링크(href)가 그대로 살아 있어 에디터로 넘어가 거기서 열린다. */
