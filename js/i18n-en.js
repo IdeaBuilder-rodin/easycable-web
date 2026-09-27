@@ -1586,6 +1586,26 @@ WE.i18nMaps = WE.i18nMaps || {};
     "<p>결제는 완료되었습니다. 다시 로그인하시면 이용권이 자동으로 적용됩니다.</p>": "<p>Your payment went through. Sign in again and your pass will be applied automatically.</p>",
     "오류 코드": "Error code",
     "다시 시도하기": "Try again",
+
+    // ===== 랜딩 — 영상 섹션 (2026-09-27 영상 랜딩) =====
+    // 한국어 문구는 고원빈 확정(초안 그대로). 영어는 Claude 초안 — 문구를 바꾸면 여기 키도 같이 바꾼다
+    "손으로 그리던 배선도,": "Wiring diagrams you used to draw by hand —",
+    "이렇게 달라집니다": "here's what changes",
+    "선 끝을 핀에 맞추느라, 부품 하나 옮겼다고 다시 그리느라 쓰던 시간이 없어집니다.": "No more nudging line ends onto pins, or redrawing everything because you moved one part.",
+    "왼쪽은 흔한 그리기 도구의 동작을 재현한 화면입니다.": "The left side re-creates how a typical drawing tool behaves.",
+    "영상으로 보는 기능": "See it in action",
+    "설명보다 화면이 빠릅니다.": "Quicker to watch than to read.",
+    "사진 한 장이 부품이 됩니다": "One photo becomes a part",
+    "사진을 올리면 배경이 지워지고, 단자 자리를 클릭해 찍으면 끝입니다. 한 번 만든 부품은 라이브러리에 저장돼 계속 씁니다.": "Upload a photo and the background is removed — click where the terminals are and you're done. Parts you make are saved to your library for reuse.",
+    "놓기만 해도 BOM이 생깁니다": "Place parts, get a BOM",
+    "부품을 도면에 놓는 순간 부품명·수량·단가·구매 링크가 표로 모이고, 합계까지 나옵니다. 그대로 발주하면 됩니다.": "The moment a part goes on the diagram, its name, quantity, unit price and purchase link land in the table — with a total. Order straight from it.",
+    "PDF 한 파일로 넘깁니다": "Hand it off as one PDF",
+    "도면·배선 범례·BOM·결선표가 한 파일로 나옵니다. 블로그·과제 제출·팀 인수인계에 그대로 넘기면, 받는 사람이 같은 것을 만들 수 있습니다.": "The diagram, wire legend, BOM and connection table come out as one file. Share it on a blog, hand it in for class or pass it to your team — they can build the same thing.",
+    "왼쪽은 손으로 그리는 도구(재현), 오른쪽은 이지케이블. 부품을 옮기면 왼쪽은 선이 끊어지고 오른쪽은 따라온다": "Left: a hand-drawing tool (re-created). Right: EasyCable. When a part moves, the wires on the left break; the ones on the right follow.",
+    "부품 사진을 올리면 배경이 지워지고, 단자 자리를 클릭해 찍는다": "Upload a part photo, the background is removed, then click to place the terminals",
+    "라이브러리에서 부품을 놓기만 하면 BOM 에 부품명·단가·구매 링크·합계가 모인다": "Placing parts from the library fills the BOM with names, prices, purchase links and a total",
+    "메뉴에서 PDF 문서를 누르면 도면·BOM·결선표가 한 파일로 나온다": "Choosing PDF from the menu puts the diagram, BOM and connection table into one file",
+    "일시정지": "Pause",
   };
 
   WE.i18nMaps.en = EN;

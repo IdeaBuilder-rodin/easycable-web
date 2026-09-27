@@ -375,6 +375,29 @@ section > .wrap > h2 {
    이제 그림의 제 비율대로 둔다 — 잘리지 않고, 자리는 img 의 width/height 속성이 미리 잡는다. */
 .out-shot { border-bottom: 1px solid var(--bd); background: var(--bg2); }
 .out-shot img { display: block; width: 100%; height: auto; }
+
+/* ── 영상 카드 (2026-09-27 영상 랜딩) ───────────────────────────
+   그림 대신 영상이 든 .out 카드. 자리는 <video> 의 width/height 속성이 비율로 미리 잡아서
+   포스터·영상이 늦게 와도 아래 내용이 밀리지 않는다. 동작은 js/landing-video.js */
+.out-shot video { display: block; width: 100%; height: auto; background: var(--bg2); }
+.out-shot, .shot { position: relative; }   /* 일시정지 단추의 기준 */
+
+/* 전·후 비교 — 히어로 영상 바로 아래 흰 바탕 섹션. 히어로와 붙어 보여서 위를 더 벌린다 */
+.vcompare { padding-top: 96px; }
+.vcompare .vid-card { margin: 36px auto 0; max-width: 1000px; }
+.vcompare .vid-note { margin: 10px auto 40px; max-width: 1000px; font-size: 13px; color: var(--tx2); text-align: right; }
+
+/* 일시정지 단추 — 5초 넘게 자동으로 움직이면 멈출 수 있어야 한다(WCAG 2.2.2).
+   영상 오른쪽 아래에 작고 반투명하게, 올려놓으면 또렷하게. 그림은 스크립트가 재생/멈춤으로 바꾼다 */
+.vid-pp {
+  position: absolute; right: 12px; bottom: 12px; z-index: 3;
+  width: 36px; height: 36px; padding: 0; border: 0; border-radius: 50%; cursor: pointer;
+  background: rgba(17, 24, 39, .55); opacity: .75;
+  display: flex; align-items: center; justify-content: center;
+  transition: opacity .15s, background .15s;
+}
+.vid-pp:hover, .vid-pp:focus-visible { opacity: 1; background: rgba(17, 24, 39, .85); }
+.vid-pp svg { width: 18px; height: 18px; fill: #fff; display: block; }
 /* 그림이 커진 만큼 설명 글씨도 같이 올린다 — 그림만 키우면 글이 주석처럼 작아 보인다 */
 .out figcaption { padding: 22px 26px 24px; }
 .out figcaption h3 { margin: 0 0 8px; font-size: 21px; font-weight: 700; }
