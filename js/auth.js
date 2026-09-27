@@ -80,10 +80,14 @@ WE.auth = (function () {
         '아직 효력이 남은 paid/partially_refunded 주문에 year 가 있으면 1년권'.
         한쪽만 고치면 화면과 서버가 어긋나, 화면은 살 수 있다고 하는데
         결제 화면에서 막히는 헛걸음이 생긴다.
-     못 읽어도 그냥 넘어간다 — 이건 화면 표시용이고, 진짜 판정은 서버가 한다. */
+     못 읽어도 그냥 넘어간다 — 이건 화면 표시용이고, 진짜 판정은 서버가 한다.
+     ⚠ **내 주문만 묻는다 (user_id 조건).** 관리자는 RLS 로 모든 주문이 보여서, 조건이 없으면
+        남의 1년권을 보고 내 이용권을 1년권으로 판단한다 (2026-09-27 — loadProfile 주석 참고). */
   function 이용권종류(client, done) {
     try {
+      if (!_user) { done(null); return; }
       client.from("orders").select("plan")
+        .eq("user_id", _user.id)
         .in("status", ["paid", "partially_refunded"])
         .gt("entitlement_ended_at", new Date().toISOString())
         .then(function (res) {
@@ -116,6 +120,29 @@ WE.auth = (function () {
   function usable() {
     return !!(WE.flags && WE.flags.LAUNCH) &&
            location.protocol.indexOf("http") === 0;
+  }
+
+  /* ── SDK 늦게 받기 (랜딩 — 2026-09-27) ─────────────────────
+     랜딩 방문자 대부분은 로그인한 적이 없는데, 예전에는 열자마자 SDK(207KB)를 받았다.
+     <html data-auth-lazy> 인 페이지(지금은 index.html 만)는 아래 둘 다 없으면 SDK 를 받지 않고
+     곧바로 '로그아웃' 으로 확정한다. 로그인 창을 열거나 로그인 함수를 부르면 그때 받는다(준비()).
+       · 세션 흔적 — 저장소에 SDK 의 'sb-' 열쇠가 있다 = 로그인해 둔 사람 → 아바타를 띄워야 하니 바로 받는다
+       · 돌아온 주소 — 구글·카카오·메일 링크에서 돌아오면 주소에 토큰·코드가 붙는다(돌아올주소() 는 시작한 그 페이지)
+         → SDK 가 이걸 읽어 로그인을 마쳐야 하니 바로 받는다
+     에디터·요금제·계정·결제·관리자 페이지는 이 표시가 없어서 예전과 똑같이 바로 받는다.
+     검사: tests/verify_lazyload.mjs */
+  function 늦게받나() { return document.documentElement.hasAttribute("data-auth-lazy"); }
+  function 세션흔적() {
+    var n = 0;
+    try { n += 세션열쇠(localStorage).length; } catch (e) { /* 막힌 저장소 — 흔적 없음으로 */ }
+    try { n += 세션열쇠(sessionStorage).length; } catch (e) { /* 무시 */ }
+    return n > 0;
+  }
+  function 돌아온주소() {
+    var h = String(location.hash || ""), q = String(location.search || "");
+    return h.indexOf("access_token=") >= 0 || h.indexOf("refresh_token=") >= 0 ||
+           h.indexOf("error_description=") >= 0 || h.indexOf("type=recovery") >= 0 ||
+           /[?&](code|error|error_description)=/.test(q);
   }
 
   /* ── 로그인 상태 유지 ───────────────────────────────
@@ -240,7 +267,11 @@ WE.auth = (function () {
   }
 
   /* 로그인 후 프로필 한 줄을 읽어 온다.
-     RLS 때문에 남의 행은 애초에 안 온다 — 조건을 걸 필요가 없다.
+     ⚠ **내 것만 묻는다 (user_id 조건).** 예전 주석은 "RLS 때문에 남의 행은 애초에 안 온다 —
+        조건을 걸 필요가 없다" 였는데, 2026-09-22 에 「관리자는 모든 프로필 읽기」 규칙이 더해진 뒤로는
+        관리자에게 **모든 회원의 줄**이 왔다. .single() 이 여러 줄을 받아 406 → Pro 확인 실패 →
+        7일 유예 뒤 관리자 본인이 무료로 떨어진다(2026-09-27 발견). RLS 는 막는 장치이고,
+        무엇을 물을지는 여기서 정한다 — payrecover.js 와 같은 원칙. 검사: tests/verify_ownrows.mjs
 
      ⚠ 응답이 늦게 도착하는 경우를 반드시 걸러내야 한다.
         조회를 시작한 뒤 로그아웃하거나 계정을 바꾸면,
@@ -256,7 +287,7 @@ WE.auth = (function () {
     // 더 최신 요청이 생겼거나, 로그아웃했거나, 계정이 바뀌었으면 무시한다.
     function 유효한가() { return seq === _reqSeq && _user && _user.id === who; }
 
-    client.from("profiles").select("plan, expires_at, source, agreed_at, marketing_opt_in").single()
+    client.from("profiles").select("plan, expires_at, source, agreed_at, marketing_opt_in").eq("user_id", who).single()
       .then(function (res) {
         if (!유효한가()) { if (done) done(); return; }
         if (res.error) {
@@ -312,10 +343,40 @@ WE.auth = (function () {
 
   /* ── 공개 API ───────────────────────────────────────────────────── */
 
+  var _늦춤 = false;      // SDK 를 늦춰 둔 상태인가 (랜딩 첫 방문자)
+  var _준비중 = null;     // 늦춰 둔 SDK 를 받는 중이면 끝나고 부를 함수들
+
   function init(done) {
     // 출시 전에는 로그인을 안 하지만, 주소에 토큰이 붙어 왔다면 지우고 끝낸다
     if (!usable()) { 남은토큰지우기(); if (done) done(); return; }
 
+    // 랜딩 첫 방문자 — SDK 없이 '로그아웃' 으로 확정한다. 상태는 SDK 를 받은 뒤의 로그아웃과 같다
+    // (applySession(null) → 프로필 없음 → _ready → notify). 위 「SDK 늦게 받기」 참조
+    if (늦게받나() && !세션흔적() && !돌아온주소()) {
+      _늦춤 = true;
+      applySession(null, done);
+      return;
+    }
+    시작(done);
+  }
+
+  /* 늦춰 둔 SDK 를 지금 받는다. 이미 있으면 바로 cb(true). 여러 곳에서 동시에 불러도 한 번만 받는다.
+     cb(false) = 못 받았다(인터넷 등) — 부른 쪽이 원래 문구("로그인 기능을 불러오지 못했습니다")를 낸다. */
+  function 준비(cb) {
+    cb = cb || function () {};
+    if (client) { cb(true); return; }
+    if (!_늦춤 || !usable()) { cb(false); return; }
+    if (_준비중) { _준비중.push(cb); return; }
+    _준비중 = [cb];
+    시작(function () {
+      var 목록 = _준비중; _준비중 = null;
+      if (client) _늦춤 = false;   // 못 받았으면 늦춘 상태로 남겨 다음에 다시 시도한다
+      목록.forEach(function (f) { try { f(!!client); } catch (e) { /* 한 곳이 터져도 나머지는 */ } });
+    });
+  }
+
+  // SDK 를 받고 클라이언트를 만든 뒤 세션을 읽는다 (예전 init 의 본문 그대로)
+  function 시작(done) {
     loadSdk(function (ok) {
       if (!ok) { if (done) done(); return; }       // SDK 를 못 받아도 앱은 돈다
 
@@ -457,6 +518,8 @@ WE.auth = (function () {
     function fail(msg) { if (onFail) onFail(msg); }
     if (!usable()) { fail("이 환경에서는 로그인을 사용할 수 없습니다."); return; }
     if (!client) {
+      // 랜딩에서 SDK 를 늦춰 뒀다면 지금 받고 이어서 간다. 못 받았을 때만 아래 문구
+      if (_늦춤) { 준비(function (ok) { if (ok) signIn(provider, onFail); else fail("로그인 기능을 불러오지 못했습니다. 인터넷 연결을 확인하고 새로고침해 주세요."); }); return; }
       fail("로그인 기능을 불러오지 못했습니다. 인터넷 연결을 확인하고 새로고침해 주세요.");
       return;
     }
@@ -620,6 +683,7 @@ WE.auth = (function () {
   function signUpEmail(정보, done) {
     /* 칸: 어느 입력칸의 문제인지("email"). 호출부가 그 칸 아래에 오류를 붙인다. */
     function 끝(err, 상태, 칸) { if (done) done(err || null, 상태 || null, 칸 || null); }
+    if (!client && _늦춤) { 준비(function (ok) { if (ok) signUpEmail(정보, done); else 끝("로그인 기능을 불러오지 못했습니다. 새로고침해 주세요."); }); return; }   // 랜딩: SDK 를 지금 받고 이어서
     if (!client) { 끝("로그인 기능을 불러오지 못했습니다. 새로고침해 주세요."); return; }
     client.auth.signUp({
       email: 정보.email,
@@ -673,6 +737,7 @@ WE.auth = (function () {
   /* 확인 메일을 다시 보낸다 (스팸함에 갔거나 못 받은 경우). */
   function resendConfirm(email, done) {
     function 끝(err) { if (done) done(err || null); }
+    if (!client && _늦춤) { 준비(function (ok) { if (ok) resendConfirm(email, done); else 끝("로그인 기능을 불러오지 못했습니다. 새로고침해 주세요."); }); return; }   // 랜딩: SDK 를 지금 받고 이어서
     if (!client) { 끝("로그인 기능을 불러오지 못했습니다. 새로고침해 주세요."); return; }
     client.auth.resend({
       type: "signup",
@@ -698,6 +763,7 @@ WE.auth = (function () {
     /* 두 번째 인자로 '왜 실패했는가' 를 알려준다.
        미인증은 오류가 아니라 '아직 안 끝난 절차' 라서, 화면 자체를 바꿔야 한다. */
     function 끝(err, 상태) { if (done) done(err || null, 상태 || null); }
+    if (!client && _늦춤) { 준비(function (ok) { if (ok) signInEmail(email, password, done); else 끝("로그인 기능을 불러오지 못했습니다. 새로고침해 주세요."); }); return; }   // 랜딩: SDK 를 지금 받고 이어서
     if (!client) { 끝("로그인 기능을 불러오지 못했습니다. 새로고침해 주세요."); return; }
     // 구글 로그인과 같은 이유 — 나가기 확인창이 먼저 뜨면 안 된다
     try { if (WE.io && WE.io.allowLeave) WE.io.allowLeave(); } catch (e) { /* 무시 */ }
@@ -725,6 +791,7 @@ WE.auth = (function () {
         화면에도 "가입된 주소라면 메일을 보냈습니다" 라고만 쓴다. */
   function resetPassword(email, done) {
     function 끝(err) { if (done) done(err || null); }
+    if (!client && _늦춤) { 준비(function (ok) { if (ok) resetPassword(email, done); else 끝("로그인 기능을 불러오지 못했습니다. 새로고침해 주세요."); }); return; }   // 랜딩: SDK 를 지금 받고 이어서
     if (!client) { 끝("로그인 기능을 불러오지 못했습니다. 새로고침해 주세요."); return; }
     client.auth.resetPasswordForEmail(email, { redirectTo: 돌아올주소() })
       .then(function (res) {
@@ -749,6 +816,7 @@ WE.auth = (function () {
      그 세션으로 자기 비밀번호만 바꾸는 것이라 별도 인증이 필요 없다. */
   function updatePassword(pw, done) {
     function 끝(err) { if (done) done(err || null); }
+    if (!client && _늦춤) { 준비(function (ok) { if (ok) updatePassword(pw, done); else 끝("로그인 기능을 불러오지 못했습니다. 새로고침해 주세요."); }); return; }   // 랜딩: SDK 를 지금 받고 이어서
     if (!client) { 끝("로그인 기능을 불러오지 못했습니다. 새로고침해 주세요."); return; }
     client.auth.updateUser({ password: pw })
       .then(function (res) {
@@ -812,6 +880,7 @@ WE.auth = (function () {
 
   return {
     init: init,
+    prepare: 준비,          // 늦춰 둔 SDK 를 지금 받는다 — 로그인 창을 열 때 부른다(아래 openLogin)
     signIn: signIn,
     signOut: signOut,
     lastProvider: lastProvider,
@@ -1054,6 +1123,9 @@ document.addEventListener("DOMContentLoaded", function () { WE.auth.init(); });
 
   function openLogin(errMsg) {
     var m = modal(); if (!m) return;
+    // 랜딩에서 SDK 를 늦춰 뒀다면 창이 뜨는 지금 받기 시작한다 — 사용자가 입력하는 동안 도착한다.
+    // (이미 있으면 아무 일도 안 한다. 여는 길이 여러 개라 openAuth 가 아니라 여기서 부른다)
+    if (WE.auth.prepare) WE.auth.prepare();
     /* 열 때마다 지난 입력을 지운다. 예전에는 그대로 남아서, 로그인에 실패하고 창을 닫았다
        다시 열면 **틀린 아이디·비밀번호가 그대로** 들어 있었다(2026-09-02 고원빈 지적). */
     if (_창비우기) _창비우기();
@@ -1153,9 +1225,11 @@ document.addEventListener("DOMContentLoaded", function () { WE.auth.init(); });
       화면(어느쪽 === "signup" ? "up" : "in");
     };
 
-    /* 랜딩(index.html)의 「로그인」·「회원가입」에서 넘어온 경우 — ?auth=login / ?auth=signup.
-       랜딩에는 인증 스크립트를 안 싣는다(auth.js 77KB + Supabase SDK 207KB). 첫 화면 속도를
-       그만큼 깎을 이유가 없어서, 여기 와서 해당 화면을 여는 방식으로 뒀다.
+    /* 주소에 ?auth=login / ?auth=signup 이 붙어 온 경우 — 그 화면을 연다.
+       랜딩(index.html)은 「로그인」·「회원가입」을 **그 자리에서** 연다(openAuth). 이 주소는 랜딩의 스크립트가
+       실패했을 때 링크(href="app.html?auth=login")를 따라 에디터로 넘어온 경우의 대비다.
+       ⚠ 예전 주석은 "랜딩에는 인증 스크립트를 안 싣는다"였는데 사실이 아니게 된 지 오래다 — 랜딩도 auth.js 를 싣는다.
+          대신 랜딩은 SDK(207KB)를 필요할 때만 받는다(위 「SDK 늦게 받기」, 2026-09-27).
 
        ⚠ **세션 복원이 끝난 뒤에** 판단한다. 이미 로그인해 둔 사람에게 로그인 창을 띄우면 안 되는데,
           DOMContentLoaded 시점에는 user() 가 아직 비어 있다.

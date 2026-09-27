@@ -437,12 +437,18 @@
   var 내역조회함 = false;
   function 결제내역() {
     if (내역조회함) return;               // 그리기() 는 상태가 바뀔 때마다 불린다
+    // ⚠ 내 결제만 묻는다 (user_id 조건). 관리자는 RLS 로 모든 주문이 보여서, 조건이 없으면
+    //    다른 회원의 결제·영수증 링크가 '내 결제 내역' 에 섞였다 (2026-09-27, js/auth.js loadProfile 주석 참고).
+    //    로그인이 확정되기 전이면 아직 묻지 않는다 — 조회함 표시를 세우기 전에 확인해야 다음 그리기() 때 다시 온다.
+    var 나 = WE.auth && WE.auth.user && WE.auth.user();
+    if (!나) return;
     내역조회함 = true;
     var client = WE.auth && WE.auth._client && WE.auth._client();
     if (!client) return;
 
     client.from("orders")
       .select("id, plan, amount, status, paid_at, refund_amount, created_at, receipt_url")
+      .eq("user_id", 나.id)
       /* ⚠ 돈이 오간 것만 보여 준다.
          pending(결제창을 띄웠다 만 것) · failed · canceled 는 뺀다.
          결제 내역에서 손님이 알고 싶은 것은 "언제 얼마를 냈나" 하나다.
