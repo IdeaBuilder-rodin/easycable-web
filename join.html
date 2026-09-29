@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="ko" data-i18n-default="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>기관 참여 — 이지케이블 (EasyCable)</title>
+
+  <!-- ⚠ 검색에 나오면 안 되는 페이지다. 참여 링크는 선생님·담당자가 직접 나눠 주는 것이다. -->
+  <meta name="robots" content="noindex, nofollow" />
+
+  <link rel="icon" href="assets/favicon.svg" type="image/svg+xml" />
+  <link rel="apple-touch-icon" href="assets/icon-180.png" />
+  <link rel="stylesheet" href="landing.css?v=abcefcd7" />
+  <!-- 로그인·회원가입·동의 창의 겉모습 + 머리줄 오른쪽 프로필(.top-auth). 요금제 페이지와 같은 조합이다(landing.css + auth.css). -->
+  <link rel="stylesheet" href="auth.css?v=0880ba8a" />
+
+  <!-- 「로그인 확인 중」 표시를 첫 페인트 전에 건다 — pricing.html 과 **같은 코드**다(이유·주의는 그쪽 주석).
+       없으면 로그인한 사람에게도 한순간 「로그인·회원가입」 이 보였다가 아바타로 바뀐다.
+       2초 뒤에는 무슨 일이 있어도 스스로 걷는다(로그인을 못 쓰는 환경에서 버튼이 영영 사라지지 않게). -->
+  <script>
+    (function () {
+      var h = document.documentElement;
+      h.setAttribute("data-auth", "pending");
+      setTimeout(function () { h.removeAttribute("data-auth"); }, 2000);
+    })();
+  </script>
+
+  <!-- ─────────────────────────────────────────────────────────────────────
+       기관 참여 페이지 (2026-09-28)
+
+       ★ 왜 — 학교·기관이 학생들을 일정 기간 Pro 로 쓰게 할 때, 관리자가 만든 **참여 링크**
+          (join.html?j=GJMH7K3Q) 를 나눠 준다. 학생은 이 페이지에서 로그인하고 「참여하기」를 누른다.
+          그러면 관리자가 정한 폴더로 들어가고 기간 한정 Pro 가 된다.
+          조건 판정(정원·마감·기간)은 전부 서버 함수가 한다(_ai/sql/2026-09-28_폴더_참여링크.sql).
+          이 페이지는 보여 주고 누르는 것뿐이다.
+
+       ★ 왜 계정 페이지가 아니라 새 페이지인가
+          · 계정 페이지에는 로그인 창이 없다(로그인하러 랜딩으로 보낸다) → 돌아오면 랜딩이다.
+          · 로그인은 **시작한 페이지로 돌아온다**(auth.js 돌아올주소). 여기서 로그인하면 여기로 돌아온다.
+
+       ★ 코드를 적어 두는 이유 — 로그인하고 돌아오면 주소의 ? 뒤가 지워진다(auth.js 돌아올주소는
+          launch=1 말고는 버린다). 그래서 **페이지를 여는 순간** 코드를 브라우저에 적어 두고(30분),
+          돌아와서 꺼내 쓴다. js/app.js 의 we_admin_inbox 와 같은 방식이다.
+          ⚠ 변수 이름은 j 다. code 는 안 된다 — ?code= 는 로그인 복귀 표시로 이미 쓰인다(auth.js 돌아온주소).
+
+       ⚠ 관리자가 적은 글(링크 제목)은 **textContent 로만** 넣는다. innerHTML 에 넣으면 스크립트가 끼어들 수 있다.
+       ───────────────────────────────────────────────────────────────────── -->
+  <style>
+    .join-wrap { padding: 56px 0 80px; max-width: 560px; }
+    .join-title { font-size: 30px; letter-spacing: -.02em; margin: 0 0 26px; }
+
+    /* 계정 페이지(account.html)의 카드와 같은 모양 — 같은 사이트 안에서 화면마다 모양이 달라지지 않게 */
+    .join-card {
+      background: #fff; border: 1px solid #e3e7ec; border-radius: 16px;
+      padding: 36px 28px; text-align: center; color: #5f6771;
+    }
+    .join-card b.join-head { display: block; font-size: 20px; color: #2c3238; letter-spacing: -.02em; margin: 0 0 10px; word-break: break-all; }
+    .join-card p { margin: 0 0 18px; font-size: 15px; line-height: 1.7; }
+    .join-card p.join-small { font-size: 13px; color: #7b838d; margin-top: -8px; }
+    .join-acts { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+    /* <button> 은 글꼴을 물려받지 않는다 — 옆의 <a class="btn"> 과 글꼴이 달라 보이지 않게 */
+    .join-card button.btn { font-family: inherit; }
+    .join-card .btn[disabled] { opacity: .5; cursor: not-allowed; }
+    .join-card p.join-who { font-size: 13.5px; color: #3c434c; margin: -4px 0 16px; word-break: break-all; }
+    .join-card p.join-who b { font-weight: 600; }
+
+    .join-err {
+      background: #fdecea; border: 1px solid #f5c6c2; color: #b3261e;
+      border-radius: 8px; padding: 10px 12px; font-size: 13px;
+      margin: 16px 0 0; line-height: 1.6;
+    }
+    .join-err[hidden] { display: none; }
+  </style>
+</head>
+<body>
+
+<header class="top">
+  <div class="wrap">
+    <a class="logo" href="index.html"><img class="brand-mark" src="assets/logo.svg" alt="" />이지케이블</a>
+    <nav>
+      <a href="index.html#outputs" class="hide-sm">기능</a>
+      <a href="pricing.html" class="hide-sm">요금제</a>
+      <a href="index.html#faq" class="hide-sm">자주 묻는 질문</a>
+      <a href="mailto:easycableinfo@gmail.com" class="hide-sm">문의</a>
+      <a class="btn btn-main btn-sm" href="app.html">배선 그리기</a>
+      <span class="lang-switch" aria-label="Language">
+        <button type="button" data-setlang="ko" lang="ko" data-short="KO">한국어</button><i aria-hidden="true">·</i><button type="button" data-setlang="en" lang="en" data-short="EN">English</button>
+      </span>
+      <!-- 로그인·회원가입 / 로그인하면 동그란 아바타(계정 메뉴: 이름·이메일·내 계정·요금제·로그아웃) — 2026-09-29
+           요금제·랜딩·에디터와 **같은 모양**이다(마크업은 js/authmodal.js 한 벌).
+           왜 — 관리자 계정으로 로그인된 채 링크를 열어 참여 확인이 바로 떴는데, 누구로 로그인됐는지 알 수 없었다(원빈). -->
+      <span class="top-auth">
+        <a href="app.html?auth=login" class="nav-auth" data-auth="login">로그인</a>
+        <a href="app.html?auth=signup" class="nav-auth hide-sm" data-auth="signup">회원가입</a>
+        <span id="acctSlot"></span>
+      </span>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap join-wrap">
+  <h1 class="join-title">기관 참여</h1>
+
+  <!-- 여섯 갈래 중 하나만 보인다 (보이기() 가 정한다) -->
+  <section class="join-card" id="joinLoading">
+    <p>불러오는 중…</p>
+  </section>
+
+  <!-- 링크에 코드가 없거나 모양이 틀렸다 -->
+  <section class="join-card" id="joinNoCode" hidden>
+    <b class="join-head">참여 링크가 올바르지 않습니다</b>
+    <p>받은 링크를 다시 확인해 주세요.</p>
+    <div class="join-acts"><a class="btn btn-sub" href="index.html">이지케이블 둘러보기</a></div>
+  </section>
+
+  <!-- 로그인 전 -->
+  <section class="join-card" id="joinGuest" hidden>
+    <b class="join-head">기관 참여 링크입니다</b>
+    <p>로그인하면 참여할 수 있어요.</p>
+    <div class="join-acts">
+      <!-- 로그인 창을 못 여는 환경이면 링크대로 에디터의 로그인으로 간다(요금제 페이지와 같은 방식) -->
+      <a class="btn btn-main" id="joinLogin" href="app.html?auth=login" data-auth="login">로그인</a>
+      <a class="btn btn-sub" id="joinSignup" href="app.html?auth=signup" data-auth="signup">회원가입</a>
+    </div>
+  </section>
+
+  <!-- 참여 확인 -->
+  <section class="join-card" id="joinConfirm" hidden>
+    <b class="join-head" id="joinTitle"></b>
+    <p id="joinWhat"></p>
+    <p class="join-small" id="joinConsent" hidden>약관 동의를 마치면 참여할 수 있습니다.</p>
+    <!-- 누구로 참여하는지 — 누르기 직전 눈에 들어오는 자리. 다른 계정이면 오른쪽 위 프로필에서 로그아웃한다 -->
+    <p class="join-who" id="joinWho"></p>
+    <div class="join-acts"><button type="button" class="btn btn-main" id="joinGo">참여하기</button></div>
+    <p class="join-err" id="joinErr" hidden></p>
+  </section>
+
+  <!-- 참여 완료 (이미 참여한 경우도 여기) -->
+  <section class="join-card" id="joinDone" hidden>
+    <b class="join-head" id="joinDoneHead">참여했습니다</b>
+    <p id="joinDoneWhat"></p>
+    <div class="join-acts"><a class="btn btn-main" href="app.html">에디터 열기</a></div>
+  </section>
+
+  <!-- 참여할 수 없음 (마감·정원·없는 링크·서버 오류) -->
+  <section class="join-card" id="joinFail" hidden>
+    <b class="join-head" id="joinFailHead"></b>
+    <p id="joinFailWhy"></p>
+    <div class="join-acts"><a class="btn btn-sub" href="app.html">에디터 열기</a></div>
+  </section>
+</main>
+
+<!-- ── 푸터 ─────────────────────────────────────────────────────────
+     ⚠ 법적 필수 영역 (전자상거래법 제10조). 항목을 임의로 지우지 말 것.
+     index.html · pricing.html · account.html 푸터와 글자 하나까지 같아야 한다 — PG 심사가 대조한다. -->
+<footer>
+  <div class="wrap">
+    <div class="foot-top">
+      <div class="foot-brand">
+        <p class="biz-name">이지케이블</p>
+        <p class="foot-tag">부품 사진을 올리고 단자를 이으면,<br />그게 배선도가 됩니다.</p>
+      </div>
+      <nav class="foot-cols">
+        <div>
+          <b>제품</b>
+          <a href="app.html">배선 그리기</a>
+          <a href="index.html#outputs">기능</a>
+          <a href="pricing.html">요금제</a>
+        </div>
+        <div>
+          <b>지원</b>
+          <a href="index.html#faq">자주 묻는 질문</a>
+          <a href="mailto:easycableinfo@gmail.com">이메일 문의</a>
+        </div>
+        <div>
+          <b>법적 고지</b>
+          <a href="terms.html">이용약관</a>
+          <a href="privacy.html">개인정보처리방침</a>
+          <a href="terms.html#refund">환불 정책</a>
+        </div>
+      </nav>
+    </div>
+
+    <p class="biz">
+      상호 아이비엑스(IBX)
+      <span class="sep">|</span>
+      대표 고원빈
+      <span class="sep">|</span>
+      사업자등록번호 497-25-02151 (간이과세자)
+      <span class="sep">|</span>
+      통신판매번호 제2026-영종구-0124호
+      <br />
+      주소 인천광역시 영종구 하늘별빛로 66 (중산동, 영종힐스테이트)
+      <br />
+      전화 010-2864-7171
+      <span class="sep">|</span>
+      이메일 easycableinfo@gmail.com
+    </p>
+
+    <p class="copy">© 2026 EasyCable. All rights reserved.</p>
+  </div>
+</footer>
+
+<!-- 순서는 요금제 페이지와 같다 — authmodal 이 auth 앞에 와야 로그인 창 단추가 매달린다(authmodal.js 머리말) -->
+<script src="js/flags.js?v=d53ae8fb"></script>
+<script src="js/i18n.js?v=275ab437"></script>
+<script src="js/authmodal.js?v=2bee75f1"></script>
+<script src="js/auth.js?v=596c2dd8"></script>
+<script>
+  // 번역 — i18n.js 가 실려 있으면 사전으로, 없으면 원문 그대로 (account.html 과 같은 방식)
+  var tr = function (s) { return (window.WE && WE.i18n && WE.i18n.t) ? WE.i18n.t(s) : s; };
+
+(function () {
+  "use strict";
+  function $(id) { return document.getElementById(id); }
+
+  var 적어둘키 = "we_join_code";
+  var 유효분 = 30;            // 로그인·회원가입(메일 확인 포함)에 넉넉한 시간. 너무 길면 공용 PC 에서 다음 사람에게 남는다
+
+  /* 코드 정리 — 대소문자·하이픈·공백을 무시한다. 서버(_ezc_norm_code)와 같은 규칙.
+     8자 영숫자가 아니면 null — 모양이 틀린 코드로 서버를 부를 이유가 없다. */
+  function 정리(v) {
+    var s = String(v || "").toUpperCase(), 결과 = "";
+    for (var i = 0; i < s.length; i++) {
+      var c = s.charAt(i);
+      if ((c >= "A" && c <= "Z") || (c >= "0" && c <= "9")) 결과 += c;
+    }
+    return 결과.length === 8 ? 결과 : null;
+  }
+
+  function 주소코드() {
+    try { return 정리(new URLSearchParams(location.search).get("j")); } catch (e) { return null; }
+  }
+  function 적어두기(c) {
+    try { localStorage.setItem(적어둘키, JSON.stringify({ c: c, at: Date.now() })); } catch (e) { /* 사생활 보호 모드 — 이번 방문 동안만 기억한다 */ }
+  }
+  function 꺼내기() {
+    try {
+      var m = JSON.parse(localStorage.getItem(적어둘키) || "null");
+      if (!m || !m.c) return null;
+      if (Date.now() - (m.at || 0) > 유효분 * 60000) { localStorage.removeItem(적어둘키); return null; }
+      return 정리(m.c);
+    } catch (e) { return null; }
+  }
+  function 지우기() {
+    try { localStorage.removeItem(적어둘키); } catch (e) { /* 무시 */ }
+  }
+
+  // 미리보기 표시(?launch=1)는 남긴다 — 로컬 확인에서 이게 떨어지면 로그인 자체가 꺼진다(auth.js 돌아올주소)
+  function 표시() {
+    return /[?&]launch=1(&|$)/.test(String(location.search || "")) ? "?launch=1" : "";
+  }
+
+  /* ── 코드 받기 ─────────────────────────────────────────────────
+     주소에 있으면 적어 두고 주소창에서 지운다(새로고침·공유 때 다시 쓰이지 않게).
+     없으면 적어 둔 것을 꺼낸다 — 로그인하고 돌아온 경우다. */
+  var 코드 = 주소코드();
+  if (코드) {
+    적어두기(코드);
+    try { history.replaceState(null, "", location.pathname + 표시()); } catch (e) { /* 무시 */ }
+  } else {
+    코드 = 꺼내기();
+  }
+
+  var 미리보기 = null;       // join_link_preview 응답
+  var 읽는중 = false;
+  var 보내는중 = false;
+  var 끝남 = false;          // 완료·실패 화면을 띄웠으면 onChange 가 다시 와도 덮어쓰지 않는다
+  /* 마지막으로 화면을 그린 계정(id). 계정이 바뀌면(프로필 메뉴에서 로그아웃 → 다른 계정으로 로그인) 처음부터 다시 판단한다.
+     ⚠ 이게 없으면 첫 계정의 확인 화면·미리보기가 남아, 다른 계정으로 바꿨는데도 앞 계정 기준 화면이 보인다(9/29). */
+  var 마지막계정;
+
+  function 보이기(어느것) {
+    ["joinLoading", "joinNoCode", "joinGuest", "joinConfirm", "joinDone", "joinFail"].forEach(function (id) {
+      var e = $(id); if (e) e.hidden = (id !== 어느것);
+    });
+  }
+
+  function 날짜(v) {
+    if (!v) return "—";
+    var d = new Date(v);
+    if (isNaN(d.getTime())) return "—";
+    var 두자리 = function (n) { return (n < 10 ? "0" : "") + n; };
+    return d.getFullYear() + "." + 두자리(d.getMonth() + 1) + "." + 두자리(d.getDate());
+  }
+
+  function 제공설명(r) {
+    if (r.pro_mode === "until") return tr("{날짜}까지 Pro 기능을 쓸 수 있습니다.").replace("{날짜}", 날짜(r.pro_until));
+    if (r.pro_mode === "days")  return tr("참여한 날부터 {일}일 동안 Pro 기능을 쓸 수 있습니다.").replace("{일}", String(r.pro_days));
+    return tr("Pro 제공 없이 소속만 등록됩니다.");
+  }
+
+  /* 참여할 수 없는 이유 → 화면. 멈춤과 마감은 서버가 같은 'closed' 로 준다(어느 쪽인지 알릴 이유가 없다)
+     'active' — 기관 제공 Pro 가 아직 살아 있다. 살아 있는 동안에는 다른 링크로 더할 수 없다(2026-09-29 원빈 규칙).
+                끝나는 날짜를 함께 알려, 언제부터 새 링크로 참여할 수 있는지 알게 한다. r = 서버 응답(grant_until) */
+  function 실패(reason, r) {
+    var 머리 = {
+      none:   "참여 링크가 올바르지 않습니다",
+      closed: "참여가 마감된 링크입니다",
+      full:   "정원이 다 찼습니다",
+      active: "이미 기관 제공 Pro를 이용 중입니다"
+    }[reason] || "참여 정보를 불러오지 못했습니다";
+    var 이유 = reason === "active"
+      ? tr("{날짜}까지 이용할 수 있습니다. 기간이 끝난 뒤 새 참여 링크로 참여할 수 있습니다.").replace("{날짜}", 날짜(r && r.grant_until))
+      : tr(reason === "none" ? "받은 링크를 다시 확인해 주세요."
+         : (reason === "closed" || reason === "full") ? "링크를 보내 준 분께 문의해 주세요."
+         : "잠시 후 다시 시도해 주세요.");
+    $("joinFailHead").textContent = tr(머리);
+    $("joinFailWhy").textContent = 이유;
+    // 서버 오류가 아니면(링크나 계정 상태 때문) 적어 둔 코드도 버린다 — 다음에 또 같은 화면이 뜨지 않게
+    if (reason === "none" || reason === "closed" || reason === "full" || reason === "active") 지우기();
+    끝남 = true;
+    보이기("joinFail");
+  }
+
+  function 완료(r, 이미) {
+    지우기();
+    $("joinDoneHead").textContent = 이미 ? tr("이미 참여했습니다") : tr("참여했습니다");
+    $("joinDoneWhat").textContent = r && r.grant_until
+      ? tr("{날짜}까지 Pro 기능을 쓸 수 있습니다.").replace("{날짜}", 날짜(r.grant_until))
+      : tr("등록되었습니다.");
+    끝남 = true;
+    보이기("joinDone");
+  }
+
+  function 확인그리기() {
+    var r = 미리보기;
+    $("joinTitle").textContent = r.title || "";           // ⚠ 관리자가 적은 글 — textContent 로만
+    $("joinWhat").textContent = 제공설명(r);
+    // 누구로 참여하는지 — 관리자 계정으로 로그인된 채 링크를 열어 모르고 참여하는 것을 막는다(9/29 원빈이 실제로 그럴 뻔했다)
+    var u = WE.auth.user && WE.auth.user();
+    $("joinWho").textContent = u && u.email ? tr("{이메일} 계정으로 참여합니다").replace("{이메일}", u.email) : "";
+    // 약관 동의 전이면 누르지 못하게 — 동의 창은 auth.js 가 스스로 띄운다(동의확인). 서버도 한 번 더 막는다.
+    var 동의전 = !!(WE.auth.needsConsent && WE.auth.needsConsent());
+    $("joinConsent").hidden = !동의전;
+    $("joinGo").disabled = 동의전 || 보내는중;
+    보이기("joinConfirm");
+  }
+
+  function 미리보기읽기() {
+    var c = WE.auth._client && WE.auth._client();
+    if (!c) { 실패("error"); return; }
+    읽는중 = true;
+    보이기("joinLoading");
+    var 누구 = 마지막계정;
+    c.rpc("join_link_preview", { p_code: 코드 }).then(function (res) {
+      if (누구 !== 마지막계정) return;                     // 그 사이 계정이 바뀌었으면 앞 계정의 답은 버린다
+      읽는중 = false;
+      if (res.error || !res.data) { 실패("error"); return; }
+      var r = res.data;
+      if (r.ok && r.already) { 완료(r, true); return; }
+      if (!r.ok) { 실패(r.reason, r); return; }
+      미리보기 = r;
+      확인그리기();
+    }).catch(function () { if (누구 !== 마지막계정) return; 읽는중 = false; 실패("error"); });
+  }
+
+  function 참여하기() {
+    var c = WE.auth._client && WE.auth._client();
+    if (!c || !미리보기 || 보내는중) return;
+    보내는중 = true;
+    $("joinGo").disabled = true;
+    $("joinErr").hidden = true;
+    c.rpc("join_link_accept", { p_code: 코드 }).then(function (res) {
+      보내는중 = false;
+      if (res.error || !res.data) {
+        $("joinErr").textContent = tr("참여하지 못했습니다. 잠시 후 다시 시도해 주세요.");
+        $("joinErr").hidden = false;
+        확인그리기();
+        return;
+      }
+      var r = res.data;
+      if (r.ok) {
+        // 요금제를 다시 읽는다 — 이 탭의 Pro 상태가 바뀌고(onChange), 다른 탭의 에디터는
+        // 돌아올 때 pro.js 가 스스로 다시 읽는다
+        if (WE.auth.refreshProfile) { try { WE.auth.refreshProfile(); } catch (e) { /* 무시 */ } }
+        완료(r, !!r.already);
+        return;
+      }
+      if (r.reason === "consent") { 확인그리기(); return; }   // 동의 창이 뜬다
+      실패(r.reason, r);
+    }).catch(function () {
+      보내는중 = false;
+      $("joinErr").textContent = tr("참여하지 못했습니다. 잠시 후 다시 시도해 주세요.");
+      $("joinErr").hidden = false;
+      확인그리기();
+    });
+  }
+
+  /* 로그인 상태가 바뀔 때마다(onChange) 다시 판단한다 */
+  function 그리기() {
+    var A = window.WE && WE.auth;
+    var u = A && A.user && A.user();
+    var 지금계정 = u ? u.id : null;
+    if (지금계정 !== 마지막계정) {                        // 계정이 바뀌었다 — 링크 코드는 두고 나머지는 처음부터
+      마지막계정 = 지금계정; 미리보기 = null; 읽는중 = false; 끝남 = false;
+      if ($("joinErr")) $("joinErr").hidden = true;
+    }
+    if (끝남) return;
+    if (!코드) { 보이기("joinNoCode"); return; }
+    if (!u) {
+      // 아직 확인 중일 수 있다 — 확인이 끝나기 전에 "로그인하세요" 라고 단정하지 않는다(account.html 과 같은 원칙)
+      if (A && A._usable && A._usable() && A.ready && !A.ready()) { 보이기("joinLoading"); return; }
+      보이기("joinGuest");
+      return;
+    }
+    if (읽는중) return;
+    if (!미리보기) { 미리보기읽기(); return; }
+    확인그리기();                     // 동의가 끝났으면 단추가 풀린다
+  }
+
+  // 로그인·회원가입 — 이 페이지에서 창을 연다(돌아올 곳이 여기가 되도록). 못 열면 링크대로 간다.
+  // 카드 안의 단추와 머리줄 오른쪽 링크(.nav-auth) 둘 다
+  Array.prototype.forEach.call(document.querySelectorAll("#joinLogin, #joinSignup, a.nav-auth[data-auth]"), function (a) {
+    a.addEventListener("click", function (e) {
+      if (!(window.WE && WE.auth && WE.auth.openAuth)) return;
+      e.preventDefault();
+      WE.auth.openAuth(a.dataset.auth);
+    });
+  });
+  $("joinGo").addEventListener("click", 참여하기);
+
+  /* 머리줄 오른쪽 프로필 — 로그인했으면 「로그인·회원가입」 을 감추고 아바타를 보인다. **pricing.html 과 같은 코드**다.
+     ⚠ 보이고 감추는 것은 CSS(.top-auth.is-in)가 정한다. auth.js 의 paint() 가 #acctWrap 의 hidden 을 직접 만지므로
+        여기서 hidden 을 같이 만지면 누가 나중에 실행되느냐에 따라 결과가 달라진다 — 클래스만 붙였다 뗀다.
+     ⚠ 「확인 중」 표시는 **확정된 뒤에만** 걷는다(onChange 는 확정 전에도 울린다). 로그인을 못 쓰는 환경은 곧바로 확정. */
+  function 확정됐나() {
+    if (!(window.WE && WE.auth)) return false;
+    if (WE.auth._usable && !WE.auth._usable()) return true;
+    return !!(WE.auth.ready && WE.auth.ready());
+  }
+  function 계정표시() {
+    var box = document.querySelector(".top-auth");
+    if (!box) return;
+    box.classList.toggle("is-in", !!(window.WE && WE.auth && WE.auth.user && WE.auth.user()));
+    if (확정됐나()) document.documentElement.removeAttribute("data-auth");
+  }
+  if (WE.auth && WE.auth.onChange) WE.auth.onChange(계정표시);
+  계정표시();
+
+  // 검사가 서버 응답을 흉내 낸 뒤 화면을 다시 그리게 한다
+  window.WE = window.WE || {}; WE.ui = WE.ui || {};
+  WE.ui.joinPage = { 그리기: 그리기, 코드: function () { return 코드; }, 계정표시: 계정표시 };
+
+  document.addEventListener("DOMContentLoaded", function () {
+    그리기();
+    setTimeout(그리기, 1200);         // 세션 확인은 네트워크를 탄다 — onChange 가 오기 전에 한 번 더 본다
+  });
+  if (WE.auth && WE.auth.onChange) WE.auth.onChange(그리기);
+})();
+</script>
+</body>
+</html>

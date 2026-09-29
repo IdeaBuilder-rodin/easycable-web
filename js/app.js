@@ -1847,16 +1847,26 @@ WE.app = (function () {
   }
 
   // 배선도는 항상 표시. BOM/배선 리스트 탭 = 배선도 아래에 해당 창을 추가 표시(스크롤 이동), 배선도 탭 = 둘 다 숨김.
+  /* 배선도를 떠나기 직전의 가로 스크롤 — BOM·결선표에서 돌아올 때 되돌려 준다.
+     ⚠ 2026-09-28 수정: 도면을 확대해 오른쪽으로 스크롤한 채 BOM 탭을 누르면 세로만 내려가고
+        가로는 그대로 남아, BOM 표 왼쪽(번호·이름 열)이 화면 밖으로 잘렸다(실측 표 왼쪽 -1075px).
+        표는 늘 왼쪽 끝에서 시작하므로 표를 볼 때는 가로를 0 으로 보낸다.
+        대신 확대해서 보던 자리를 잃지 않게, 배선도로 돌아오면 보던 가로 위치를 되돌린다.
+        배선도 → 배선도(시트 탭 사이 이동)는 예전처럼 가로를 건드리지 않는다. */
+  var _도면가로 = 0;
   function switchView(view) {
     if (view === "wirelist" && !SHOW_WIRE_LIST) view = "wiring";   // 숨긴 상태에선 진입 자체를 막는다
-    _view = view; setActiveTab(view);
     var wrap = document.getElementById("canvasWrap");
+    var 이전 = _view;
+    if (이전 === "wiring" && view !== "wiring") _도면가로 = wrap.scrollLeft;
+    _view = view; setActiveTab(view);
     var bom = document.getElementById("bomView");
     var wl = document.getElementById("wireListView");
     bom.hidden = view !== "bom";
     wl.hidden = view !== "wirelist";
-    if (view === "bom") { renderBOMView(); wrap.scrollTo({ top: bom.offsetTop - 8, behavior: "smooth" }); }
-    else if (view === "wirelist") { renderWireListView(); wrap.scrollTo({ top: wl.offsetTop - 8, behavior: "smooth" }); }
+    if (view === "bom") { renderBOMView(); wrap.scrollTo({ top: bom.offsetTop - 8, left: 0, behavior: "smooth" }); }
+    else if (view === "wirelist") { renderWireListView(); wrap.scrollTo({ top: wl.offsetTop - 8, left: 0, behavior: "smooth" }); }
+    else if (이전 !== "wiring") { wrap.scrollTo({ top: 0, left: _도면가로, behavior: "smooth" }); }   // 표에서 돌아옴
     else { wrap.scrollTo({ top: 0, behavior: "smooth" }); }   // 배선도만
     syncCanvasMark();   // 탭 전환 직후엔 스크롤 애니메이션 중이라도, 곧이어 scroll 이벤트가 실제 위치로 다시 잡아준다
   }
@@ -2246,12 +2256,19 @@ WE.app = (function () {
   // 예전 프로젝트가 부품 인스턴스에 들고 있던 값도 함께 지워야 실제로 기본값이 나온다.
   function resetBomRow(key) {
     var proj = WE.model.project;
+    /* ⚠ 지우기 **전에** BOM 에서 고친 이름을 기억한다 (2026-09-28 수정).
+       BOM 이름 칸을 고치면 commitBomCell 이 도면 부품 이름(c.name)도 바꾸고 c.bomName 은 지운다.
+       예전 조건 `c.bomName` 은 그래서 늘 거짓이었고, ↺ 를 누르면 표는 기본 이름으로 돌아오는데
+       **도면 이름표는 고친 이름으로 남았다**(9/15 감사 7번). BOM 에서 준 그 이름을 달고 있는 부품만 되돌린다 —
+       속성창에서 따로 지은 이름까지 덮으면 안 되므로. */
+    var 고친이름 = proj.bomEdit && proj.bomEdit[key] ? proj.bomEdit[key].name : null;
     if (proj.bomEdit) delete proj.bomEdit[key];
     if (proj.bomPrice) delete proj.bomPrice[key];
     WE.model.allComponents().forEach(function (c) {
       if ((c.libraryId || c.publicId || ("name:" + c.name)) !== key) return;
       var lib = componentPart(c);
-      if (lib && c.bomName) c.name = lib.name;   // 캔버스 이름표도 부품 이름으로 되돌린다
+      // 캔버스 이름표도 부품 이름으로 되돌린다
+      if (lib && (c.bomName || (고친이름 != null && c.name === 고친이름))) c.name = lib.name;
       delete c.bomName; delete c.bomSpec; delete c.bomLink;
     });
     WE.render.renderAll();
@@ -2292,7 +2309,13 @@ WE.app = (function () {
       // 예전 프로젝트가 부품 인스턴스에 들고 있던 값은 정리한다 — 안 지우면 ↺ 를 눌러도 그게 남아 되살아난다
       WE.model.allComponents().forEach(function (c) {
         if ((c.libraryId || c.publicId || ("name:" + c.name)) !== key) return;
-        if (f === "name") { c.name = text; delete c.bomName; }
+        /* 칸을 비우면 표는 부품 기본 이름을 보여 준다(setBomEdit 가 편집을 지움) — 도면 이름표도 같아야 한다.
+           ⚠ 예전에는 c.name = "" 이 되어 도면에서 이름표가 통째로 사라졌다 (2026-09-28 수정) */
+        if (f === "name") {
+          var 부품 = componentPart(c);
+          c.name = (text === "" && 부품) ? 부품.name : text;
+          delete c.bomName;
+        }
         else if (f === "spec") delete c.bomSpec;
         else if (f === "link") delete c.bomLink;
       });
@@ -5840,6 +5863,7 @@ WE.app = (function () {
       var v = parseFloat(e.target.value); if (isNaN(v)) return;
       var 스냅 = ((Math.round(v / 90) * 90) % 360 + 360) % 360;
       applyProp(function (c) { c.rotation = 스냅; }, true);
+      회전뒤가두기(true);
     });
     document.getElementById("propRot").addEventListener("blur", function (e) {
       var c = WE.model.getSelectedComponent();
@@ -5848,10 +5872,23 @@ WE.app = (function () {
     // 음수가 나오지 않도록 360을 더한 뒤 나머지를 취한다 (-90 → 270)
     document.getElementById("propRot90").addEventListener("click", function () {
       applyProp(function (c) { c.rotation = (c.rotation + 90) % 360; }, false);
+      회전뒤가두기(false);
     });
     document.getElementById("propRotL").addEventListener("click", function () {
       applyProp(function (c) { c.rotation = (c.rotation + 270) % 360; }, false);
+      회전뒤가두기(false);
     });
+    /* 회전하고 나서 캔버스 밖으로 삐져나갔으면 끝 여백 안으로 당긴다 (2026-09-28 고원빈 결정).
+       예전에는 "삐져나간 만큼은 다음에 옮길 때 당긴다" 였다 — 그 사이 부품이 잘려 보였고
+       (실측: 왼쪽 끝에서 돌리면 31.5px 밖), 파일을 다시 열면 그만큼 저절로 움직였다.
+       ⚠ 회전과 **따로** applyProp 로 감싼다 — 같은 함수 안에서 돌리고 옮기면 회전 추종이
+          옛 중심 기준으로 수동 배선을 돌려서 꺾임점이 어긋난다. 이건 순수한 평행이동이라
+          단자 추종(withTermFollow)이 이동 때와 똑같이 꺾임점을 따라오게 한다.
+       한 번의 클릭 안에서 동기로 끝나므로 되돌리기는 한 단계다(history 는 700ms 마다 커밋). */
+    function 회전뒤가두기(fromInput) {
+      if (!WE.geometry || !WE.geometry.pullInside) return;
+      applyProp(function (c) { WE.geometry.pullInside(c); }, fromInput);
+    }
     document.getElementById("propBgRemove").addEventListener("click", function () {
       var c = WE.model.getSelectedComponent();
       if (!c || !c.image) return;
@@ -6027,13 +6064,28 @@ WE.app = (function () {
   // 툴바에 길게 늘어놓으면 줄이 접혀 화면이 흔들리고, 그러면 오히려 아무도 안 읽는다.
   // 화면 가운데서 한 번 막고 알린다. 되돌릴 수 없는 실패에만 쓴다 —
   // 성공·진행 상황까지 이걸로 알리면 곧 닫기 바쁜 창이 되어 정작 중요한 순간에도 안 읽힌다.
-  function notice(title, text) {
+  /* opts(선택) = { label, dismiss, run } — 안내에 '할 일' 버튼을 붙인다 (2026-09-28).
+     무료 한도 창이 쓴다: 「Pro로 계속 그리기」(주 버튼) + 「나중에 하기」. 누르면 창을 닫고 run() 을 부른다.
+     ⚠ 매번 처음 모양으로 되돌린다 — 안 그러면 앞선 한도 창의 버튼·글자가 다음 평범한 안내에 남는다.
+     ⚠ 초점은 「나중에 하기」에 둔다 — 막힌 순간 습관처럼 Enter 를 눌렀는데 결제 페이지가 열리면 불쾌하다. */
+  var _noticeRun = null;
+  function notice(title, text, opts) {
     var m = document.getElementById("noticeModal");
     if (!m) { alert(title + "\n\n" + (text || "")); return; }   // 마크업이 없으면 최소한 알리기는 한다
     document.getElementById("noticeTitle").textContent = title;
     document.getElementById("noticeText").textContent = text || "";
-    m.hidden = false;
+    _noticeRun = (opts && typeof opts.run === "function") ? opts.run : null;
     var ok = document.getElementById("noticeOk");
+    var act = document.getElementById("noticeAction");
+    if (act) {
+      act.hidden = !_noticeRun;
+      act.textContent = _noticeRun ? (opts.label || "") : "";
+    }
+    if (ok) {
+      ok.textContent = _noticeRun ? (opts.dismiss || WE.i18n.t("나중에 하기")) : WE.i18n.t("확인");
+      ok.classList.toggle("primary", !_noticeRun);
+    }
+    m.hidden = false;
     if (ok) ok.focus();
   }
   /* 안내 모달이 지금 떠 있는가.
@@ -6047,6 +6099,13 @@ WE.app = (function () {
     var m = document.getElementById("noticeModal"); if (!m) return;
     function close() { m.hidden = true; }
     document.getElementById("noticeOk").addEventListener("click", close);
+    // '할 일' 버튼 — 먼저 창을 닫고 부른다(요금제 새 탭이 열려도 돌아오면 작업 화면이 그대로 보이게)
+    var act = document.getElementById("noticeAction");
+    if (act) act.addEventListener("click", function () {
+      var run = _noticeRun;
+      close();
+      if (run) { try { run(); } catch (e) { /* 할 일이 실패해도 창은 닫힌 채로 둔다 */ } }
+    });
     m.addEventListener("click", function (e) { if (e.target === m) close(); });   // 바깥을 눌러도 닫힘
     m.addEventListener("keydown", function (e) { if (e.key === "Escape") close(); });
   }

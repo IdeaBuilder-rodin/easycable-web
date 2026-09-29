@@ -1839,6 +1839,17 @@ WE.interactions = (function () {
 
   function onPointerUp(e) {
     if (!drag) return;
+    /* 회전 핸들로 돌리고 손을 떼면, 캔버스 밖으로 삐져나간 만큼 끝 여백 안으로 당긴다 (2026-09-28).
+       끄는 동안에는 각도만 바꾼다 — 매 프레임 당기면 돌리는 중에 부품이 미끄러져 조작이 어렵다.
+       속성창 회전 버튼(app.js 회전뒤가두기)과 같은 규칙이다. 평행이동이라 withTermFollow 로
+       수동 배선 꺾임점이 이동 때와 똑같이 따라온다. 아래 공통 끝처리에서 renderAll·commit 이 된다. */
+    if (drag.mode === "rotate") {
+      var 돈부품 = WE.model.getComponent(drag.id);
+      if (돈부품 && WE.geometry.pullInside) {
+        withTermFollow([돈부품.id], function () { WE.geometry.pullInside(돈부품); });
+        WE.render.renderAll();
+      }
+    }
     if (drag.mode === "pan") {
       document.body.classList.remove("panning");
       try { svg.releasePointerCapture(e.pointerId); } catch (err) {}

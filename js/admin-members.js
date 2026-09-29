@@ -32,14 +32,28 @@
   window.WE = window.WE || {};
 
   var PAGE = 60;            // 한 번에 읽는 회원 수. 더 필요하면 「더 보기」
-  var 회원들 = [];
+
+  /* ★ 왼쪽 계정란은 두 모양이다 (2026-09-29 — 폴더를 이 화면으로 합침, 고원빈 결정)
+       · 폴더 묶음(기본) — 「일반 회원」(폴더 없음) 과 폴더들이 파일 탐색기처럼 펼침·접힘으로 묶인다.
+         묶음마다 따로 서버에서 60명씩 읽는다(일반 회원은 수천 명이 될 수 있어 한 번에 다 안 읽는다).
+       · 검색 결과(평평) — 이메일로 찾을 때만. 묶음을 풀고 결과를 나열한다(9/28 까지의 목록 모양 그대로).
+         누가 어느 폴더에 있든 한 번에 찾을 수 있어야 해서다. 검색창을 비우고 Enter 하면 묶음으로 돌아온다. */
+  var 평평 = false;
+  var 회원들 = [];          // 검색 결과
   var 전체수 = 0;
-  var 고른회원 = null;      // user_id
+  var 읽는중 = false;
+  var 읽기오류 = null;
+  /* 묶음 — 키: "none"(일반 회원 = 폴더 없음) 또는 폴더 id
+     값: { 열림, 회원: [], 전체, 읽는중, 오류, 읽음, 차례 } — 차례는 늦게 온 응답을 버리려고 센다 */
+  var 묶음 = {};
+  var 폴더목록 = [];        // admin_folders — 묶음 머리줄 · 「회원 설정」 의 폴더 고르기에 쓴다
+  var 폴더오류 = null;
+
+  var 고른회원 = null;      // user_id — 오른쪽 칸이 「회원」
+  var 고른폴더 = null;      // folder id — 오른쪽 칸이 「폴더 관리」 (둘 중 하나만 선다)
   var 주문들 = [];
   var 고른주문 = null;      // order id
   var 계산결과 = null;      // payment-cancel 미리보기 응답
-  var 읽는중 = false;
-  var 읽기오류 = null;
   var 주문오류 = null;
   var 들어온적 = false;
 
@@ -75,6 +89,33 @@
   function 프로인가(m) {
     return m && m.plan === "pro" && m.expires_at && new Date(m.expires_at).getTime() > Date.now();
   }
+  /* 기관 제공 Pro 가 살아 있는가 (2026-09-28). 결제 Pro 와 **따로** 본다 — 환불 판단이 다르다 */
+  function 제공중(m) {
+    return !!(m && m.grant_until && new Date(m.grant_until).getTime() > Date.now());
+  }
+  /* <input type="date"> 에 넣을 값 — 한국 시각의 날짜(YYYY-MM-DD).
+     ⚠ toISOString().slice(0,10) 으로 자르면 안 된다. 「참여일부터 N일」 로 받은 기간은 끝나는 시각이
+        제각각이라, 한국 시각 00~09시에 끝나면 UTC 로는 **전날**이다 → 하루 앞 날짜가 칸에 들어가고,
+        관리자가 모르고 [저장]하면 기간이 하루 줄어든다. */
+  function 날짜칸(v) {
+    if (!v) return "";
+    var d = new Date(v); if (isNaN(d.getTime())) return "";
+    return d.toLocaleDateString("en-CA", { timeZone: "Asia/Seoul" });
+  }
+  /* 고른 회원을 찾는다 — 지금 보이는 모양(검색 결과 / 묶음들) 어디에 있든 */
+  function 회원찾기(uid) {
+    if (!uid) return null;
+    var 목록 = 평평 ? [회원들] : Object.keys(묶음).map(function (k) { return 묶음[k].회원; });
+    for (var j = 0; j < 목록.length; j++) {
+      for (var i = 0; i < 목록[j].length; i++) if (목록[j][i].user_id === uid) return 목록[j][i];
+    }
+    return null;
+  }
+  function 폴더찾기(id) {
+    for (var i = 0; i < 폴더목록.length; i++) if (폴더목록[i].id === id) return 폴더목록[i];
+    return null;
+  }
+  function 새묶음(열림) { return { 열림: !!열림, 회원: [], 전체: 0, 읽는중: false, 오류: null, 읽음: false, 차례: 0 }; }
 
   var 상태이름 = {
     pending: "미완료", paid: "결제완료", failed: "실패", canceled: "취소",
@@ -86,16 +127,23 @@
          : (s === "failed" || s === "canceled") ? "failed" : "";
   }
 
-  // ── 회원 목록 읽기 ────────────────────────────────────────────────────────
-  function 회원읽기(이어서) {
+  // ── 검색 결과 읽기 (평평한 목록) ──────────────────────────────────────────
+  /* 유지uid — 회원 설정을 저장한 뒤처럼 **고른 회원을 그대로 둔 채** 목록만 새로 읽을 때 준다 */
+  function 회원읽기(이어서, 유지uid) {
     var c = client();
     if (!c) { 읽기오류 = "로그인 정보를 읽지 못했습니다."; 회원그리기(); return Promise.resolve(); }
     읽는중 = true; 읽기오류 = null;
-    if (!이어서) { 회원들 = []; 고른회원 = null; 주문들 = []; 고른주문 = null; 계산결과 = null; }
-    회원그리기();
+    if (!이어서) {
+      회원들 = [];
+      if (!유지uid) { 고른회원 = null; 주문들 = []; 고른주문 = null; 계산결과 = null; }
+    }
+    회원그리기(); 회원설정그리기();
 
     var 검색 = ($("admMemSearch") && $("admMemSearch").value || "").trim();
-    return c.rpc("admin_members", { p_q: 검색 || null, p_limit: PAGE, p_offset: 회원들.length })
+    /* ⚠ 폴더 인자를 안 보낸다(인자 셋) — 검색은 폴더와 상관없이 전체에서 찾는다.
+       덤으로 폴더 SQL 을 아직 안 돌린 DB 의 옛 admin_members(인자 셋)로도 검색은 그대로 돈다. */
+    var 인자 = { p_q: 검색 || null, p_limit: PAGE, p_offset: 회원들.length };
+    return c.rpc("admin_members", 인자)
       .then(function (res) {
         읽는중 = false;
         if (res.error) {
@@ -107,7 +155,9 @@
         var rows = res.data || [];
         전체수 = rows.length ? Number(rows[0].total_count || rows.length) : (이어서 ? 전체수 : 0);
         회원들 = 회원들.concat(rows);
-        회원그리기(); msg("");
+        // 고른 회원이 새 목록에서 빠졌으면 선택을 푼다
+        if (유지uid && !회원찾기(유지uid)) { 고른회원 = null; 주문들 = []; 고른주문 = null; 계산결과 = null; 주문그리기(); 상세그리기(); }
+        회원그리기(); 오른쪽그리기(); msg("");
       })
       .catch(function (e) {
         읽는중 = false; 읽기오류 = (e && e.message) || "서버에 닿지 못했습니다.";
@@ -115,13 +165,68 @@
       });
   }
 
+  // ── 묶음 읽기 (폴더 하나 · 일반 회원) ────────────────────────────────────
+  /* 키 = "none"(폴더 없음) 또는 폴더 id. admin_members 의 p_no_folder / p_folder 로 그 묶음만 읽는다 */
+  function 묶음읽기(키, 이어서) {
+    var c = client(); var g = 묶음[키];
+    if (!g) return Promise.resolve();
+    if (!c) { g.오류 = "로그인 정보를 읽지 못했습니다."; 회원그리기(); return Promise.resolve(); }
+    if (!이어서) g.회원 = [];
+    g.읽는중 = true; g.오류 = null;
+    var 이번 = ++g.차례;
+    회원그리기();
+    var 인자 = { p_q: null, p_limit: PAGE, p_offset: g.회원.length };
+    if (키 === "none") 인자.p_no_folder = true; else 인자.p_folder = 키;
+    return c.rpc("admin_members", 인자).then(function (res) {
+      if (이번 !== g.차례) return;                    // 그 사이 같은 묶음을 또 읽었으면 늦게 온 것은 버린다
+      g.읽는중 = false;
+      if (res.error) {
+        // ⚠ 조용히 빈 묶음을 보여 주지 않는다 — SQL 을 안 돌렸을 때가 가장 흔하다
+        g.오류 = res.error.message || "알 수 없는 오류"; 회원그리기(); return;
+      }
+      var rows = res.data || [];
+      g.전체 = rows.length ? Number(rows[0].total_count || rows.length) : (이어서 ? g.전체 : 0);
+      g.회원 = g.회원.concat(rows); g.읽음 = true;
+      회원그리기(); 오른쪽그리기();
+    }).catch(function (e) {
+      if (이번 !== g.차례) return;
+      g.읽는중 = false; g.오류 = (e && e.message) || "서버에 닿지 못했습니다."; 회원그리기();
+    });
+  }
+
+  // ── 그리기 ────────────────────────────────────────────────────────────────
+  /* 회원 한 줄. 폴더태그 — 검색 결과에서만 붙인다(묶음 안에서는 이미 그 폴더 아래라 중복이다) */
+  function 회원줄(m, 폴더태그) {
+    var el = document.createElement("div");
+    el.className = "adm-mem-user" + (m.user_id === 고른회원 ? " on" : "");
+    el.setAttribute("role", "button");
+    el.tabIndex = 0;
+    el.dataset.uid = m.user_id;
+    var 태그 = [];
+    // 결제 Pro(초록) · 기관 제공(보라)을 따로 보인다. 둘 다 없을 때만 「무료」 —
+    // 제공받는 학생에게 「무료」 와 「제공」 이 같이 붙으면 어느 쪽인지 헷갈린다.
+    if (프로인가(m)) 태그.push('<span class="adm-mem-tag pro">Pro · ' + esc(날짜(m.expires_at, true)) + '까지</span>');
+    else if (!제공중(m)) 태그.push('<span class="adm-mem-tag">무료</span>');
+    if (제공중(m)) 태그.push('<span class="adm-mem-tag grant">제공 · ' + esc(날짜(m.grant_until, true)) + '까지</span>');
+    if (폴더태그 && m.folder_name) 태그.push('<span class="adm-mem-tag fol">' + esc(m.folder_name) + '</span>');
+    if (m.order_count > 0) 태그.push('<span class="adm-mem-tag">결제 ' + m.order_count + '건 · ' + esc(원(m.paid_total)) + '</span>');
+    if (m.refund_count > 0) 태그.push('<span class="adm-mem-tag">환불 ' + m.refund_count + '건</span>');
+    // 미완료 주문 — 「돈은 받고 이용권은 못 준」 후보라 눈에 띄게 (js/admin.js 의 놓친 결제 경고와 같은 취지)
+    if (m.pending_count > 0) 태그.push('<span class="adm-mem-tag warn">미완료 ' + m.pending_count + '건</span>');
+    el.innerHTML = "<b>" + esc(m.email || "(이메일 없음)") + "</b>" +
+      '<span class="adm-col-meta">가입 ' + esc(날짜(m.joined_at, true)) + "</span>" +
+      '<span class="adm-mem-tags">' + 태그.join("") + "</span>";
+    return el;
+  }
+
   function 회원그리기() {
+    if (!평평) { 묶음그리기(); return; }
     var box = $("admMemUsers"); if (!box) return;
     var stats = $("admMemStats");
     if (stats) {
       stats.textContent = 읽는중 ? "읽는 중…"
         : 읽기오류 ? ""
-        : (전체수 > 회원들.length ? 회원들.length + " / " + 전체수 + "명" : 회원들.length + "명");
+        : "검색 " + (전체수 > 회원들.length ? 회원들.length + " / " + 전체수 + "명" : 회원들.length + "명");
     }
 
     if (읽는중 && !회원들.length) { box.innerHTML = '<div class="adm-batch-empty">읽는 중…</div>'; return; }
@@ -133,25 +238,7 @@
     if (!회원들.length) { box.innerHTML = '<div class="adm-batch-empty">조건에 맞는 회원이 없습니다.</div>'; return; }
 
     box.innerHTML = "";
-    회원들.forEach(function (m) {
-      var el = document.createElement("div");
-      el.className = "adm-mem-user" + (m.user_id === 고른회원 ? " on" : "");
-      el.setAttribute("role", "button");
-      el.tabIndex = 0;
-      el.dataset.uid = m.user_id;
-      var 태그 = [];
-      태그.push(프로인가(m)
-        ? '<span class="adm-mem-tag pro">Pro · ' + esc(날짜(m.expires_at, true)) + '까지</span>'
-        : '<span class="adm-mem-tag">무료</span>');
-      if (m.order_count > 0) 태그.push('<span class="adm-mem-tag">결제 ' + m.order_count + '건 · ' + esc(원(m.paid_total)) + '</span>');
-      if (m.refund_count > 0) 태그.push('<span class="adm-mem-tag">환불 ' + m.refund_count + '건</span>');
-      // 미완료 주문 — 「돈은 받고 이용권은 못 준」 후보라 눈에 띄게 (js/admin.js 의 놓친 결제 경고와 같은 취지)
-      if (m.pending_count > 0) 태그.push('<span class="adm-mem-tag warn">미완료 ' + m.pending_count + '건</span>');
-      el.innerHTML = "<b>" + esc(m.email || "(이메일 없음)") + "</b>" +
-        '<span class="adm-col-meta">가입 ' + esc(날짜(m.joined_at, true)) + "</span>" +
-        '<span class="adm-mem-tags">' + 태그.join("") + "</span>";
-      box.appendChild(el);
-    });
+    회원들.forEach(function (m) { box.appendChild(회원줄(m, true)); });
 
     if (회원들.length < 전체수) {
       var more = document.createElement("button");
@@ -159,6 +246,250 @@
       more.textContent = "더 보기 (" + (전체수 - 회원들.length) + "명 남음)";
       box.appendChild(more);
     }
+  }
+
+  /* 폴더 묶음 — 맨 위 폴더들(처음엔 접힘, 한 줄씩) → 새 폴더 입력줄 → 맨 아래 「일반 회원」(폴더 없음, 펼침).
+     ⚠ 9/29 오전까지는 「일반 회원」 이 맨 위였다. 60명이 먼저 펼쳐져 폴더와 [새 폴더] 가 목록 한참 아래에 묻혔고,
+        원빈이 "링크 만들기가 안 보인다" 고 했다(스크린샷으로 확인). 폴더 머리줄은 한 줄씩이라 몇 개든 첫 화면에 들어간다. */
+  function 묶음그리기() {
+    var box = $("admMemUsers"); if (!box) return;
+    var stats = $("admMemStats");
+    if (stats) stats.textContent = 폴더오류 ? "" : "폴더 " + 폴더목록.length + "개";
+    // 새 폴더 입력줄에 적던 글자는 다시 그려도 남긴다(묶음 하나가 늦게 읽혀도 적던 것이 날아가지 않게)
+    var 적던 = $("admFolNewName") ? $("admFolNewName").value : "";
+    box.innerHTML = "";
+
+    폴더목록.forEach(function (f) { 묶음하나(box, f.id); });
+
+    if (폴더오류) {
+      var 알림 = document.createElement("div");
+      알림.className = "adm-batch-empty";
+      알림.innerHTML = "폴더를 읽지 못했습니다.<br />" + esc(폴더오류) +
+        "<br /><br /><code>_ai/sql/2026-09-28_폴더_참여링크.sql</code> 실행 여부를 확인하세요.";
+      box.appendChild(알림);
+    }
+
+    var form = document.createElement("form");
+    form.className = "adm-fol-new"; form.id = "admFolNew"; form.setAttribute("autocomplete", "off");
+    form.innerHTML = '<input type="text" id="admFolNewName" maxlength="60" placeholder="새 폴더 이름 (예: 공주마이스터고)" />' +
+      '<button type="submit" class="adm-edit-btn">새 폴더</button>';
+    box.appendChild(form);
+    if (적던) $("admFolNewName").value = 적던;
+
+    묶음하나(box, "none");
+  }
+
+  /* 묶음 하나 — 머리줄(▸/▾ 이름 · 인원) + 펼쳤으면 회원 줄들 */
+  function 묶음하나(box, 키) {
+      var g = 묶음[키] || (묶음[키] = 새묶음(키 === "none"));
+      var f = 키 === "none" ? null : 폴더찾기(키);
+      var 수 = 키 === "none"
+        ? (g.읽음 ? g.전체 + "명" : "")
+        : (f.member_count || 0) + "명" + (f.granted_count ? " · 제공 " + f.granted_count : "");
+
+      var head = document.createElement("button");
+      head.type = "button";
+      head.className = "adm-mem-grp" + (키 !== "none" && 키 === 고른폴더 ? " on" : "");
+      head.dataset.grp = 키;
+      if (키 !== "none") head.title = "더블클릭하면 이름을 바꿉니다";
+      head.innerHTML = '<span class="arr">' + (g.열림 ? "▾" : "▸") + "</span>" +
+        "<b>" + esc(키 === "none" ? "일반 회원" : f.name) + "</b>" +     // ⚠ 폴더 이름은 관리자가 적은 글
+        '<span class="adm-col-meta">' + esc(수) + "</span>";
+      box.appendChild(head);
+
+      var body = document.createElement("div");
+      body.className = "adm-mem-grp-body";
+      body.dataset.body = 키;
+      body.hidden = !g.열림;
+      if (g.열림) {
+        if (g.오류) {
+          body.innerHTML = '<div class="adm-batch-empty">회원을 읽지 못했습니다.<br />' + esc(g.오류) +
+            '<br /><br />관리자 권한과 <code>_ai/sql/2026-09-28_폴더_참여링크.sql</code> 실행 여부를 확인하세요.</div>';
+        } else if (g.읽는중 && !g.회원.length) {
+          body.innerHTML = '<div class="adm-col-meta">읽는 중…</div>';
+        } else if (!g.회원.length) {
+          body.innerHTML = '<div class="adm-col-meta">' + (키 === "none" ? "폴더 없는 회원이 없습니다." : "아직 참여한 회원이 없습니다.") + "</div>";
+        } else {
+          g.회원.forEach(function (m) { body.appendChild(회원줄(m, false)); });
+          if (g.회원.length < g.전체) {
+            var more = document.createElement("button");
+            more.type = "button"; more.className = "adm-more"; more.dataset.more = 키;
+            more.textContent = "더 보기 (" + (g.전체 - g.회원.length) + "명 남음)";
+            body.appendChild(more);
+          }
+        }
+      }
+      box.appendChild(body);
+  }
+
+  // ── 폴더 (2026-09-28 · 09-29 이 화면으로 합침) ─────────────────────────────
+  /* 폴더 목록 — 묶음 머리줄(이름·인원)과 「회원 설정」 의 폴더 고르기에 쓴다.
+     못 읽으면 조용히 넘어가지 않고 계정란에 이유를 보인다(SQL 을 안 돌렸을 때가 가장 흔하다). */
+  function 폴더읽기() {
+    var c = client(); if (!c) return Promise.resolve();
+    return c.rpc("admin_folders").then(function (res) {
+      if (res.error) { 폴더오류 = res.error.message || "알 수 없는 오류"; 회원그리기(); return; }
+      폴더오류 = null;
+      폴더목록 = res.data || [];
+      // 지워진 폴더의 묶음은 버린다 · 오른쪽 칸에 떠 있던 폴더가 지워졌으면 닫는다
+      Object.keys(묶음).forEach(function (k) { if (k !== "none" && !폴더찾기(k)) delete 묶음[k]; });
+      if (고른폴더 && !폴더찾기(고른폴더)) 고른폴더 = null;
+      회원그리기(); 오른쪽그리기(true);
+    }).catch(function (e) { 폴더오류 = (e && e.message) || "서버에 닿지 못했습니다."; 회원그리기(); });
+  }
+
+  /* 오른쪽 칸 — 폴더를 골랐으면 폴더 관리(admin-folders.js), 회원을 골랐으면 회원 설정 + 주문 상세.
+     맨 위 제목으로 지금 무엇을 보는지 밝힌다. 폴더일 때는 가운데 주문 칸을 접고 이 칸을 넓힌다(CSS .fol-mode).
+     폴더정보바뀜 — 폴더 목록을 새로 읽은 뒤(이름·인원이 바뀌었을 수 있다)만 true.
+       그 밖에는 같은 폴더가 이미 떠 있으면 폴더 관리를 다시 그리지 않는다 — 묶음 하나 읽을 때마다
+       링크를 다시 읽고, 적던 새 링크 양식이 지워지면 안 된다. */
+  function 오른쪽그리기(폴더정보바뀜) {
+    var head = $("admMemSideHead"), panel = $("admFolPanel"), det = $("admMemDetail");
+    var body = document.querySelector("#admMembers .adm-mem-body");
+    var f = 고른폴더 && 폴더찾기(고른폴더);
+    if (f) {
+      if (head) { head.textContent = "폴더 · " + f.name; head.hidden = false; }   // textContent — 관리자가 적은 글
+      if (panel) panel.hidden = false;
+      if (det) det.hidden = true;
+      if (body) body.classList.add("fol-mode");
+      회원설정그리기();                                 // 고른회원이 없으니 숨는다
+      var 떠있음 = WE.adminFolders && WE.adminFolders.current && WE.adminFolders.current() === f.id;
+      if (WE.adminFolders && WE.adminFolders.show && (폴더정보바뀜 || !떠있음)) WE.adminFolders.show(f);
+      return;
+    }
+    if (WE.adminFolders && WE.adminFolders.current && WE.adminFolders.current()) WE.adminFolders.hide();
+    if (panel) panel.hidden = true;
+    if (det) det.hidden = false;
+    if (body) body.classList.remove("fol-mode");
+    var m = 회원찾기(고른회원);
+    if (head) { head.hidden = !m; head.textContent = m ? "회원 · " + (m.email || "(이메일 없음)") : ""; }
+    회원설정그리기();
+  }
+
+  /* 폴더 머리줄을 눌렀다 — 처음 누르면 펼치고 오른쪽에 그 폴더 관리, 떠 있는 폴더를 다시 누르면 접는다.
+     「일반 회원」 머리줄은 펼침·접힘만 한다(관리할 폴더가 아니다). */
+  function 머리줄누름(키) {
+    var g = 묶음[키] || (묶음[키] = 새묶음(false));
+    if (키 !== "none" && 고른폴더 !== 키) {
+      고른폴더 = 키; 고른회원 = null; 주문들 = []; 고른주문 = null; 계산결과 = null;
+      g.열림 = true;
+    } else {
+      g.열림 = !g.열림;
+    }
+    if (g.열림 && !g.읽음 && !g.읽는중) 묶음읽기(키, false);
+    회원그리기(); 오른쪽그리기(); 주문그리기(); 상세그리기();
+  }
+
+  /* 폴더 관리(admin-folders.js)가 무언가를 바꿨다 — 인원수·이름을 다시 읽는다.
+     opts.select: 그 뒤 오른쪽 칸에 둘 폴더(null 이면 닫는다) · opts.removed: 지운 폴더 · opts.reload: 다시 읽을 묶음 */
+  function foldersChanged(opts) {
+    opts = opts || {};
+    if ("select" in opts) 고른폴더 = opts.select || null;
+    if (opts.removed) delete 묶음[opts.removed];
+    var 다시 = opts.reload;
+    return 폴더읽기().then(function () {
+      if (다시 && 묶음[다시] && (묶음[다시].읽음 || 묶음[다시].열림)) 묶음읽기(다시, false);
+    });
+  }
+
+  /* 폴더 이름 바꾸기 — 머리줄을 더블클릭하면 그 자리에 입력칸을 끼운다 (2026-09-29 원빈 — 파일 탐색기처럼)
+     Enter = 저장 · Esc · 바깥 누르기 = 취소 · 빈 이름·같은 이름은 저장하지 않는다.
+     ⚠ 입력칸을 머리줄 <button> **안에** 두면 Enter·Space 가 버튼을 눌러 펼침/접힘이 돼 버린다 → 버튼은 숨기고 바로 앞에 둔다.
+     ⚠ 머리줄은 CSS 가 display:flex 라 hidden 속성으로는 안 숨는다 → style 로 숨긴다(다시 그리면 원래대로 돌아온다).
+     저장은 WE.adminFolders.rename — 메모를 함께 보내 메모가 지워지지 않게 한다. */
+  function 이름바꾸기(머리) {
+    var 키 = 머리.dataset.grp, f = 폴더찾기(키);
+    if (!f || !WE.adminFolders || !WE.adminFolders.rename) return;
+    var 칸 = document.createElement("input");
+    칸.type = "text"; 칸.className = "adm-mem-grp-rename"; 칸.id = "admFolRename"; 칸.maxLength = 60; 칸.value = f.name;
+    머리.style.display = "none";
+    머리.parentNode.insertBefore(칸, 머리);
+    칸.focus(); 칸.select();
+    var 끝 = false;
+    function 취소() { if (끝) return; 끝 = true; 회원그리기(); }
+    칸.addEventListener("keydown", function (ev) {
+      if (ev.key === "Escape") { ev.preventDefault(); 취소(); return; }
+      if (ev.key !== "Enter") return;
+      ev.preventDefault();
+      var 새 = 칸.value.trim();
+      if (!새 || 새 === f.name) { 취소(); return; }
+      끝 = true; 칸.disabled = true;
+      WE.adminFolders.rename(f, 새).then(function (ok) {
+        if (ok) foldersChanged({ select: 고른폴더 });   // 머리줄·오른쪽 제목을 새 이름으로 다시 그린다
+        else 회원그리기();                               // 실패(같은 이름 폴더 등) — 이유는 아래 알림줄에 뜬다
+      });
+    });
+    칸.addEventListener("blur", 취소);
+  }
+
+  /* 새 폴더 — 계정란 맨 아래 입력줄. 만들면 그 폴더를 펼치고 오른쪽에 관리 화면을 연다 */
+  function 새폴더() {
+    var 칸 = $("admFolNewName"); var 이름 = 칸 ? 칸.value : "";
+    if (!WE.adminFolders || !WE.adminFolders.create) return;
+    WE.adminFolders.create(이름).then(function (id) {
+      if (!id) return;
+      if ($("admFolNewName")) $("admFolNewName").value = "";
+      묶음[id] = 새묶음(true);
+      고른폴더 = id; 고른회원 = null; 주문들 = []; 고른주문 = null; 계산결과 = null;
+      폴더읽기().then(function () { 묶음읽기(id, false); 주문그리기(); 상세그리기(); });
+    });
+  }
+
+  /* 회원 설정 — 고른 회원의 폴더와 기관 제공 종료일.
+     ⚠ 주문 상세(#admMemDetail)와 다른 상자다. 주문을 누를 때마다 상세는 새로 그려지는데
+        여기까지 같이 그리면 적던 값이 날아간다. 그래서 회원이 바뀔 때만 다시 그린다. */
+  function 회원설정그리기() {
+    var box = $("admMemSet"); if (!box) return;
+    var m = 고른회원 && 회원찾기(고른회원);
+    if (!m) { box.hidden = true; box.innerHTML = ""; return; }
+    var 옵션 = '<option value="">폴더 없음</option>';
+    var 있음 = false;
+    폴더목록.forEach(function (f) {
+      if (f.id === m.folder_id) 있음 = true;
+      옵션 += '<option value="' + esc(f.id) + '"' + (f.id === m.folder_id ? " selected" : "") + ">" + esc(f.name) + "</option>";
+    });
+    // 폴더 목록을 아직 못 읽었어도 지금 소속은 보여야 한다(모르고 저장하면 폴더에서 빠진다)
+    if (m.folder_id && !있음) 옵션 += '<option value="' + esc(m.folder_id) + '" selected>' + esc(m.folder_name || "(현재 폴더)") + "</option>";
+    box.innerHTML =
+      "<h4>회원 설정</h4>" +
+      '<label class="adm-col-f">폴더<select id="admMemSetFolder">' + 옵션 + "</select></label>" +
+      '<label class="adm-col-f" style="margin-top:6px">기관 제공 Pro 종료일 (비우면 제공 없음)' +
+      '<input type="date" id="admMemSetUntil" value="' + esc(날짜칸(m.grant_until)) + '" /></label>' +
+      '<div class="adm-col-meta" style="margin-top:4px">한국 시각으로 그날 끝까지 · 결제한 이용권과는 따로 계산됩니다. ' +
+      "폴더를 바꾸면 참여 링크의 자리가 하나 돌아갑니다.</div>" +
+      '<div class="adm-col-tools"><button type="button" class="adm-edit-btn" id="admMemSetSave">저장</button></div>';
+    box.hidden = false;
+  }
+
+  function 회원설정저장() {
+    var c = client(); var m = 고른회원 && 회원찾기(고른회원);
+    if (!c || !m) return;
+    var 폴더 = ($("admMemSetFolder") && $("admMemSetFolder").value) || null;
+    var 종료 = ($("admMemSetUntil") && $("admMemSetUntil").value) || null;   // "YYYY-MM-DD" — 변환은 서버가 한다
+    // 살아 있는 제공을 끝내는 것만 확인받는다(학생이 수업 중에 무료로 떨어진다)
+    if (!종료 && 제공중(m) && !window.confirm(
+      "이 회원의 기관 제공 Pro 를 끝냅니다.\n\n" + (m.email || "") + "\n" + 날짜(m.grant_until, true) + "까지였습니다. 계속할까요?")) return;
+    var btn = $("admMemSetSave"); if (btn) btn.disabled = true;
+    c.rpc("admin_member_set", { p_user: m.user_id, p_folder: 폴더, p_until: 종료 }).then(function (res) {
+      if (res.error) {
+        msg("회원 설정을 저장하지 못했습니다 — " + (res.error.message || "알 수 없는 오류"), "err");
+        if ($("admMemSetSave")) $("admMemSetSave").disabled = false;
+        return;
+      }
+      msg("저장했습니다 — " + (m.email || ""));
+      // 서버가 정한 값(그날 끝 시각 등)으로 다시 그린다
+      if (평평) { 회원읽기(false, m.user_id); return; }
+      /* 묶음: **옮기기 전·후 두 묶음을 다시 읽는다** — 한쪽만 읽으면 그 회원이 두 곳에 보이거나 사라진다.
+         옮겨 간 묶음은 펼친다 — 고른 회원이 어디로 갔는지 그 자리에서 보이고, 선택도 이어진다. */
+      var 전 = m.folder_id || "none", 후 = 폴더 || "none";
+      if (!묶음[후]) 묶음[후] = 새묶음(true); else 묶음[후].열림 = true;
+      폴더읽기();                                      // 머리줄의 인원수
+      묶음읽기(후, false);
+      if (전 !== 후 && 묶음[전] && 묶음[전].읽음) 묶음읽기(전, false);
+    }).catch(function (e) {
+      msg("회원 설정을 저장하지 못했습니다 — " + ((e && e.message) || "서버에 닿지 못했습니다."), "err");
+      if ($("admMemSetSave")) $("admMemSetSave").disabled = false;
+    });
   }
 
   // ── 한 회원의 주문 ────────────────────────────────────────────────────────
@@ -354,10 +685,34 @@
   function bind() {
     var users = $("admMemUsers");
     if (users) users.addEventListener("click", function (e) {
-      if (e.target.id === "admMemMore") { 회원읽기(true); return; }
+      if (e.target.id === "admMemMore") { 회원읽기(true); return; }           // 검색 결과 더 보기
+      var 더 = e.target.closest("[data-more]");                               // 묶음 안 더 보기
+      if (더) { 묶음읽기(더.dataset.more, true); return; }
+      var 머리 = e.target.closest(".adm-mem-grp");                            // 폴더 머리줄
+      // ⚠ 더블클릭은 클릭 두 번을 먼저 일으킨다. 두 번째 클릭(detail 2)까지 받으면 펼쳤다가 곧바로 접혀 깜빡인다 —
+      //    두 번째부터는 무시하고, 이름 바꾸기는 아래 dblclick 이 맡는다
+      if (머리) { if (e.detail > 1) return; 머리줄누름(머리.dataset.grp); return; }
       var el = e.target.closest(".adm-mem-user"); if (!el) return;
-      고른회원 = el.dataset.uid; 고른주문 = null; 계산결과 = null;
-      회원그리기(); 주문읽기(고른회원);
+      // 회원을 고르면 오른쪽 칸은 「회원」 — 떠 있던 폴더 관리는 닫는다
+      고른회원 = el.dataset.uid; 고른폴더 = null; 고른주문 = null; 계산결과 = null;
+      회원그리기(); 오른쪽그리기(); 주문읽기(고른회원);
+    });
+    // 폴더 이름 더블클릭 → 그 자리에서 바꾸기 (2026-09-29 원빈 — 파일 탐색기처럼)
+    if (users) users.addEventListener("dblclick", function (e) {
+      var 머리 = e.target.closest(".adm-mem-grp");
+      if (!머리 || 머리.dataset.grp === "none") return;          // 「일반 회원」 은 폴더가 아니다
+      이름바꾸기(머리);
+    });
+    // 새 폴더 입력줄 — 계정란을 다시 그릴 때마다 새로 생기므로 상위에서 받는다
+    if (users) users.addEventListener("submit", function (e) {
+      if (!e.target || e.target.id !== "admFolNew") return;
+      e.preventDefault(); 새폴더();
+    });
+
+    // 회원 설정 저장 (2026-09-28)
+    var 설정 = $("admMemSet");
+    if (설정) 설정.addEventListener("click", function (e) {
+      if (e.target.id === "admMemSetSave") 회원설정저장();
     });
 
     var orders = $("admMemOrders");
@@ -385,33 +740,56 @@
       }
     });
 
+    // 검색 — 검색어가 있으면 묶음을 풀고 결과만 나열, 비우고 Enter 하면 묶음으로 돌아온다
     var search = $("admMemSearch");
     if (search) search.addEventListener("keydown", function (e) {
-      if (e.key === "Enter") { e.preventDefault(); 회원읽기(false); }
+      if (e.key !== "Enter") return;
+      e.preventDefault();
+      if ((search.value || "").trim()) { 평평 = true; 회원읽기(false); }
+      else { 평평 = false; 회원그리기(); 오른쪽그리기(); }
     });
+    // 새로 읽기 — 지금 모양 그대로 다시 읽는다(묶음이면 폴더 목록과 **펼쳐 둔** 묶음만)
     var refresh = $("admMemRefresh");
-    if (refresh) refresh.addEventListener("click", function () { 회원읽기(false); });
+    if (refresh) refresh.addEventListener("click", function () {
+      if (평평) { 회원읽기(false); return; }
+      폴더읽기();
+      Object.keys(묶음).forEach(function (k) { if (묶음[k].열림) 묶음읽기(k, false); });
+    });
   }
 
   /* 탭에 들어올 때 읽는다 (admin-batch.js 의 setMode 가 부른다).
      ⚠ 처음 한 번만 자동으로 읽는다 — 탭을 오갈 때마다 전체 회원을 다시 읽으면
-        관리자가 「더 보기」로 불러 놓은 목록과 고른 회원이 매번 초기화된다. */
+        관리자가 「더 보기」로 불러 놓은 목록과 고른 회원이 매번 초기화된다.
+     처음 모양은 폴더 묶음 — 「일반 회원」 만 펼쳐 읽고, 폴더들은 접어 둔다(누를 때 읽는다). */
   function enter() {
     if (들어온적) return;
     들어온적 = true;
     bind();
-    회원읽기(false);
+    평평 = false;
+    묶음.none = 새묶음(true);
+    폴더읽기();
+    묶음읽기("none", false);
     주문그리기(); 상세그리기();
   }
 
   WE.adminMembers = {
     enter: enter,
+    foldersChanged: foldersChanged,     // 폴더 관리(admin-folders.js)가 바꾼 뒤 부른다
+    _테스트_폴더심기: function (목록) { 폴더목록 = 목록 || []; 폴더오류 = null; 회원그리기(); 오른쪽그리기(); },
+    /* 묶음 하나를 읽은 것처럼 채운다 (키 = "none" 또는 폴더 id) */
+    _테스트_묶음심기: function (키, 목록, 총수) {
+      var g = 묶음[키] || (묶음[키] = 새묶음(true));
+      g.열림 = true; g.회원 = 목록 || []; g.전체 = 총수 == null ? g.회원.length : 총수;
+      g.읽음 = true; g.읽는중 = false; g.오류 = null; 평평 = false; 회원그리기(); 오른쪽그리기();
+    },
     /* 검사용 이음매 — 로그인·DB 를 흉내 낸 뒤 화면을 그리게 한다.
        이게 없으면 검사가 권한 확인에서 막혀 클릭 동작을 잴 수 없다
        (admin.js·admin-collect.js 의 _테스트_* 와 같은 목적). */
-    _테스트_심기: function (목록, 총수) { 회원들 = 목록 || []; 전체수 = 총수 == null ? (목록 || []).length : 총수; 읽는중 = false; 읽기오류 = null; 회원그리기(); },
-    _테스트_오류: function (m) { 읽기오류 = m; 읽는중 = false; 회원그리기(); },
-    _테스트_회원고르기: function (uid) { 고른회원 = uid; 회원그리기(); },
+    /* _테스트_심기 · _테스트_오류 는 **검색 결과(평평한 목록)** 를 그린다 — 9/28 까지 목록의 모양이 그것이었고,
+       그 모양을 재는 verify_adminmembers 를 손대지 않고 그대로 돌리기 위해서다(검색 경로는 지금도 실제로 쓰인다). */
+    _테스트_심기: function (목록, 총수) { 평평 = true; 회원들 = 목록 || []; 전체수 = 총수 == null ? (목록 || []).length : 총수; 읽는중 = false; 읽기오류 = null; 회원그리기(); },
+    _테스트_오류: function (m) { 평평 = true; 읽기오류 = m; 읽는중 = false; 회원그리기(); },
+    _테스트_회원고르기: function (uid) { 고른회원 = uid; 고른폴더 = null; 회원그리기(); 오른쪽그리기(); },
     _테스트_주문심기: function (목록) { 주문들 = 목록 || []; 주문오류 = null; 주문그리기(); },
     _테스트_주문고르기: function (oid) { 고른주문 = oid; 주문그리기(); 상세그리기(); },
     _테스트_응답: function (res, 실행인가) { return 환불응답표시(res, 실행인가); },

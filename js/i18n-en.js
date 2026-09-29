@@ -830,6 +830,7 @@ WE.i18nMaps = WE.i18nMaps || {};
     " · 새 부품 ": " · new parts ",
     "개를 라이브러리에 추가": " added to library",
     "파일을 읽을 수 없습니다: ": "Cannot read file: ",
+    "배선도 파일이 아닙니다.": "This is not a wiring diagram file.",
 
     // --- 기본 팔레트 / 단자 ---
     "+ (전원)": "+ (Power)",
@@ -870,6 +871,12 @@ WE.i18nMaps = WE.i18nMaps || {};
     "이 도면에는 배선 {w}개 · 부품 {c}개가 있습니다.": "This project has {w} wires and {c} components.",
     "무료 버전은 배선 {wmax}개 · 부품 {cmax}개까지입니다.": "The free plan allows {wmax} wires and {cmax} components.",
     "열어서 보거나 지우는 것은 됩니다. 새로 추가하는 것만 막힙니다.": "You can still open, view and delete. Only adding new items is blocked.",
+
+    // 한도 창의 결제 버튼 · 안심 문구 · 돌아왔을 때 Pro 적용 알림 — 2026-09-28 (pro.js)
+    "Pro로 계속 그리기": "Continue with Pro",
+    "지금까지 그린 도면은 그대로 저장돼 있습니다.": "Everything you've drawn so far is saved.",
+    "Pro로 바꾸면 부품·배선·페이지 제한 없이 이어서 그리고, 내보내기·인쇄 워터마크도 빠집니다.": "With Pro you can keep going with no limit on parts, wires or pages, and exports and prints have no watermark.",
+    "이제 제한 없이 이어서 그릴 수 있습니다.": "You can keep drawing without limits.",
 
     // 도면 페이지(시트) 한도 — 2026-09-06 신설
     "페이지 한도에 도달했습니다": "Page limit reached",
@@ -993,6 +1000,33 @@ WE.i18nMaps = WE.i18nMaps || {};
     "계정": "Account",
     "로그인 상태 유지": "Keep me signed in",
     "간편 로그인": "Quick sign-in",
+    // ---- 기관 참여 (join.html · 계정 페이지, 2026-09-28) ----
+    "기관 참여 — 이지케이블 (EasyCable)": "Join an organization — EasyCable",
+    "기관 참여": "Join an organization",
+    "참여 링크가 올바르지 않습니다": "This invite link is not valid",
+    "받은 링크를 다시 확인해 주세요.": "Please check the link you received.",
+    "이지케이블 둘러보기": "Explore EasyCable",
+    "기관 참여 링크입니다": "This is an organization invite link",
+    "로그인하면 참여할 수 있어요.": "Sign in to join.",
+    "약관 동의를 마치면 참여할 수 있습니다.": "You can join once you accept the terms.",
+    "참여하기": "Join",
+    "참여했습니다": "You're in",
+    "이미 참여했습니다": "You've already joined",
+    "에디터 열기": "Open the editor",
+    "{날짜}까지 Pro 기능을 쓸 수 있습니다.": "You can use Pro features until {날짜}.",
+    "참여한 날부터 {일}일 동안 Pro 기능을 쓸 수 있습니다.": "You can use Pro features for {일} days from the day you join.",
+    "Pro 제공 없이 소속만 등록됩니다.": "You'll be registered as a member (no Pro access included).",
+    "참여가 마감된 링크입니다": "This invite link is closed",
+    "정원이 다 찼습니다": "This invite link is full",
+    "참여 정보를 불러오지 못했습니다": "Couldn't load the invite",
+    "링크를 보내 준 분께 문의해 주세요.": "Please contact the person who sent you the link.",
+    "잠시 후 다시 시도해 주세요.": "Please try again in a moment.",
+    "등록되었습니다.": "You've been registered.",
+    "참여하지 못했습니다. 잠시 후 다시 시도해 주세요.": "Couldn't join. Please try again in a moment.",
+    "기관 제공": "Provided by organization",
+    "{이메일} 계정으로 참여합니다": "You'll join as {이메일}",
+    "이미 기관 제공 Pro를 이용 중입니다": "You already have Pro from an organization",
+    "{날짜}까지 이용할 수 있습니다. 기간이 끝난 뒤 새 참여 링크로 참여할 수 있습니다.": "It lasts until {날짜}. After it ends, you can join with a new invite link.",
     // ---- 계정 메뉴 (2026-08-19) ----
     "내 계정": "My account",
     "요금제": "Pricing",

@@ -386,6 +386,16 @@ WE.geometry = (function () {
     return { width: (m && m.width) || 1600, height: (m && m.height) || 900 };
   }
 
+  /* 부품은 캔버스 끝에서 이만큼 안쪽까지만 간다 (2026-09-28 고원빈 결정).
+     예전에는 끝에 딱 붙을 수 있었다(여백 0). 끌기·방향키·붙여넣기·복제·회전이 모두 이 값을 쓴다.
+     ⚠ **옛 도면은 열 때 안 움직인다** — 불러오기(model.loadProject)는 여백 0 으로 가둔다.
+        여백 띠(끝에서 0~10px)에 있던 부품은 그대로 두고, 사용자가 움직일 때부터 여백을 지킨다. */
+  var 여백 = 10;
+
+  // 이 축에 쓸 여백 — 부품이 (캔버스 − 양쪽 여백)보다 크면 여백을 포기하고 캔버스 끝까지 쓴다.
+  // 안 그러면 캔버스에 거의 꽉 차는 부품은 어디에도 못 놓인다.
+  function 축여백(크기, 전체, m) { return 크기 <= 전체 - 2 * m ? m : 0; }
+
   // 부품이 화면에서 차지하는 사각형 (회전·배율 반영). render.componentBBox 가 이걸 쓴다.
   function componentBox(cmp) {
     var W = cmp.width, H = cmp.height;
@@ -412,9 +422,21 @@ WE.geometry = (function () {
     var cv = canvasSize();
     var r = { loX: -Infinity, hiX: Infinity, loY: -Infinity, hiY: Infinity };
     for (var i = 0; i < cmps.length; i++) {
-      var b = componentBox(cmps[i]);
-      if (b.x2 - b.x <= cv.width)  { r.loX = Math.max(r.loX, -b.x); r.hiX = Math.min(r.hiX, cv.width  - b.x2); }
-      if (b.y2 - b.y <= cv.height) { r.loY = Math.max(r.loY, -b.y); r.hiY = Math.min(r.hiY, cv.height - b.y2); }
+      var b = componentBox(cmps[i]), bw = b.x2 - b.x, bh = b.y2 - b.y;
+      /* 끝에서 여백만큼 안쪽까지. (2026-09-28)
+         ⚠ min(0,…)·max(0,…) 로 감싼다 — 이미 여백 띠 안에 있는 부품(옛 도면)은 **그쪽으로 더 못 갈 뿐**
+            반대로 억지로 튀지 않는다. 감싸지 않으면 x=3 부품은 "오른쪽으로 7 이상"만 허용돼서
+            왼쪽 방향키를 눌렀는데 오른쪽으로 7px 튀는 이상한 일이 생긴다. */
+      if (bw <= cv.width) {
+        var mx = 축여백(bw, cv.width, 여백);
+        r.loX = Math.max(r.loX, Math.min(0, mx - b.x));
+        r.hiX = Math.min(r.hiX, Math.max(0, cv.width - mx - b.x2));
+      }
+      if (bh <= cv.height) {
+        var my = 축여백(bh, cv.height, 여백);
+        r.loY = Math.max(r.loY, Math.min(0, my - b.y));
+        r.hiY = Math.min(r.hiY, Math.max(0, cv.height - my - b.y2));
+      }
     }
     return r;
   }
@@ -440,11 +462,20 @@ WE.geometry = (function () {
         canvasSize() 는 **지금 보고 있는 페이지**의 크기다(2026-09-08 페이지별 용지 이후).
         다른 페이지의 부품을 이걸로 가두면, 세로 페이지 부품이 가로 페이지 높이로 눌려
         위치가 통째로 무너진다 — 실제로 파일을 열 때마다 그렇게 됐다. */
-  function pullInside(cmp, cv) {
+  /* m = 여백. 생략하면 끝에서 10px 안쪽으로(붙여넣기·복제·회전).
+     ⚠ 파일을 열 때(model.loadProject)는 0 을 넘긴다 — 옛 도면의 부품이 열자마자 움직이면 안 된다. */
+  function pullInside(cmp, cv, m) {
     cv = cv || canvasSize();
-    var b = componentBox(cmp), dx = 0, dy = 0;
-    if (b.x2 - b.x <= cv.width)  { if (b.x < 0) dx = -b.x; else if (b.x2 > cv.width)  dx = cv.width  - b.x2; }
-    if (b.y2 - b.y <= cv.height) { if (b.y < 0) dy = -b.y; else if (b.y2 > cv.height) dy = cv.height - b.y2; }
+    if (m == null) m = 여백;
+    var b = componentBox(cmp), dx = 0, dy = 0, bw = b.x2 - b.x, bh = b.y2 - b.y;
+    if (bw <= cv.width) {
+      var mx = 축여백(bw, cv.width, m);
+      if (b.x < mx) dx = mx - b.x; else if (b.x2 > cv.width - mx) dx = cv.width - mx - b.x2;
+    }
+    if (bh <= cv.height) {
+      var my = 축여백(bh, cv.height, m);
+      if (b.y < my) dy = my - b.y; else if (b.y2 > cv.height - my) dy = cv.height - my - b.y2;
+    }
     if (!dx && !dy) return null;
     cmp.x += dx; cmp.y += dy;
     return { dx: dx, dy: dy };
@@ -1251,6 +1282,7 @@ WE.geometry = (function () {
     deltaRange: deltaRange,
     applyRange: applyRange,
     pullInside: pullInside,
+    edgeMargin: 여백,   // 캔버스 끝 여백(px) — model 의 용지 바꾸기(밀어넣기)도 같은 값을 쓴다
     maxSize: maxSize,
     clientToCanvas: clientToCanvas,
     localToAbs: localToAbs,

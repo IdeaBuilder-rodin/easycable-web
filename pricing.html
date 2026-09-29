@@ -579,6 +579,20 @@
     } catch (e) { return null; }
   }
 
+  /* 기관 제공 Pro 의 기억 — auth.js 제공기억하기() 가 적는다. 모양 { id, t, until, label }.
+     ⚠ 제공 중에는 이용권을 팔지 않는다 (2026-09-29 고원빈) — 서버(order-create)도 같은 규칙으로 막는다.
+        결제 기간은 오늘부터 시작돼서, 제공 기간과 겹쳐 사면 그만큼 돈을 버리는 셈이다.
+     규칙은 프로기억() 과 같다 — 오래된 기억(유예 7일)·이미 끝난 제공은 없는 것으로 본다. */
+  function 제공기억() {
+    try {
+      var m = JSON.parse(localStorage.getItem("we_last_grant") || "null");
+      if (!m) return null;
+      if (Date.now() - (m.t || 0) > 유예일 * 86400000) return null;
+      if (!m.until || new Date(m.until) <= new Date()) return null;
+      return m;
+    } catch (e) { return null; }
+  }
+
 
   document.addEventListener("DOMContentLoaded", function () {
     var 월권 = document.querySelector('a[href^="checkout.html?plan=month"]');
@@ -628,6 +642,22 @@
        그래서 항상 원래 모습으로 되돌린 다음 다시 잠근다. */
     function 칠하기() {
     되돌리기();
+
+    /* 기관 제공 중 — 월권·1년권 둘 다 잠근다. 결제 기억 판정보다 **먼저** 본다(서버와 같은 순서).
+       아래 판정은 결제 기억이 없으면 바로 끝나고(제공만 받는 학생이 안 걸린다),
+       월권 기억이 있으면 「1년 이용권으로 변경」 을 연다(제공 중에는 그것도 못 산다).
+       글자는 1년권 이용자에게 쓰는 것과 같은 「이용 중에는 구매할 수 없습니다」 — 새 문구를 만들지 않는다.
+       강조 테두리(.is-pick)는 원래 자리에 둔다 — 누를 것이 없으니 옮길 곳도 없다. */
+    if (제공기억()) {
+      [월권, 연권].forEach(function (b) {
+        b.classList.remove("btn-main");
+        b.classList.add("btn-sub", "is-current");
+        b.textContent = tr("이용 중에는 구매할 수 없습니다");
+        b.removeAttribute("href");
+      });
+      return;
+    }
+
     var 기억 = 프로기억();
     if (!기억) return;                       // 무료거나 비로그인 — 되돌린 그대로 둔다
 

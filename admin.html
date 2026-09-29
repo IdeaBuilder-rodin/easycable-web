@@ -289,6 +289,91 @@
     .adm-mem-res.info { background: #eef4ff; color: #1a3f7a; }
     .adm-mem-res.warn { background: #fff3e0; color: #7a3d00; }
     .adm-mem-res.err  { background: #fdecea; color: #8e1b14; }
+
+    /* ── 폴더·기관 제공 (2026-09-28) ───────────────────────────────────────
+       회원 행의 폴더 태그는 파랑, 기관 제공 Pro 는 보라 — 결제 Pro(초록)와 **다른 색**이어야
+       "돈 낸 사람"과 "학교에서 받은 사람"을 목록에서 바로 가를 수 있다(환불 판단이 다르다). */
+    .adm-mem-tag.fol   { background: #e3f2fd; color: #1565c0; }
+    .adm-mem-tag.grant { background: #ede7f6; color: #5e35b1; font-weight: 600; }
+    .adm-mem-set { padding-bottom: 12px; margin-bottom: 12px; border-bottom: 1px solid var(--bd); }
+    .adm-mem-set[hidden] { display: none; }
+    .adm-mem-set h4 { margin: 0 0 8px; font-size: var(--fs-sm); }
+    .adm-mem-set select, .adm-mem-set input[type="date"] { height: 28px; padding: 0 6px; border: 1px solid var(--bd); border-radius: var(--r); font: inherit; font-size: var(--fs-sm); color: var(--tx); }
+
+    /* ── 계정란의 폴더 묶음 (2026-09-29 — 따로 있던 「폴더·링크」 화면을 합침) ──────────
+       파일 탐색기처럼 머리줄(▸/▾ 이름 · 인원)을 누르면 펼쳐지고 접힌다. 회원 줄은 한 칸 들여 쓴다. */
+    .adm-mem-grp { display: flex; align-items: center; gap: 6px; width: 100%; padding: 6px 8px; margin-top: 2px;
+      border: 1px solid transparent; border-radius: var(--r); background: var(--bg2); font: inherit; font-size: var(--fs-sm);
+      text-align: left; cursor: pointer; }
+    .adm-mem-grp:hover { border-color: var(--bd); }
+    .adm-mem-grp.on { background: var(--primary-bg); border-color: #c9d8ec; }   /* 오른쪽 칸에 떠 있는 폴더 */
+    .adm-mem-grp .arr { width: 14px; flex: none; color: var(--tx2, #555); font-size: 13px; }   /* 10px 회색은 화면에서 거의 안 보였다(9/29 스크린샷) */
+    .adm-mem-grp b { font-weight: 600; word-break: break-all; }
+    .adm-mem-grp .adm-col-meta { margin-left: auto; white-space: nowrap; }
+    .adm-mem-grp-body { display: flex; flex-direction: column; gap: 4px; padding: 4px 0 6px 14px; }
+    .adm-mem-grp-body[hidden] { display: none; }
+    /* 새 폴더 줄 — 폴더들과 「일반 회원」 사이(9/29 순서 변경). 위아래 점선으로 두 무리를 가른다 */
+    .adm-fol-new { display: flex; gap: 6px; margin: 8px 0; padding: 8px 0; border-top: 1px dashed var(--bd2); border-bottom: 1px dashed var(--bd2); }
+    .adm-fol-new input { flex: 1; min-width: 0; height: 28px; padding: 0 8px; border: 1px solid var(--bd); border-radius: var(--r); font: inherit; font-size: var(--fs-sm); }
+
+    /* 오른쪽 칸 맨 위 제목 — 「폴더 · 이름」 / 「회원 · 이메일」. 같은 칸이 두 가지로 쓰여서 밝혀 둔다 */
+    .adm-mem-side-head { margin: -2px 0 12px; padding-bottom: 8px; border-bottom: 2px solid var(--bd); font-weight: 700; font-size: 14px; word-break: break-all; }
+    .adm-mem-side-head[hidden], .adm-fol-panel[hidden] { display: none; }
+    /* 폴더를 골랐을 때 — 가운데 주문 칸을 접고 오른쪽 칸을 넓힌다. 폴더에는 주문이 없고, 링크 양식은 자리가 필요하다 */
+    .adm-mem-body.fol-mode .adm-mem-list-wrap { display: none; }
+    .adm-mem-body.fol-mode .adm-mem-detail { flex: 1; width: auto; min-width: 0; }
+    .adm-fol-panel h4 { margin: 16px 0 8px; font-size: var(--fs-sm); }
+    .adm-fol-panel h4:first-child { margin-top: 0; }
+    .adm-fol-contact { color: var(--tx2, #555); }
+    /* 공용 .adm-col-meta 는 한 줄로 자른다(…). 회원 설정·폴더 관리의 안내문은 잘리면 핵심이 사라진다 —
+       「폴더를 바꾸면 참여 링크의 자리가 하나 돌아갑니다」 가 「폴더를 바꾸…」 로 잘려 있었다(9/29 스크린샷). */
+    .adm-mem-set .adm-col-meta, .adm-fol-panel .adm-col-meta { white-space: normal; }
+    .adm-fol-grid { display: grid; grid-template-columns: 150px minmax(0, 1fr); gap: 8px 12px; align-items: center; max-width: 640px; }
+    .adm-fol-grid > span { color: var(--tx3); }
+    .adm-fol-grid input[type="text"], .adm-fol-grid input[type="number"], .adm-fol-grid input[type="date"] {
+      height: 28px; padding: 0 8px; border: 1px solid var(--bd); border-radius: var(--r); font: inherit; font-size: var(--fs-sm); color: var(--tx); max-width: 100%;
+    }
+    .adm-fol-grid input[type="text"] { width: 320px; }
+    .adm-fol-mode input[type="checkbox"] { width: auto; height: auto; }
+    /* 세로로 쌓는 칸 안의 날짜 입력은 칸 끝까지 늘어나지 않게(링크 수정의 「제공 종료일」 이 화면 폭만큼 길어졌다 — 9/29 스크린샷) */
+    .adm-fol-mode > input[type="date"] { align-self: flex-start; }
+    /* 「Pro 이용 기간」 — 양식에서 가장 중요한 칸이라 글자를 진하게(9/29 원빈이 기간 칸을 못 찾았다) */
+    .adm-fol-grid > span.adm-fol-key { color: var(--tx); font-weight: 700; }
+    /* 「Pro 안 줌」 을 골랐을 때의 경고 한 줄 */
+    .adm-fol-warn { margin-top: 2px; padding: 6px 10px; border-radius: var(--r); background: #fff3e0; color: #7a3d00; font-size: 12px; }
+    .adm-fol-warn[hidden] { display: none; }
+    /* 폴더 이름 더블클릭 수정 — 머리줄 자리에 들어가는 입력칸 */
+    .adm-mem-grp-rename { width: 100%; box-sizing: border-box; height: 32px; margin-top: 2px; padding: 0 8px; border: 1px solid var(--primary); border-radius: var(--r); font: inherit; font-size: var(--fs-sm); font-weight: 600; }
+    .adm-fol-grid input[type="number"] { width: 90px; }
+    .adm-fol-mode { display: flex; flex-direction: column; gap: 4px; }
+    .adm-fol-mode label { display: flex; align-items: center; gap: 6px; }
+    .adm-fol-acts { display: flex; gap: 6px; flex-wrap: wrap; }
+    /* 링크 한 장 — 위 줄(내용 · 단추) 아래에 [수정] 을 누르면 수정 양식이 붙는다(9/29 오후) */
+    .adm-fol-link { padding: 10px 12px; margin-bottom: 8px; border: 1px solid var(--bd); border-radius: var(--r); background: #fff; max-width: 820px; }
+    .adm-fol-link.off { background: var(--bg2); }
+    .adm-fol-link.off .adm-fol-link-main { color: var(--tx3); }
+    .adm-fol-link-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+    .adm-fol-link-main { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+    .adm-fol-link-title { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .adm-fol-link-main b { word-break: break-all; }
+    .adm-fol-link code { font-size: 12px; letter-spacing: .04em; }
+    .adm-fol-link-acts { display: flex; gap: 6px; flex: none; }
+    /* 상태 점 — 받는 중만 초록. 멈춤·마감·정원 참은 회색(글자로 무엇인지 적는다) */
+    .adm-fol-dot { font-size: 11px; font-weight: 600; color: #8a9099; white-space: nowrap; }
+    .adm-fol-dot.on { color: #2e7d32; }
+    .adm-fol-box { margin: 8px 0 12px; padding: 12px 14px; border: 1px dashed var(--bd); border-radius: var(--r); max-width: 820px; }
+    .adm-fol-edit { margin: 10px 0 0; background: var(--bg2); }
+    /* 칸 제목 줄 — 「참여 링크 [+ 새 링크]」 · 「이미 참여한 사람」 */
+    .adm-fol-sec { display: flex; align-items: center; justify-content: space-between; gap: 10px; max-width: 820px; margin: 18px 0 8px; }
+    .adm-fol-sec h4 { margin: 0 !important; }
+    .adm-fol-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; max-width: 820px; }
+    .adm-fol-who { margin-bottom: 8px; }
+    .adm-fol-bulk { align-items: center; padding: 10px 12px; background: var(--bg2); border-radius: var(--r); max-width: 820px; box-sizing: border-box; }
+    .adm-fol-bulk input[type="date"] { height: 28px; padding: 0 8px; border: 1px solid var(--bd); border-radius: var(--r); font: inherit; font-size: var(--fs-sm); }
+    /* 폴더 삭제 — 드물고 되돌릴 수 없는 일이라 맨 아래 작은 글씨로(account.html 의 회원 탈퇴와 같은 원칙) */
+    .adm-fol-end { max-width: 820px; text-align: right; margin-top: 24px; }
+    .adm-fol-textbtn { background: none; border: 0; padding: 4px 2px; font: inherit; font-size: 12px; color: var(--tx3); text-decoration: underline; cursor: pointer; }
+    .adm-fol-textbtn:hover { color: #c62828; }
     .adm-col-f-title em { font-style: normal; font-size: 10px; margin-left: 4px; }
     .adm-col-buy-item { display: flex; align-items: center; gap: 5px; }
     .adm-col-buy-item input[type=text] { height: 26px; padding: 0 6px; border: 1px solid var(--bd); border-radius: var(--r); font: inherit; font-size: var(--fs-sm); flex: 1; min-width: 0; }
@@ -418,6 +503,7 @@
         <button type="button" class="adm-mode-btn" data-mode="batch">일괄 등록</button>
         <button type="button" class="adm-mode-btn" data-mode="collect">사용자 부품</button>
         <button type="button" class="adm-mode-btn" data-mode="members">회원·결제</button>
+        <!-- 폴더·참여 링크는 따로 화면을 두지 않는다 — 「회원·결제」 왼쪽 계정란에서 폴더로 묶인다 (2026-09-29 고원빈 결정) -->
       </div>
       <a class="public-library-close" href="app.html" title="에디터로 돌아가기" aria-label="에디터로 돌아가기">×</a>
     </header>
@@ -573,7 +659,8 @@
             목적으로 적혀 있어, 환불을 처리하는 맥락(오른쪽 상세)에서만 보인다. -->
     <section id="admMembers" class="adm-members" aria-label="회원·결제" hidden>
       <div class="adm-batch-bar">
-        <input type="search" id="admMemSearch" class="adm-col-search" placeholder="이메일 검색" autocomplete="off" />
+        <!-- 검색어가 있으면 폴더 묶음을 풀고 결과만 나열한다. 비우고 Enter 하면 묶음으로 돌아온다 -->
+        <input type="search" id="admMemSearch" class="adm-col-search" placeholder="이메일 검색 (Enter)" autocomplete="off" />
         <span class="adm-col-stats adm-batch-saved" id="admMemStats"></span>
         <button type="button" class="adm-edit-btn" id="admMemRefresh" title="서버에서 다시 읽습니다">↻ 새로 읽기</button>
       </div>
@@ -582,7 +669,19 @@
         <div class="adm-mem-list-wrap">
           <div id="admMemOrders" role="list"></div>
         </div>
-        <aside id="admMemDetail" class="adm-mem-detail"></aside>
+        <!-- 오른쪽 칸 — 무엇을 골랐느냐에 따라 바뀐다 (2026-09-29, 폴더를 회원 화면으로 합침)
+               · 폴더 머리줄을 누르면 → 그 폴더의 관리(이름·기간·참여 링크, js/admin-folders.js 가 #admFolPanel 에 그린다).
+                 이때는 가운데 주문 칸을 접고 이 칸이 넓어진다 — 폴더에는 주문이 없고, 링크 양식은 자리가 필요하다
+               · 회원을 누르면 → 회원 설정(폴더·기관 제공) + 주문 상세·환불 (지금까지 그대로)
+             맨 위 제목(#admMemSideHead)으로 지금 무엇을 보고 있는지 밝힌다 — 같은 칸이 두 가지로 쓰여 헷갈리지 않게.
+             ⚠ 회원 설정과 주문 상세는 따로 둔다 — 주문 상세는 주문을 고를 때마다 통째로 다시 그려진다. 한 상자에 두면
+                회원 설정에 적던 값이 주문 하나 누를 때마다 날아간다. -->
+        <aside class="adm-mem-detail">
+          <div id="admMemSideHead" class="adm-mem-side-head" hidden></div>
+          <div id="admFolPanel" class="adm-fol-panel" hidden></div>
+          <div id="admMemSet" class="adm-mem-set" hidden></div>
+          <div id="admMemDetail"></div>
+        </aside>
       </div>
     </section>
 
@@ -924,5 +1023,6 @@
   <script src="js/xlsx.js"></script>          <!-- 사용자 부품 통계 엑셀 내보내기 (에디터의 BOM 엑셀과 같은 작성기) -->
   <script src="js/admin-collect.js"></script> <!-- 사용자 부품 (수집). admin-batch 다음 — 「일괄 등록으로 보내기」가 그 API 를 쓴다 -->
   <script src="js/admin-members.js"></script> <!-- 회원·결제·환불 (2026-09-22). 앞의 것들과 독립이지만 순서를 지켜 admin.js 의 esc·msg 관례를 따라 쓴다 -->
+  <script src="js/admin-folders.js"></script> <!-- 폴더 관리 (2026-09-28 · 09-29 회원 화면 오른쪽 칸으로). 계정란(admin-members)이 부른다 -->
 </body>
 </html>

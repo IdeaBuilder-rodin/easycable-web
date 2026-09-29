@@ -48,12 +48,63 @@ WE.auth = (function () {
   var 기억키 = "we_last_pro";
   var 유예일 = 7;
 
+  /* 기관 제공 Pro 의 기억 (2026-09-28 — 폴더·참여 링크).
+     ⚠ we_last_pro 와 **따로** 둔다. we_last_pro 는 '결제한 이용권' 의 기억이라 월권/1년권 종류(kind)와
+        결제 만료일을 담고, 요금제 화면은 그것으로 「1년 이용권으로 변경」 을 열지 정한다. 섞으면 그 판단이 틀어진다.
+     요금제 화면(pricing.html 제공기억)은 **둘 다 읽어**, 제공 중이면 월권·1년권을 모두 잠근다 —
+        제공 기간 중에는 결제하지 않는다(2026-09-29 고원빈, 서버 order-create 도 같은 규칙).
+     모양: { id, t, until, label } — 유예 규칙(7일)은 결제 쪽과 같다. */
+  var 제공기억키 = "we_last_grant";
+
   /* 기억을 지운다 — 로그아웃·탈퇴에서 반드시 부른다.
      안 지우면 로그아웃한 뒤에도 유예 기간(7일) 동안 Pro 로 보이고,
      같은 브라우저를 쓰는 다른 사람에게까지 그 상태가 넘어간다.
-     개인정보처리방침에도 "로그아웃하면 함께 삭제됩니다" 라고 적어 두었다. */
+     개인정보처리방침에도 "로그아웃하면 함께 삭제됩니다" 라고 적어 두었다.
+     ⚠ 제공 기억도 함께 지운다 — 학교 PC 는 여럿이 번갈아 쓴다. */
   function 기억지우기() {
     try { localStorage.removeItem(기억키); } catch (e) { /* 무시 */ }
+    try { localStorage.removeItem(제공기억키); } catch (e) { /* 무시 */ }
+  }
+
+  /* 결제 Pro 인가 — 예전 isPro 의 '확인됨' 규칙 그대로다.
+     만료 없음(null)은 수동 부여 등으로 보고 Pro 로 인정한다(01_profiles.sql:115). */
+  function 결제Pro(prof) {
+    if (!prof || prof.plan !== "pro") return false;
+    if (!prof.expires_at) return true;
+    return new Date(prof.expires_at) > new Date();
+  }
+
+  /* 기관 제공 Pro 인가 — profiles.grant_until 이 미래면 Pro.
+     ⚠ 결제 기간(expires_at)과 섞지 않는다. 환불 함수가 expires_at 을 결제 내역만 보고
+        다시 계산하기 때문에, 같은 칸에 두면 환불 한 번에 제공 기간이 사라진다
+        (_ai/sql/2026-09-28_폴더_참여링크.sql 머리말). */
+  function 제공Pro(prof) {
+    return !!(prof && prof.grant_until && new Date(prof.grant_until) > new Date());
+  }
+
+  function 제공기억하기(prof) {
+    try {
+      if (제공Pro(prof)) {
+        localStorage.setItem(제공기억키, JSON.stringify({
+          id: _user && _user.id, t: Date.now(),
+          until: prof.grant_until, label: prof.grant_label || null
+        }));
+      } else {
+        localStorage.removeItem(제공기억키);   // 제공이 없다고 확인됐으면 기억도 지운다
+      }
+    } catch (e) { /* 무시 */ }
+  }
+
+  /* 확인을 못 했을 때 — 마지막으로 확인된 제공 기간을 유예 안에서 인정한다 (기억된Pro 와 같은 규칙).
+     돌려주는 값: 살아 있으면 { until, label }, 아니면 null */
+  function 기억된제공() {
+    try {
+      var m = JSON.parse(localStorage.getItem(제공기억키) || "null");
+      if (!m || !_user || m.id !== _user.id) return null;
+      if (Date.now() - (m.t || 0) > 유예일 * 86400000) return null;
+      if (!m.until || new Date(m.until) <= new Date()) return null;
+      return { until: m.until, label: m.label || null };
+    } catch (e) { return null; }
   }
 
   // 종류 = "month" | "year" | null.
@@ -70,7 +121,10 @@ WE.auth = (function () {
           kind: 종류 || null
         }));
       } else {
-        기억지우기();   // 무료로 확인됐으면 기억도 지운다
+        // 결제 이용권이 없다고 확인됐으면 **결제 기억만** 지운다.
+        // ⚠ 기억지우기() 를 부르면 안 된다 — 그건 제공 기억(we_last_grant)까지 지운다.
+        //    제공만 받는 학생은 plan 이 'free' 라 매번 여기로 오므로, 적어 둔 제공 기억이 곧바로 사라진다.
+        localStorage.removeItem(기억키);
       }
     } catch (e) { /* 무시 */ }
   }
@@ -287,7 +341,10 @@ WE.auth = (function () {
     // 더 최신 요청이 생겼거나, 로그아웃했거나, 계정이 바뀌었으면 무시한다.
     function 유효한가() { return seq === _reqSeq && _user && _user.id === who; }
 
-    client.from("profiles").select("plan, expires_at, source, agreed_at, marketing_opt_in").eq("user_id", who).single()
+    /* grant_until · grant_label — 기관 제공 Pro (2026-09-28).
+       ⚠ 이 두 칸은 _ai/sql/2026-09-28_폴더_참여링크.sql 이 만든다. **SQL 을 먼저 실행하고 이 파일을 배포한다.**
+          칸이 없는데 이 코드가 나가면 조회가 통째로 실패해 모든 사용자가 '확인 실패' 상태가 된다. */
+    client.from("profiles").select("plan, expires_at, source, agreed_at, marketing_opt_in, grant_until, grant_label").eq("user_id", who).single()
       .then(function (res) {
         if (!유효한가()) { if (done) done(); return; }
         if (res.error) {
@@ -297,6 +354,7 @@ WE.auth = (function () {
         } else {
           _profile = res.data;
           _조회상태 = "확인됨";
+          제공기억하기(res.data);
           // 무료면 종류를 물어볼 것도 없다 — 쓸데없는 조회를 안 한다
           if (res.data && res.data.plan === "pro") {
             이용권종류(client, function (종류) {
@@ -591,14 +649,40 @@ WE.auth = (function () {
     // 로그아웃했는데 Pro 로 남을 수 있다.
     if (!_user) return false;
 
-    if (_조회상태 === "확인됨") {
-      if (!_profile || _profile.plan !== "pro") return false;
-      if (!_profile.expires_at) return true;              // 만료 없음(수동 부여 등)
-      return new Date(_profile.expires_at) > new Date();
-    }
+    // Pro = 결제한 이용권 **또는** 기관 제공 (2026-09-28).
+    // 한도·워터마크·시트 수가 모두 이 함수를 거치므로 여기만 넓히면 앱 전체에 반영된다.
+    if (_조회상태 === "확인됨") return 결제Pro(_profile) || 제공Pro(_profile);
 
     // 아직 확인 못 했다 — 마지막으로 확인된 Pro 를 유예 기간 안에서 인정한다.
     // 무료 사용자는 기억이 없으므로 그대로 무료다.
+    return 기억된Pro() || !!기억된제공();
+  }
+
+  /* 기관 제공 기간 — 살아 있으면 { until, label }, 없으면 null.
+     계정 페이지가 "○○ · 날짜까지" 를 보여 줄 때 쓴다. */
+  function grant() {
+    if (!_user) return null;
+    if (_조회상태 === "확인됨") {
+      return 제공Pro(_profile) ? { until: _profile.grant_until, label: _profile.grant_label || null } : null;
+    }
+    return 기억된제공();
+  }
+
+  /* 결제한 이용권으로 **만** Pro 인가 — 기관 제공이 살아 있으면 false.
+     ⚠ 유료 기능 사용 기록(약관 제8조 환불 제한의 근거, js/pro.js)의 문지기다.
+        isPro 를 쓰면 학교에서 제공받아 쓴 학생이 따로 이용권을 샀을 때 **그 주문에 「사용함」이 찍혀**
+        7일 환불이 부당하게 막힌다. 제공이 살아 있는 동안에는 결제한 것을 쓴 것으로 보지 않는다
+        (손님에게 유리한 쪽). */
+  function paidOnly() {
+    return paidPro() && !grant();
+  }
+
+  /* 결제한 이용권이 살아 있는가 — 기관 제공과 **상관없이**.
+     계정 페이지의 '이용권 기간' 줄과 '탈퇴하면 잔여 이용권 소멸' 안내가 이것을 본다.
+     (isPro 를 쓰면 제공만 받는 학생에게 "기간 제한 없음"·"잔여 이용권 소멸" 이 거짓으로 뜬다) */
+  function paidPro() {
+    if (!_user) return false;
+    if (_조회상태 === "확인됨") return 결제Pro(_profile);
     return 기억된Pro();
   }
 
@@ -618,6 +702,9 @@ WE.auth = (function () {
       // 이미 적어 둔 종류를 지우지 않는다 — 여기서는 만료 시각만 새로 고친다
       var 이전 = null;
       try { 이전 = JSON.parse(localStorage.getItem(기억키) || "null"); } catch (e) {}
+      // ⚠ loadProfile 과 **같은 순서**(제공 → 결제)로 적는다. 순서가 다르면 '결제 기억을 지우다
+      //    제공 기억까지 지우는' 실수를 검사가 못 잡는다(2026-09-28 실제로 그 실수를 했다).
+      제공기억하기(_profile);
       기억하기(_profile, 이전 && 이전.kind);
     }
   }
@@ -890,6 +977,9 @@ WE.auth = (function () {
     refreshProfile: refreshProfile,
     ready: ready,
     isPro: isPro,
+    grant: grant,           // 기관 제공 기간 { until, label } | null (2026-09-28)
+    paidPro: paidPro,       // 결제한 이용권이 살아 있는가 (제공과 무관)
+    paidOnly: paidOnly,     // 결제로만 Pro 인가 — 유료 기능 사용 기록의 문지기 (js/pro.js)
     proConfirmed: proConfirmed,
     _테스트_상태: _테스트_상태,
     proState: proState,

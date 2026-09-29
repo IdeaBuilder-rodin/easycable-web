@@ -145,6 +145,18 @@ WE.pro = (function () {
         또 불려도 '처음' 시각은 그대로다. */
   var _사용보고함 = false;
 
+  /* 유료 기능 사용을 기록해도 되는가 — **결제한 이용권으로만** Pro 일 때 (2026-09-28).
+     ⚠ isPro 를 쓰면 안 된다. isPro 는 기관 제공(학교·기관 참여 링크)도 Pro 로 본다.
+        제공받아 쓰던 학생이 따로 이용권을 사면, 그 사용이 **결제한 주문에 「사용함」으로 찍혀**
+        약관 제8조의 7일 환불이 부당하게 막힌다. 제공이 살아 있는 동안에는 기록하지 않는다.
+     ⚠ paidOnly 가 없으면(옛 auth.js 가 캐시에 남은 경우) isPro 로 물러난다 —
+        옛 auth.js 의 isPro 는 제공을 모르므로 그 자체가 '결제로만' 과 같다. */
+  function 결제로만Pro() {
+    if (!WE.auth) return false;
+    if (WE.auth.paidOnly) return !!WE.auth.paidOnly();
+    return !!(WE.auth.isPro && WE.auth.isPro());
+  }
+
   function _유료사용기록(배선수, 부품수) {
     if (_사용보고함) return;
     if (!WE.flags || !WE.flags.LAUNCH) return;              // 출시 전에는 아무 일도 안 한다
@@ -158,7 +170,7 @@ WE.pro = (function () {
        FREE_LIMIT 을 끄면서 **무료 사용자도 limited()==false 가 됐다.**
        그래서 이 방어가 없으면 심사 기간에 30개를 넘긴 무료 사용자마다 기록이 남는다.
        (2026-09-01) */
-    if (!(WE.auth && WE.auth.isPro && WE.auth.isPro())) return;
+    if (!결제로만Pro()) return;
     // 배선이든 부품이든 무료 범위를 넘겨야 '유료 기능 사용' 이다.
     // 둘 다 범위 안이면 아직 무료로 쓰는 중이다.
     // ⚠ 요청한 종류만 본다 (canAddBundle 과 같은 이유)
@@ -183,7 +195,7 @@ WE.pro = (function () {
   function _유료사용기록_시트(n) {
     if (_사용보고함) return;
     if (!WE.flags || !WE.flags.LAUNCH) return;
-    if (!(WE.auth && WE.auth.isPro && WE.auth.isPro())) return;
+    if (!결제로만Pro()) return;                                // 이유는 결제로만Pro 머리말
     if (sheetCount() + (n || 1) <= sheetLimit()) return;    // 아직 무료 범위 안이다
     _사용보고함 = true;
     try {
@@ -226,6 +238,26 @@ WE.pro = (function () {
 
   /* 문구는 완전한 문장 하나로 두고 {} 를 나중에 채운다.
      "…배선 " + n + "개…" 처럼 조각내면 번역 단위가 쪼개져 다른 언어에서 어순이 깨진다. */
+  /* ── 한도에 막혔을 때 결제로 가는 길 (2026-09-28 고원빈 결정 ①②, ④ 미리 알림은 하지 않는다) ──
+     예전 한도 창은 [확인] 하나뿐이라 구매 의향이 가장 높은 순간에 결제로 갈 길이 없었다.
+     ① 창에 「Pro로 계속 그리기」 — 요금제 페이지를 **새 탭**으로 연다(작업 중인 도면을 덮지 않는다).
+     ② 「지금까지 그린 도면은 그대로 저장돼 있습니다」 — 막힌 순간의 불안을 먼저 덜어 준다.
+     ⚠ 가격은 창에 적지 않는다 — 가격 원본이 이미 여러 곳에 흩어져 있고(대조 검사 없음) 요금제 페이지에 있다. */
+  function 요금제열기() {
+    var q = /[?&]launch=1(&|$)/.test(String(location.search || "")) ? "?launch=1" : "";   // 로컬 시험 주소 유지
+    /* ⚠ noopener 를 주지 않는다 — 「로그인 상태 유지」를 끈 사용자(기본)는 세션이 sessionStorage 에 있어서
+          noopener 로 열면 새 탭이 로그인을 물려받지 못하고, 결제하기에서 다시 로그인하라고 한다.
+          (auth.js 「내 계정」 새 탭 주석의 실측과 같은 이유. 같은 오리진 페이지라 막을 위험도 없다) */
+    window.open("pricing.html" + q, "_blank");
+  }
+  function 결제버튼() {
+    return { label: WE.i18n.t("Pro로 계속 그리기"), dismiss: WE.i18n.t("나중에 하기"), run: 요금제열기 };
+  }
+  function 안심문구() {
+    return WE.i18n.t("지금까지 그린 도면은 그대로 저장돼 있습니다.") + "\n" +
+      WE.i18n.t("Pro로 바꾸면 부품·배선·페이지 제한 없이 이어서 그리고, 내보내기·인쇄 워터마크도 빠집니다.");
+  }
+
   function msg(ko, vals) {
     var s = WE.i18n.t(ko);
     for (var k in vals) s = s.replace("{" + k + "}", vals[k]);
@@ -250,6 +282,8 @@ WE.pro = (function () {
         msg("무료 버전은 도면 하나에 페이지 {max}장까지 만들 수 있습니다.", { max: 최대 })
         + "\n\n"
         + msg("도면 페이지 {n}/{max}", { n: 지금, max: 최대 })
+        + "\n\n" + 안심문구(),
+        결제버튼()
       );
     }
     return false;
@@ -302,8 +336,9 @@ WE.pro = (function () {
         본문 += "\n" + msg("이 작업에는 배선 {w}개 · 부품 {c}개가 필요합니다.",
                            { w: 배선수 || 0, c: 부품수 || 0 });
       }
+      본문 += "\n\n" + 안심문구();
 
-      WE.app.notice(제목, 본문);
+      WE.app.notice(제목, 본문, 결제버튼());
     }
     return false;
   }
@@ -347,7 +382,8 @@ WE.pro = (function () {
         + msg("무료 버전은 배선 {wmax}개 · 부품 {cmax}개 · 페이지 {smax}장까지입니다.",
               { wmax: limit(), cmax: compLimit(), smax: sheetLimit() })
         + "\n\n"
-        + WE.i18n.t("열어서 보거나 지우는 것은 됩니다. 새로 추가하는 것만 막힙니다.")
+        + WE.i18n.t("열어서 보거나 지우는 것은 됩니다. 새로 추가하는 것만 막힙니다."),
+        결제버튼()   // 여기는 막힌 게 아니라 알리는 창이라 ② 안심 문구는 넣지 않는다 — 버튼만
       );
     }
   }
@@ -414,3 +450,38 @@ if (WE.auth && WE.auth.onChange) {
     if (WE.render && WE.render.refreshWatermark) WE.render.refreshWatermark();
   });
 }
+
+/* ③ 다른 탭에서 결제하고 돌아오면 요금제를 다시 읽는다 (2026-09-28 고원빈 결정).
+   ⚠ 왜 — 에디터는 로그인·토큰 갱신 때만 요금제를 읽는다. 한도 창의 「Pro로 계속 그리기」는 요금제를
+      새 탭으로 여는데, 거기서 결제를 끝내고 이 탭으로 돌아와도 여기 기억은 '무료' 그대로라
+      **새로고침 전까지 계속 막혀 있었다**(돈 내고도 막히는 셈 — 코드상 판단).
+   그래서 탭이 다시 보일 때(탭 전환 = visibilitychange, 창 전환 = focus) 로그인한 무료 사용자만 한 번 다시 묻는다.
+   - 이미 Pro 면 묻지 않는다(대부분의 전환은 서버를 안 부른다).
+   - 두 이벤트가 겹쳐 오고, 탭을 자주 오가도 10초에 한 번만 묻는다.
+   - 무료 한도 스위치(FREE_LIMIT)가 꺼져 있어도 묻는다 — 워터마크는 스위치와 무관하게 Pro 여부를 따른다.
+   - WE.auth.refreshProfile 을 **부를 때마다 찾아** 부른다(검사가 서버 대신 바꿔 끼울 수 있게).
+   refreshProfile 이 notify() 를 부르므로 위 onChange(워터마크 등)는 저절로 따라온다. */
+(function () {
+  if (!WE.auth || typeof document === "undefined") return;
+  var 마지막 = 0;
+  function 돌아옴() {
+    if (document.hidden) return;
+    if (!WE.flags || !WE.flags.LAUNCH) return;
+    if (!WE.auth.user || !WE.auth.user()) return;       // 로그아웃 상태 — 결제할 수도 없다
+    if (WE.auth.isPro && WE.auth.isPro()) return;
+    var 지금 = Date.now();
+    if (지금 - 마지막 < 10000) return;
+    마지막 = 지금;
+    if (!WE.auth.refreshProfile) return;
+    WE.auth.refreshProfile(function () {
+      if (!WE.auth.isPro || !WE.auth.isPro()) return;   // 아직 결제 전이면 조용히
+      // 에디터에서만 알린다 — 요금제·계정 페이지에는 이 창이 없다(WE.app.notice 가 없으면 건너뜀)
+      // 제목은 결제 복구(payrecover.js)와 같은 말을 쓴다 — 같은 일을 두 가지 말로 알리지 않는다
+      if (WE.app && WE.app.notice) {
+        WE.app.notice(WE.i18n.t("이용권이 적용되었습니다"), WE.i18n.t("이제 제한 없이 이어서 그릴 수 있습니다."));
+      }
+    });
+  }
+  document.addEventListener("visibilitychange", 돌아옴);
+  window.addEventListener("focus", 돌아옴);
+})();

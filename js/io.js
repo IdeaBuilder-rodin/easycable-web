@@ -299,6 +299,16 @@ WE.io = (function () {
         incomingParts = data.libraryParts || [];
       }
 
+      /* ⚠ 배선도가 아닌 JSON 이면 여기서 멈춘다 — 도면도 라이브러리도 건드리기 **전에** (2026-09-28).
+         열기 창이 .json 을 받으므로 옛 라이브러리 백업(.json)이나 엉뚱한 JSON 을 고르기 쉽다.
+         예전에는 그런 파일도 loadProject 가 빈 도면으로 받아들여 ① 작업 중이던 도면이 비고
+         ② "열기 완료" 라고 했고 ③ 문서 id 가 그대로라 자동저장이 **같은 칸에 빈 도면을 덮어써**
+         「최근 작업」 에서도 사라졌다(실측). 잘린 JSON 은 JSON.parse 가 먼저 막아 괜찮았다.
+         판정은 loadProject 가 읽는 모양 그대로 — 새 형식 sheets[] 또는 옛 형식 components/wires[]. */
+      var 도면인가 = project && typeof project === "object" && !Array.isArray(project) &&
+        (Array.isArray(project.sheets) || Array.isArray(project.components) || Array.isArray(project.wires));
+      if (!도면인가) throw new Error(WE.i18n.t("배선도 파일이 아닙니다."));
+
       if (incomingParts) {
         var res = mergeLibraryParts(incomingParts);
         added = res.added;

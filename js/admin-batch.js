@@ -548,6 +548,7 @@ WE.adminBatch = (function () {
 
   // ── 화면 전환 ─────────────────────────────────────────────────────────────
   function setMode(next) {
+    // 폴더·참여 링크는 「회원·결제」 안에 있다(2026-09-29 합침) — 따로 된 화면(folders)은 없다
     mode = next === "batch" ? "batch" : next === "collect" ? "collect"
          : next === "members" ? "members" : "parts";
     var body = $("admBody"), search = $("admSearchForm"), batch = $("admBatch"),

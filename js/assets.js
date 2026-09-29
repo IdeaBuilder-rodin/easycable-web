@@ -154,6 +154,27 @@ WE.assets = (function () {
     });
   }
 
+  /* 다른 탭이 새로 넣은 첨부물만 저장소에서 가져와 풀에 **더한다** (2026-09-28).
+     ⚠ loadAll 을 쓰면 안 된다 — 풀을 통째로 바꿔서, 이 탭이 아직 기록하지 못한(pending)
+        첨부물까지 풀에서 날아간다. 그러면 다음 flush 가 빈 값을 쓴다.
+        그래서 이미 있는 키는 건드리지 않고 없는 키만 채운다. */
+  function mergeFromStore(cb) {
+    WE.store.assetGetAll(function (map) {
+      for (var k in map) {
+        if (!Object.prototype.hasOwnProperty.call(map, k) || pool[k]) continue;
+        pool[k] = map[k];
+        if (keyCache) keyCache.set(map[k], k);
+      }
+      cb && cb();
+    });
+  }
+  // packed 객체가 가리키는데 풀에 없는 첨부물이 있는가
+  function hasMissing(o) {
+    var refs = collectRefs(o);
+    for (var k in refs) if (!pool[k]) return true;
+    return false;
+  }
+
   // 참조되지 않는 자산 제거. keepRefs = collectRefs()로 모은 { 키: 1 }
   function sweep(keepRefs, cb) {
     var dead = [], bytes = 0;
@@ -277,7 +298,7 @@ WE.assets = (function () {
 
   return {
     pack: pack, unpack: unpackRoot, put: put, get: get, collectRefs: collectRefs,
-    adopt: adopt, flush: flush, loadAll: loadAll,
+    adopt: adopt, flush: flush, loadAll: loadAll, mergeFromStore: mergeFromStore, hasMissing: hasMissing,
     sweep: sweep, sweepAll: sweepAll, sweepIfDue: sweepIfDue,
     stats: stats, report: report, verify: verify, cleanup: cleanup,
     lastMissing: function () { return _missing; },

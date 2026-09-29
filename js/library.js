@@ -69,16 +69,64 @@ WE.library = (function () {
   function 묶음시작() { _묶음++; }
   function 묶음끝() {
     if (--_묶음 > 0) return;            // 중첩되면 가장 바깥에서만 쓴다
-    if (!_밀린저장) return;
+    if (!_밀린저장) {
+      // 묶음 동안 다른 탭이 바꿨는데 이 탭은 쓸 게 없었다 → 이제 다시 읽어도 잃을 게 없다
+      if (_다시읽기대기) { _다시읽기대기 = false; 다시읽기(); }
+      return;
+    }
     _밀린저장 = false;
+    _다시읽기대기 = false;   // ⚠ 아래 save() 가 덮어쓴다 — 묶음 중에 온 다른 탭 변경은 여기서 진다(아래 설명)
     save();
   }
+
+  /* ── 다른 탭과 라이브러리 맞추기 (2026-09-28) ─────────────────────────
+     ⚠ 왜 필요한가 — save() 는 **이 탭 메모리의 목록 전체**를 저장소에 덮어쓴다.
+        라이브러리는 탭이 열릴 때 한 번만 읽으므로, 탭 A 가 부품을 넣은 뒤 탭 B(그 전에 열린 탭)가
+        무엇이든 저장하면 A 의 부품이 **소리 없이 사라졌다**(실측: 두 탭에서 하나씩 넣으면 먼저 넣은 쪽이 없어짐).
+        에디터는 「마지막으로 보던 도면을 연다」 규칙이라 탭을 여러 개 여는 일이 흔하다(2026-09-02 제보).
+     해결 — 저장이 **끝난 뒤** 다른 탭에 알리고, 알림을 받은 탭은 저장소에서 다시 읽는다.
+        부품 편집은 모두 id 로 updatePart 를 거치므로 목록을 새로 읽어도 편집 중인 것을 잃지 않는다.
+     남는 틈 — 두 탭이 몇 ms 안에 동시에 저장하거나, 이 탭이 묶음 작업(.ezclib 불러오기 등, 수 초) 중일 때
+        들어온 다른 탭 변경은 예전처럼 나중 저장이 이긴다. 사람 손으로는 드문 경우라 받아들인다.
+     BroadcastChannel 이 없는 오래된 브라우저에서는 아무 일도 하지 않는다(예전과 같다). */
+  var _탭표 = Math.random().toString(36).slice(2);
+  var _채널 = null;
+  try { if (window.BroadcastChannel) _채널 = new BroadcastChannel("we-library"); } catch (e) { _채널 = null; }
+  var _다시읽기대기 = false;
+  function 알리기() {
+    try { if (_채널) _채널.postMessage({ from: _탭표 }); } catch (e) { /* 무시 */ }
+  }
+  function 다시읽기() {
+    if (_묶음 > 0) { _다시읽기대기 = true; return; }
+    WE.store.getRaw(KEY2, function (json2) {
+      if (!json2) return;
+      var packed;
+      try { packed = JSON.parse(json2); } catch (e) { return; }
+      function 적용() {
+        if (_묶음 > 0) { _다시읽기대기 = true; return; }   // 읽는 사이에 묶음이 시작됐다
+        try {
+          var m = toModel(WE.assets.unpack(packed));
+          parts = m.parts; folders = m.folders;
+        } catch (e) { return; }
+        try { if (WE.app && WE.app.renderLibrary) WE.app.renderLibrary(); } catch (e) { /* 무시 */ }
+      }
+      // 다른 탭이 새 그림을 넣었으면 그 첨부물부터 가져온다 — 없으면 그림이 빈 칸으로 보인다
+      if (WE.assets.hasMissing && WE.assets.hasMissing(packed)) WE.assets.mergeFromStore(적용);
+      else 적용();
+    });
+  }
+  if (_채널) _채널.onmessage = function (e) {
+    if (e && e.data && e.data.from !== _탭표) 다시읽기();
+  };
 
   function save() {
     if (_묶음 > 0) { _밀린저장 = true; return; }
     var packed = WE.assets.pack({ folders: folders, parts: parts });
-    WE.assets.flush();
-    WE.store.putRaw(KEY2, JSON.stringify(packed));
+    // 첨부물과 목록이 **둘 다** 기록된 뒤에 알린다. 목록만 먼저 가면 다른 탭이 그림 없는 부품을 읽는다.
+    var 남은 = 2, 목록됨 = false;
+    function 하나끝() { if (--남은 === 0 && 목록됨) 알리기(); }
+    WE.assets.flush(function () { 하나끝(); });
+    WE.store.putRaw(KEY2, JSON.stringify(packed), function (ok) { 목록됨 = ok; 하나끝(); });
     /* 서버 수집(js/libsync.js) — 저장이 **끝난 뒤** 타이머만 건다. 저장 자체는 위에서 이미 끝났고,
        libsync 가 없거나 무슨 오류를 내도 여기서 삼킨다. 에디터가 이 줄 때문에 달라지면 안 된다(2026-09-14). */
     try { if (WE.libsync && WE.libsync.touch) WE.libsync.touch(); } catch (e) { /* 무시 */ }

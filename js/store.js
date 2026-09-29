@@ -353,10 +353,21 @@ WE.store = (function () {
   }
 
   // ---- 범용 키-값 (라이브러리 등) ----
-  function putRaw(key, val) {
-    if (!db) return;
-    try { db.transaction(STORE, "readwrite").objectStore(STORE).put(val, key); }
-    catch (e) { /* 무시 */ }
+  /* cb 는 선택이다 — 넘기면 기록이 **실제로 끝난 뒤** 성공 여부(true/false)를 받는다.
+     (2026-09-28) 라이브러리가 저장을 마친 뒤에야 다른 탭에 "다시 읽어라" 를 알릴 수 있어서 넣었다.
+     알림이 기록보다 먼저 가면 다른 탭이 옛 내용을 다시 읽는다. 기존 호출부는 cb 없이 그대로 동작한다. */
+  function putRaw(key, val, cb) {
+    if (!db) { cb && cb(false); return; }
+    try {
+      var tx = db.transaction(STORE, "readwrite");
+      tx.objectStore(STORE).put(val, key);
+      if (cb) {
+        tx.oncomplete = function () { cb(true); };
+        tx.onerror = function () { cb(false); };
+        tx.onabort = function () { cb(false); };
+      }
+    }
+    catch (e) { cb && cb(false); }
   }
   function getRaw(key, cb) {
     if (!db) { cb(null); return; }

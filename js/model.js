@@ -302,11 +302,13 @@ WE.model = (function () {
 
   /* 새 용지 밖으로 나간 것들을 가장자리 안쪽으로 당긴다. */
   function 밀어넣기(s, w, h) {
-    var M = 4;   // 가장자리에 딱 붙지 않게 아주 조금 띄운다
+    var M = 4;   // 가장자리에 딱 붙지 않게 아주 조금 띄운다 (주석·배선)
+    // 부품은 끌기·방향키와 같은 끝 여백(10px)을 쓴다 (2026-09-28) — 용지를 바꿔도 같은 규칙이어야 한다
+    var MC = (WE.geometry && WE.geometry.edgeMargin) || M;
     (s.components || []).forEach(function (c) {
       // 부품이 용지보다 크면 좌측 상단에 맞춘다 — 어디로도 다 넣을 수 없다
-      c.x = Math.max(M, Math.min(c.x, Math.max(M, w - (c.width || 0) - M)));
-      c.y = Math.max(M, Math.min(c.y, Math.max(M, h - (c.height || 0) - M)));
+      c.x = Math.max(MC, Math.min(c.x, Math.max(MC, w - (c.width || 0) - MC)));
+      c.y = Math.max(MC, Math.min(c.y, Math.max(MC, h - (c.height || 0) - MC)));
     });
     (s.annotations || []).forEach(function (a) {
       a.x = Math.max(M, Math.min(a.x, w - M));
@@ -575,6 +577,12 @@ WE.model = (function () {
     copy.id = nextId("cmp");
     copy.no = maxCmpNo() + 1;   // 복제본은 새 번호 — 원본 번호를 물려받으면 도면에 같은 번호가 둘이 된다
     copy.x += 20; copy.y += 20;
+    /* ⚠ 캔버스 밖으로 밀려나지 않게 가둔다 (2026-09-28).
+       9/2 에 「부품이 캔버스 밖으로 못 나가게」 를 넣으면서 붙여넣기(app.js pasteClipboard)는 가뒀는데
+       복제(Ctrl+D)는 빠져 있었다. 가장자리 부품을 복제하면 +20 만큼 밖으로 나가 잘려 보이고
+       (#canvas 는 overflow:hidden) BOM 에는 잡혔다. 실측: 오른쪽 아래 구석 복제본이 18px 밖.
+       가운데서 복제할 때는 pullInside 가 아무것도 안 하므로 예전처럼 정확히 +20,+20 이다. */
+    if (WE.geometry && WE.geometry.pullInside) WE.geometry.pullInside(copy);
     copy.z = _maxZ() + 1;
     project.components.push(copy);
     return copy;
@@ -903,7 +911,9 @@ WE.model = (function () {
            틀린 값이었다. 열 때 활성 시트는 늘 1장이라, 세로로 만든 2장이 1장 높이(900)로
            눌려 부품이 통째로 위쪽에 뭉쳤다 (2026-09-08 고원빈 신고). */
         var cv = sheetSize(s);
-        (s.components || []).forEach(function (c) { WE.geometry.pullInside(c, cv); });
+        // 여백 0 — 열 때는 캔버스 **밖**에 있는 것만 들인다. 끝 여백(10px, 2026-09-28)은 움직일 때부터 지킨다.
+        // 여기서 여백을 쓰면 옛 도면의 가장자리 부품이 열 때마다 조금씩 움직인다.
+        (s.components || []).forEach(function (c) { WE.geometry.pullInside(c, cv, 0); });
       });
     }
 
