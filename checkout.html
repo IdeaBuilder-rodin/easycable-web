@@ -132,9 +132,8 @@
 
 <main class="co-wrap">
 
-  <p style="margin-bottom:20px">
-    <a href="pricing.html" style="font-size:14px">← 요금제로 돌아가기</a>
-  </p>
+  <!-- 「← 요금제로 돌아가기」 글자 링크는 뺐다(2026-09-30 고원빈) — 모양 없이 떠 있어 어색하고,
+       완료·이용 중·오류 화면에는 아래 버튼이, 결제 전 화면에는 위 메뉴 「요금제」 가 있다. -->
 
   <!-- 상태 안내 카드 (로그인 필요 · 오류 · 확인 중 · 무료 기간) — 알림() 이 카드 모양으로 채운다 -->
   <div id="msg" class="co-card co-msg co-hide"></div>
@@ -639,6 +638,16 @@
     var 이름 = m.name || m.full_name || m.nickname || m.preferred_username || String(이메일 || (u && u.email) || "").split("@")[0];
     return String(이름 || "").trim().slice(0, 40) || "EasyCable";
   }
+  /* 치는 대로 하이픈을 넣은 모양 (2026-09-30 고원빈 — 숫자만 쳐도 되게). 숫자는 11자리까지만.
+     010 은 늘 3-4-4. 옛 번호(011·016~019)는 10자리면 3-3-4, 11자리면 3-4-4.
+     ⚠ 여기는 보기 좋게만 한다. 형식 검사와 결제창에 넘길 값은 아래 휴대폰번호() 가 따로 정한다. */
+  function 번호모양(v) {
+    var d = String(v || "").replace(/\D/g, "").slice(0, 11);
+    if (d.length <= 3) return d;
+    if (d.length <= 7) return d.slice(0, 3) + "-" + d.slice(3);
+    var 가운데 = (d.indexOf("010") === 0 || d.length === 11) ? 4 : 3;
+    return d.slice(0, 3) + "-" + d.slice(3, 3 + 가운데) + "-" + d.slice(3 + 가운데);
+  }
   /* 입력칸의 번호를 010-1234-5678 로. 휴대폰 형식(01x + 7~8자리)이 아니면 "" */
   function 휴대폰번호() {
     var d = String(($("coPhone") || {}).value || "").replace(/\D/g, "");
@@ -680,7 +689,20 @@
     결제버튼.disabled = true;
     결제버튼.textContent = tr("결제 정보를 준비하는 중…");
     // 고치기 시작하면 빨간 표시를 거둔다
-    $("coPhone").addEventListener("input", function () { this.classList.remove("is-bad"); $("coPhoneHelp").className = ""; $("coPhoneHelp").textContent = tr("결제·환불 안내에 쓰이며 전자상거래법에 따라 5년 보관합니다."); });
+    $("coPhone").addEventListener("input", function () {
+      /* 치는 대로 하이픈을 넣는다. 값을 통째로 바꾸면 커서가 끝으로 튀므로,
+         커서 앞에 있던 **숫자 개수**를 세어 두었다가 새 모양에서 같은 숫자 뒤로 커서를 돌려놓는다
+         (가운데를 고칠 때도 커서가 제자리에 있게). */
+      var 앞숫자 = this.value.slice(0, this.selectionStart || 0).replace(/\D/g, "").length;
+      var 새 = 번호모양(this.value);
+      if (새 !== this.value) {
+        this.value = 새;
+        var i = 0, n = 0;
+        while (i < 새.length && n < 앞숫자) { if (새.charAt(i) !== "-") n++; i++; }
+        try { this.setSelectionRange(i, i); } catch (e) { /* 일부 브라우저는 tel 칸의 커서 지정을 막는다 — 모양만 바뀌면 된다 */ }
+      }
+      this.classList.remove("is-bad"); $("coPhoneHelp").className = ""; $("coPhoneHelp").textContent = tr("결제·환불 안내에 쓰이며 전자상거래법에 따라 5년 보관합니다.");
+    });
     $("coName").addEventListener("input", function () { this.classList.remove("is-bad"); $("coNameHelp").className = ""; $("coNameHelp").textContent = ""; });
 
     준비되면(function () {
