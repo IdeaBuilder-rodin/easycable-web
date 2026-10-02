@@ -582,14 +582,17 @@ body.label-mode #canvas, body.label-mode #canvas * { cursor: copy !important; } 
   padding: 10px; overflow: auto; flex: none;
 }
 /* 좌측 라이브러리 패널: 세로 flex — 목록만 스크롤, 저장/불러오기는 하단 고정 */
-#leftPanel { width: 240px; display: flex; flex-direction: column; overflow: hidden; position: relative; }
+/* 폭은 --left-w — 사용자가 끌어서 바꾼 폭을 app.html 머리 스크립트가 첫 화면 전에 건다(2026-09-30).
+   없으면 기본 240px. 끌기·더블클릭은 지금처럼 js/app.js 가 style.width 로 덮는다 */
+#leftPanel { width: var(--left-w, 240px); display: flex; flex-direction: column; overflow: hidden; position: relative; }
 /* 이미지 파일을 라이브러리 패널로 드래그해서 놓을 때 시각 피드백 */
 #leftPanel.lib-dragover { outline: 2px dashed var(--primary); outline-offset: -2px; background: var(--primary-bg); }
 /* 속성창은 값을 읽고 고치는 곳이라 넓을 필요가 없다. 넓힌 만큼 도면 공간을 뺏는다. */
 /* 기본 225px — 다중 선택 시 정렬 버튼 줄이 그만큼을 요구한다.
    180px 이던 시절에는 '가로선 정렬'·'가로선 균등'이 잘려 못 눌렀다 (2026-08-18).
-   한계값이 js/app.js 의 PANEL_LIMIT 에도 있다 — 한쪽만 고치면 어긋난다. */
-#rightPanel { width: 225px; display: flex; flex-direction: column; gap: 12px; }
+   한계값이 js/app.js 의 PANEL_LIMIT 에도 있다 — 한쪽만 고치면 어긋난다.
+   폭은 --right-w — 저장 폭을 첫 화면 전에 건다(#leftPanel 과 같은 이유 · app.html 머리 스크립트) */
+#rightPanel { width: var(--right-w, 225px); display: flex; flex-direction: column; gap: 12px; }
 #leftPanel h3, #rightPanel h3 { margin: 0 0 8px; font-size: var(--fs-lg); }
 
 /* 라이브러리 */
@@ -1875,29 +1878,6 @@ body.term-mode #canvas { cursor: crosshair; }
   .public-publish-preview { width: 100%; height: 160px; }
 }
 
-/* 출시 알림(이메일 수집) 모달 — 뉴스레터 표준 패턴: 입력창+버튼 한 줄, 아래엔 텍스트형 닫기 */
-.notify-row { display: flex; gap: 8px; }
-.notify-row input {
-  flex: 1; min-width: 0; padding: 9px 10px;
-  border: 1px solid #ccc; border-radius: 6px;
-  font-family: inherit; font-size: 13px;
-}
-.notify-row input:focus { outline: none; border-color: #1e88e5; box-shadow: 0 0 0 2px rgba(30,136,229,.15); }
-.notify-row button.primary {
-  flex: none; padding: 9px 16px; white-space: nowrap;
-  background: #1e88e5; color: #fff; border: 1px solid #1565c0; border-radius: 6px;
-  cursor: pointer; font-family: inherit; font-size: 13px; font-weight: 600;
-}
-.notify-row button.primary:hover { background: #1976d2; }
-.notify-later {
-  display: block; margin: 14px auto 0;
-  background: none; border: none; padding: 2px 6px;
-  color: #999; font-size: 12px; cursor: pointer;
-  text-decoration: underline; font-family: inherit;
-}
-.notify-later:hover { color: #555; }
-#notifyStatus:empty { display: none; }   /* 상태 문구 없을 땐 자리 차지 안 함(빈 줄 방지) */
-
 /* 설정 모달 */
 .set-tabs { display: flex; gap: 4px; border-bottom: 1px solid #e2e6ea; margin: 4px 0 12px; }
 .set-tab {
@@ -2275,20 +2255,25 @@ body.note-open #projNote { height: 80px; overflow: auto; }   /* 펼침: 4줄 */
 #noteToggle:hover { border-color: var(--primary); color: var(--primary); }
 body.note-open #noteToggle { transform: rotate(180deg); }
 
-/* ---- 복원 알림 띠 ----
-   지난 작업을 자동으로 되살렸을 때만 잠깐 나타난다.
-   복원이 기본 동작이므로 "예/아니오"를 묻지 않고, 새로 시작할 길만 열어둔다. */
+/* ---- 캔버스 위 알림 (복원 알림 · 다른 탭 경고 — app.html 주석) ----
+   2026-09-30 — 툴바 아래 띠에서 **캔버스 위에 떠 있는 알림**으로 바꿨다(고원빈).
+   띠일 때는 흐름 속 요소라 나타나면 작업 영역 전체가 아래로 밀리고, 사라지면 다시 올라왔다.
+   이제 #centerCol(position:relative) 기준으로 위 가운데에 떠서 아무것도 밀지 않는다.
+   z-index 45 — 캔버스 위 날짜(#canvasHeader)·모서리 도구가 40 이라 그 위, 모달(100) 아래. */
 #restoreBanner {
+  position: absolute; top: 14px; left: 50%; transform: translateX(-50%); z-index: 45;
+  max-width: calc(100% - 32px); width: max-content;
   display: flex; align-items: center; gap: var(--sp3);
-  padding: var(--sp2) var(--sp4);
+  padding: var(--sp2) var(--sp3) var(--sp2) var(--sp4);
   background: var(--primary-bg);
-  border-bottom: 1px solid var(--bd2);
+  border: 1px solid var(--bd2); border-radius: 10px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, .14);
   font-size: var(--fs);
   color: var(--tx);
 }
 #restoreBanner[hidden] { display: none; }
 #restoreBanner .rb-icon { color: var(--primary); font-size: var(--fs-lg); }
-#restoreBannerText { flex: 1; }
+#restoreBannerText { flex: 1 1 auto; min-width: 0; }
 #restoreBannerText b { font-weight: 600; }
 #restoreBannerText .rb-sub { color: var(--tx2); font-size: var(--fs-sm); margin-left: var(--sp2); }
 #restoreBannerNew {
@@ -2346,6 +2331,25 @@ body.note-open #noteToggle { transform: rotate(180deg); }
   background: var(--primary); border-color: #e0a91b;
   box-shadow: 0 0 0 2px #e0a91b;
 }
+
+/* ── 계정 자리 고정 (2026-09-30 고원빈) ──────────────────────────────
+   [저장]·[피드백] 은 오른쪽 끝 계정 자리에 붙어 있어, 계정 자리 폭이 바뀌면 같이 밀렸다.
+   새로고침마다 비어 있음(0) → 「로그인」(61) → 로그인한 사람은 아바타(30) 로 바뀌며 두 번 움직였고,
+   로그인했을 때와 안 했을 때 자리도 달랐다.
+   → 자리 폭을 처음부터 「로그인」 버튼 폭(실측 한국어 61 · 영어 「Sign in」 61.1)으로 잡아 두고,
+      안에 든 것(글자 버튼 · 아바타 · 확인 중 동그라미)은 오른쪽에 붙인다.
+      로그인하면 아바타와 [피드백] 사이가 조금 벌어진다 — 대신 두 버튼은 어느 상태에서도 같은 자리다. */
+#toolbar #acctSlot { display: flex; align-items: center; justify-content: flex-end; flex: none; min-width: 62px; }
+
+/* 로그인 확인 중(app.html 머리의 data-auth="pending") — auth.css 의 규칙은 밝은 머리줄용이라
+   자리 자체를 30px 흰 원으로 만든다. 에디터에서는 그러면 자리 폭이 30 으로 줄어 [저장]·[피드백] 이 밀리고
+   어두운 툴바 위에서 흰 원이 튄다. 그래서 자리 폭은 그대로 두고, 오른쪽에 어두운 회색 원만 그린다.
+   선택자에 #toolbar 를 붙여 auth.css 의 html[data-auth="pending"] #acctSlot 보다 id 하나 더 세게 한다. */
+html[data-auth="pending"] #toolbar #acctSlot { width: auto; height: auto; border-radius: 0; background: none; }
+html[data-auth="pending"] #toolbar #acctSlot::after {
+  content: ""; flex: none; width: 30px; height: 30px; border-radius: 50%; background: #3d434d;
+}
+html[data-auth="pending"] #toolbar #acctWrap { display: none; }
 
 
 #toolbar .acct-menu .acct-item {     /* 툴바의 어두운 버튼 스타일을 덮어쓴다 */
@@ -2575,22 +2579,66 @@ input[type="number"] {
 .affiliate-tip span + span, .affiliate-tip b { margin-top: 9px; }
 .affiliate-tip b { display: block; }
 
-/* ── 베타 안내 모달 ──────────────────────────────────────────
-   짧게 읽고 바로 닫을 수 있어야 한다 — 들어오자마자 읽을 거리를 길게 내밀면
-   진입 자체를 막는다(2026-09-01 에 방문 안내 모달을 끈 이유가 그것이었다). */
-.beta-box { width: min(340px, calc(100vw - 32px)); padding: 34px 28px 24px; text-align: center; }
-.beta-title { margin: 0 0 24px; font-size: 20px; font-weight: 700; color: var(--tx); word-break: keep-all; }
-/* .primary 는 이 프로젝트에 단독 규칙이 없다 — 늘 .modal-actions button.primary 처럼
-   다른 선택자와 짝지어 쓴다. 그래서 여기서도 색을 직접 준다(.welcome-start 와 같은 모양). */
-.beta-ok {
-  width: 100%; margin-top: 0; padding: 11px; font-size: 14px; font-weight: 600;
-  background: var(--primary); color: #fff; border: 1px solid var(--primary-d);
-  border-radius: var(--r); cursor: pointer; font-family: inherit;
+/* ── 정식 출시 안내 모달 (2026-09-30 · 10/01 최종 · 10/12 이 지나면 함께 지운다) ─────────────
+   모양 — 실제 공지 모달 사례(Phrase·Figma: 위 절반 그림 · 제목 한 줄 · 설명 한 줄 · 큰 버튼 하나)를 따른 10/01 고원빈 최종 시안.
+     · 위계(가장 먼저 읽혀야 할 순서대로 크게): 「10.12」 64 → 「정식 출시」 24 → 제목 20 → 설명 14.5 → 무료·Pro 14
+     · 머리 그림의 무늬는 로고의 세 가닥을 흰 선으로만, 옅게(.2) — 흔한 「점과 선」 회로 무늬 대신 우리 제품의 모양
+     · 「오늘 하루 보지 않기」 는 글자 버튼 — 누르면 바로 닫힌다(js/app.js)
+   모든 선택자를 .launch-* 로 좁힌다 — 새 요소에 전역 규칙이 몰래 얹히는 것이 이 프로젝트 최다 결함이다.
+   .modal-box 의 공통값(안쪽 여백 16·18 · 폭 560 · 넘치면 스크롤)은 이 상자에서 끈다(auth.css 보다 뒤라 같은 굵기로 이긴다). */
+.launch-box {
+  position: relative; width: min(440px, calc(100vw - 32px)); padding: 0; overflow: hidden;
+  border-radius: 14px; text-align: center; word-break: keep-all; color: var(--tx);
 }
-.beta-ok:hover { background: var(--primary-d); }
-/* 마우스로 눌렀을 때는 링을 그리지 않는다. 키보드로 온 초점만 표시한다. */
-.beta-ok:focus { outline: none; }
-.beta-ok:focus-visible { outline: 2px solid var(--primary-d); outline-offset: 2px; }
+.launch-box:focus { outline: none; }   /* 열릴 때 초점을 상자로 옮기지만(접근성) 상자에 테두리는 그리지 않는다 */
+
+/* ✕ — 머리 그림 위 오른쪽(흰색) */
+.launch-box .launch-x {
+  position: absolute; right: var(--sp4); top: var(--sp4); z-index: 2;
+  width: 32px; height: 32px; padding: 0; border: 0; border-radius: var(--r);
+  background: none; color: #fff; font-size: var(--fs-h); line-height: 1; cursor: pointer; font-family: inherit;
+}
+.launch-box .launch-x:hover { background: rgba(255, 255, 255, .16); }
+
+/* 머리 그림 — 사이트 파랑 그라데이션 */
+.launch-hero {
+  position: relative; height: 210px; overflow: hidden;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-d) 60%, #0d47a1 100%); color: #fff;
+}
+.launch-wires { position: absolute; inset: 0; width: 100%; height: 100%; opacity: .2; }
+.launch-hero p { position: relative; margin: 0; }   /* 무늬(svg) 위로 */
+.launch-yr { font-size: 14px; font-weight: 700; letter-spacing: 2px; opacity: .85; }
+.launch-dt { font-size: 64px; font-weight: 800; line-height: 1.05; letter-spacing: -2px; }
+.launch-hero .launch-ln { margin-top: 6px; font-size: 24px; font-weight: 800; letter-spacing: -.4px; }
+
+.launch-body { padding: 24px 28px 20px; }
+.launch-title { margin: 0 0 6px; font-size: 20px; font-weight: 700; }
+.launch-sub { margin: 0 0 18px; font-size: 14.5px; color: #5f6771; }
+
+/* 무료·Pro 한 줄씩 — 위아래 옅은 선 */
+.launch-plans { margin: 0 0 20px; border-top: 1px solid #eceff3; text-align: left; }
+.launch-plans > div { display: flex; align-items: baseline; gap: var(--sp4); padding: 11px 2px; border-bottom: 1px solid #eceff3; font-size: var(--fs-lg); line-height: 1.5; }
+.launch-plans b { flex: none; width: 38px; font-size: 15px; }
+.launch-plans .launch-plan-pro b { color: var(--primary-d); }
+.launch-plans .launch-plan-pro span { font-weight: 700; }
+
+/* 큰 버튼 — 요금제(새 탭). <a> 지만 버튼 모양 */
+.launch-box .launch-go {
+  display: flex; align-items: center; justify-content: center; height: 50px;
+  border-radius: 10px; background: var(--primary); color: #fff;
+  font-size: 16px; font-weight: 700; text-decoration: none;
+}
+.launch-box .launch-go:hover { background: var(--primary-d); }
+/* 「오늘 하루 보지 않기」 — 글자 버튼, 누르면 바로 닫힌다 */
+.launch-box .launch-today {
+  margin-top: var(--sp3); padding: var(--sp3) var(--sp4); border: 0; border-radius: var(--r);
+  background: none; color: #6b7280; font: inherit; font-size: var(--fs); cursor: pointer;
+}
+.launch-box .launch-today:hover { color: var(--tx); text-decoration: underline; }
+/* 마우스로 눌렀을 때는 링을 그리지 않는다. 키보드로 온 초점만 표시한다 */
+.launch-box button:focus, .launch-box .launch-go:focus { outline: none; }
+.launch-box button:focus-visible, .launch-box .launch-go:focus-visible { outline: 2px solid var(--primary-d); outline-offset: 2px; }
 
 /* ══ 💡 예제 창 (CLAUDE 2026-09-20) ═══════════════════════════════════════════
    창 자체는 공용 부품 창의 규칙(.public-library-*)을 그대로 받는다. 여기는 예제에만 있는 네 조각.
@@ -2603,10 +2651,14 @@ input[type="number"] {
       그대로 두면 auto 여백에 갈 공간이 0 이다. 그래서 #hint 에 max-width 를 준다. 기준 폭(flex-basis 0)은
       그대로라 접힘 방지는 유지되고, 좁은 창에서 …으로 잘리는 것도 그대로다.
       값은 js/examples.js(alignToPanel)가 속성창 실제 폭으로 px 을 덮어쓴다(속성창은 끌어서 폭이 바뀐다).
-      여기 max-content 는 JS 가 못 돌 때의 예비값 — 그때는 그냥 오른쪽 끝에 붙는다.
-   선택자에 #toolbar 를 붙여야 한다 — 위쪽 `#toolbar button`(1,0,1)이 `#btnExamples`(1,0,0)를 이긴다. */
+   선택자에 #toolbar 를 붙여야 한다 — 위쪽 `#toolbar button`(1,0,1)이 `#btnExamples`(1,0,0)를 이긴다.
+   2026-09-30 — 예비값을 max-content 에서 **JS 와 같은 공식**으로 바꿨다. max-content 일 때는 첫 화면에
+      [예제] 가 줄 오른쪽 끝에 섰다가, 초기화 뒤 JS 가 경계로 옮기며 93px 움직였다(고원빈 「새로고침하면 예제가 움직인다」).
+      JS 공식: 줄 오른쪽 − 크기조절 막대 왼쪽 − 줄 간격 = 속성창 폭 + 막대 6 − 툴바 오른쪽 여백 12 − 줄 간격 12 = 속성창 폭 − 18.
+      (실측: 속성창 225 → JS 207.) 툴바 여백(#toolbar padding)·줄 간격(.tb-row gap)·막대 폭(.resizer)을 바꾸면 이 18 도 바꾼다.
+      JS 는 그대로 둔다 — 창 크기·끌기·두 줄 접힘은 JS 가 계속 맞춘다. */
 #toolbar #btnExamples { margin-left: auto; padding-top: 4px; padding-bottom: 4px; gap: 6px; }   /* 4px: 2행 아이콘 버튼(27px)과 키를 맞춘다 · gap: 폴더 아이콘과 글자 사이 */
-#hint { max-width: max-content; }
+#hint { max-width: calc(var(--right-w, 225px) - 18px); }
 
 /* 목록 행 썸네일 — 공용 부품은 58×46 사진, 예제는 원형 LCD 화면이라 동그랗게 */
 .ex-thumb { width: 58px; height: 46px; display: flex; align-items: center; justify-content: center; background: #f0f1f3; border-radius: 4px; }

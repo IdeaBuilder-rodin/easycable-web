@@ -60,9 +60,8 @@ WE.app = (function () {
     bindSettings();
     bindModalBackdrops();
     bindWelcome();
-    bindBeta();
+    bindLaunchNotice();
     bindFeedback();
-    bindNotify();
     bindQuickColorPicker();
     bindHelp();
     bindAppMenu();
@@ -163,7 +162,10 @@ WE.app = (function () {
     WE.store.claimCurrent();   // 이 문서는 내가 편집한다고 표시 (다른 탭이 겹쳐 열지 않게)
     // 되살린 시점을 즉시 스냅샷으로 남긴다 — 바로 '새 배선도로 시작'을 눌러도 되돌릴 수 있게
     WE.store.pushSnapshot();
-    showRestoreBanner(saved._savedAt);
+    /* 「지난 작업을 이어서 불러왔습니다」 — 10/12 정식 출시 전까지는 띄우지 않는다(2026-09-30 고원빈).
+       그동안은 들어올 때 출시 안내 모달이 뜨는데, 이 알림이 그 뒤에서 같이 떴다가 안 보인 채 사라졌다.
+       10/12 0시(출시안내끝)부터는 코드를 고치지 않아도 다시 뜬다. 복원 자체는 그대로 된다 */
+    if (Date.now() >= 출시안내끝) showRestoreBanner(saved._savedAt);
     return true;
   }
 
@@ -192,8 +194,9 @@ WE.app = (function () {
         ? "<span class='rb-sub'>" + esc(when) + (when && name ? " · " : "") + esc(name) + "</span>"
         : "");
     document.getElementById("restoreBanner").hidden = false;
-    // 방해가 되지 않도록 잠시 뒤 스스로 사라진다(내용은 이미 화면에 복원돼 있다)
-    _restoreBannerTimer = setTimeout(hideRestoreBanner, 15000);
+    // 방해가 되지 않도록 잠시 뒤 스스로 사라진다(내용은 이미 화면에 복원돼 있다).
+    // 15초 → 5초 (2026-09-30 고원빈 「너무 길게 있다」) — 읽고 [새 배선도로 시작] 을 누를 여유만 둔다
+    _restoreBannerTimer = setTimeout(hideRestoreBanner, 5000);
   }
   /* 같은 작업을 다른 탭에서 열었을 때. 이 탭은 자동저장을 멈춘 상태다.
      말없이 멈추면 사용자는 계속 그리다가 전부 잃는다 — 배너는 스스로 사라지지 않는다. */
@@ -3399,12 +3402,19 @@ WE.app = (function () {
   // ---- 좌/우 패널 크기 조절 ----
   // 패널 기본 너비 — 값을 여기 적어두면 CSS와 어긋나므로, 인라인 폭을 잠깐 걷어내고 CSS 값을 읽는다
   var _defaultPanelW = {};
+  /* 2026-09-30 — app.html 머리 스크립트가 저장 폭을 CSS 변수(--left-w · --right-w)로 첫 화면 전에 건다.
+     그 변수가 걸린 채로 재면 **저장 폭을 기본 폭으로** 읽어, 「더블클릭하면 기본 너비로」 가 저장 폭으로 돌아간다.
+     그래서 잴 때만 변수도 잠깐 걷는다(인라인 폭과 같은 방식). */
+  var PANEL_VAR = { leftPanel: "--left-w", rightPanel: "--right-w" };
   function defaultPanelWidth(panelId) {
     if (_defaultPanelW[panelId] != null) return _defaultPanelW[panelId];
     var panel = document.getElementById(panelId);
-    var saved = panel.style.width;
+    var root = document.documentElement.style, 변수 = PANEL_VAR[panelId];
+    var saved = panel.style.width, savedVar = 변수 ? root.getPropertyValue(변수) : "";
     panel.style.width = "";
+    if (savedVar) root.removeProperty(변수);
     var w = Math.round(panel.getBoundingClientRect().width);
+    if (savedVar) root.setProperty(변수, savedVar);
     panel.style.width = saved;
     _defaultPanelW[panelId] = w;
     return w;
@@ -3428,6 +3438,7 @@ WE.app = (function () {
   }
   // 패널별 너비 한계. 속성창은 값 확인·수정용이라 넓힐 이유가 없고,
   // 라이브러리는 부품 이름이 길어 조금 더 여유를 준다.
+  // ⚠ app.html 머리 스크립트(첫 화면 전에 저장 폭을 거는 곳)에도 **같은 한계**가 있다 — 함께 고친다(2026-09-30)
   var PANEL_LIMIT = {
     leftPanel: { min: 160, max: 420 },
     // 최소 225px — 다중 선택 시 나오는 정렬 버튼 줄이 그만큼을 요구한다.
@@ -3571,43 +3582,93 @@ WE.app = (function () {
         여기 것은 보조 안내였다. (로그인할 때는 별도 동의 절차가 그대로 있다) */
   var SHOW_WELCOME = false;
 
-  /* ---- 베타 안내 모달 ------------------------------------------------
-     아직 베타이므로 들어온 사람에게 한 번은 알린다(고원빈 결정 2026-09-03).
+  /* ---- 정식 출시 안내 모달 (2026-09-30 고원빈) ------------------------
+     10/12 정식 출시일부터 요금제(무료 한도)가 켜진다. 매일 들어오는 사람에게 미리, 착오 없게 알린다.
 
-     ⚠ 새로고침마다 뜨면 성가시다. 그래서 닫으면 **그 탭에서는** 다시 안 뜬다
-        (sessionStorage 는 탭 단위이고 새로고침에도 남는다).
-        체크하면 7일간 아예 안 뜬다(localStorage).
-     ⚠ 정식 출시하면 SHOW_BETA 만 false 로 내린다 — SHOW_WELCOME 과 같은 방식이다. */
-  var SHOW_BETA = true;
-  var 베타본키 = "we_betaSeen", 베타숨김키 = "we_betaHideUntil";
+     언제 뜨나 — 둘 다 맞아야 한다
+       · 출시 전: Date.now() < 출시안내끝(10/12 0시 한국). **그날이 되면 코드를 고치지 않아도 안 뜬다.**
+         (출시 알림 버튼처럼 목적이 끝났는데 잊혀 남는 일을 막는다 — 9/30 에 그걸 지웠다)
+       · 「오늘 하루 보지 않기」 를 안 눌렀다: 누르면 **한국 시각 오늘 자정까지** 안 뜬다(localStorage)
+     그 밖에는 **들어올 때마다(새로고침 포함) 뜬다** — 끄는 길은 「오늘 하루 보지 않기」 하나뿐이다.
+     (10/01 고원빈 「닫기 누르고 새로고침하면 다시 떠야 하지 않아?」 — 착오 없게 계속 안내한다는 목적에 맞다)
+     ⚠ 시간은 Date.now() 한 곳에서만 읽는다 — 검사(verify_launchnotice)가 시계를 바꿔 10/12 이후를 흉내 낸다.
+     10/12 이 지나면 이 블록·app.html 의 #launchModal·styles.css 의 .launch-*·그 검사를 함께 지워도 된다. */
+  var 출시안내끝 = Date.parse("2026-10-12T00:00:00+09:00");
+  var 출시안내숨김키 = "we_launchHideUntil";
 
-  function bindBeta() {
-    var modal = document.getElementById("betaModal");
+  // 한국 시각 「오늘」 의 다음 자정. 사용자 컴퓨터의 시간대와 상관없이 한국 날짜로 끊는다
+  function 한국다음자정(ms) {
+    var 날 = new Date(ms + 9 * 3600000).toISOString().slice(0, 10);   // 한국 시각의 날짜 YYYY-MM-DD
+    return Date.parse(날 + "T00:00:00+09:00") + 86400000;
+  }
+
+  function bindLaunchNotice() {
+    var modal = document.getElementById("launchModal");
     if (!modal) return;
-    var 숨길때까지 = 0, 이탭에서봤나 = false;
-    try { 숨길때까지 = Number(localStorage.getItem(베타숨김키) || 0); } catch (e) { /* 무시 */ }
-    try { 이탭에서봤나 = sessionStorage.getItem(베타본키) === "1"; } catch (e) { /* 무시 */ }
-    if (SHOW_BETA && !이탭에서봤나 && Date.now() >= 숨길때까지) modal.hidden = false;
+    var 지금 = Date.now();
+    var 숨길때까지 = 0;
+    try { 숨길때까지 = Number(localStorage.getItem(출시안내숨김키) || 0); } catch (e) { /* 무시 */ }
+    var 상자 = modal.querySelector(".launch-box");
+    var 이전초점 = null;   // 닫을 때 초점을 돌려줄 자리 (W3C 대화상자 패턴)
+    if (지금 < 출시안내끝 && 지금 >= 숨길때까지) {
+      modal.hidden = false;
+      /* 열리면 초점을 **상자**로 옮긴다 — 화면낭독기가 창 제목부터 읽고, Tab 이 창 안에서 시작한다.
+         ⚠ 버튼에 focus() 를 주지 않는다 — 검은 포커스 링이 버튼 테두리처럼 보인다(2026-09-03 고원빈 지적).
+            상자는 tabindex=-1 이고 styles.css 에서 테두리를 끈다.
+         초기화 뒤 다른 코드가 초점을 가져갈 수 있어 한 박자 뒤에 한 번 더 옮긴다 */
+      이전초점 = document.activeElement;
+      if (상자) { 상자.focus(); setTimeout(function () { if (!modal.hidden) 상자.focus(); }, 0); }
+    }
 
-    document.getElementById("betaOk").addEventListener("click", function () {
-      /* 확인을 누르면 7일 동안 안 뜬다.
-         체크박스를 없애고(고원빈 2026-09-03: 「확인 버튼만 하나」) 기본 동작으로 옮겼다 —
-         누를 것이 하나뿐인 창에서 「다시 보지 않기」를 또 고르게 할 이유가 없다. */
-      try { localStorage.setItem(베타숨김키, String(Date.now() + 7 * 24 * 60 * 60 * 1000)); } catch (e) { /* 무시 */ }
-      try { sessionStorage.setItem(베타본키, "1"); } catch (e) { /* 무시 */ }
+    /* 닫는 길은 넷 — 「오늘 하루 보지 않기」 만 숨김을 남긴다(10/01 고원빈 — 끄는 길은 그것 하나뿐)
+         · 「오늘 하루 보지 않기」(글자 버튼) → 누르는 즉시 한국 자정까지 숨김 + 닫기. 체크하고 또 닫을 필요 없게(한국 사이트 관례)
+         · ✕ · 바탕 누르기(MODAL_CLOSE_MAP 이 ✕ 를 누른다) · Esc → 닫기만 — 새로고침하면 또 뜬다
+         · 「요금제 확인하기」 → 요금제는 새 탭으로 열리고(링크 기본 동작) 이 창은 닫는다 — 숨김은 남기지 않는다 */
+    function 닫기(오늘숨김) {
+      if (오늘숨김) {
+        try { localStorage.setItem(출시안내숨김키, String(한국다음자정(Date.now()))); } catch (e) { /* 무시 */ }
+      }
       modal.hidden = true;
-    });
+      try { if (이전초점 && 이전초점.focus && 이전초점 !== document.body) 이전초점.focus(); else if (상자) 상자.blur(); } catch (e) { /* 무시 */ }
+    }
+    document.getElementById("launchToday").addEventListener("click", function () { 닫기(true); });
+    document.getElementById("launchX").addEventListener("click", function () { 닫기(false); });
+    document.getElementById("launchGo").addEventListener("click", function () { 닫기(false); });   // 기본 동작(새 탭)은 막지 않는다
 
-    /* Esc 로도 닫는다. 이 앱에는 「모든 모달을 Esc 로 닫는」 공용 규칙이 없고
-       모달마다 따로 붙여 왔다 — 여기서 구조를 바꾸지 않고 같은 방식을 따른다. */
-    /* ⚠ 버튼에 focus() 를 주지 않는다. 브라우저가 검은 포커스 링을 그려서
-       파란 버튼에 테두리가 두른 것처럼 보인다(고원빈 지적 2026-09-03).
-       Enter 는 여기서 직접 받으므로 초점을 안 줘도 똑같이 동작한다. */
+    /* 키보드 — 이 앱에는 「모든 모달을 Esc 로 닫는」 공용 규칙이 없어 모달마다 따로 붙인다.
+       · Esc · Enter → 닫기(숨김 없음)
+         ⚠ 버튼·링크 위의 Enter 는 브라우저가 이미 누른다 — 여기서 또 누르면 두 번 눌리고,
+            「요금제 확인하기」 가 안 열리고 창만 닫힌다. 그래서 그 둘에서는 가로채지 않는다
+       · Tab → 창 안에서만 돈다(W3C 대화상자 패턴 — 뒤의 에디터로 초점이 빠져나가지 않게) */
     document.addEventListener("keydown", function (e) {
       if (modal.hidden) return;
+      /* ⚠ 다른 창이 함께 열려 있으면 키를 건드리지 않는다 (2026-10-01 버그 — 실측으로 잡음).
+         이 창이 떠 있는 동안 위에 로그인 창이 함께 뜨는 길이 있다 — 에디터를 열자마자 「다른 PC에서 접속」 으로 밀려났을 때,
+         랜딩에서 ?auth=login 으로 넘어와 로그인 창이 바로 열릴 때. 그때 이 처리가 위 창의 키를 가로채서
+           · Tab  → 커서를 뒤에 깔린 이 창의 ✕ 로 끌어갔다(이메일 다음 비밀번호로 못 감)
+           · Enter(로그인 제출) → 뒤의 이 창이 몰래 닫혀 출시 안내를 못 보고 지나갔다
+           · Esc  → 로그인 창과 이 창이 한꺼번에 닫혔다
+         원인은 이 앱에 「맨 위 창만 키를 받는」 공용 규칙이 없다는 것. 공용 규칙(창 48개 수정)은 출시 직전엔 위험해서
+         이 창만 물러서게 했다 — 뒤에 깔린 창은 키를 받지 않는다. 위 창이 닫히면 아래 처리가 그대로 다시 산다.
+         에디터의 .modal 은 전부 hidden 속성으로 여닫힌다(확인함) — 그래서 hidden 만 봐도 믿을 수 있다. */
+      var 다른창 = Array.prototype.some.call(document.querySelectorAll(".modal"), function (m) { return m !== modal && !m.hidden; });
+      if (다른창) return;
+      if (e.key === "Tab") {
+        var 칸 = modal.querySelectorAll("button, a[href], input");
+        if (!칸.length) return;
+        var 처음 = 칸[0], 끝 = 칸[칸.length - 1], 지금칸 = document.activeElement;
+        if (!modal.contains(지금칸)) { e.preventDefault(); 처음.focus(); return; }
+        if (e.shiftKey && (지금칸 === 처음 || 지금칸 === 상자)) { e.preventDefault(); 끝.focus(); }
+        else if (!e.shiftKey && 지금칸 === 끝) { e.preventDefault(); 처음.focus(); }
+        return;
+      }
       if (e.key !== "Escape" && e.key !== "Enter") return;
-      document.getElementById("betaOk").click();
-    });
+      if (e.key === "Enter" && e.target && e.target.closest && e.target.closest("#launchModal a, #launchModal button")) return;
+      닫기(false);
+    }, true);   /* ⚠ 캡처 단계(true)로 듣는다 — 「다른 창이 열려 있는가」 를 키를 누른 **그 순간** 의 상태로 봐야 한다.
+                   로그인 창의 Esc 처리(auth.js)가 먼저 등록돼 먼저 돌며 자기를 닫는데, 그 뒤에 이 처리가 돌면
+                   「다른 창 없음」 으로 보여 이 창까지 닫혔다(Esc 한 번에 둘 다 닫힘 — 실측). 캡처는 그 처리들보다 먼저 돈다.
+                   전파는 막지 않는다(stopPropagation 없음) — 로그인 창의 Esc 는 그대로 제 일을 한다 */
   }
 
   function bindWelcome() {
@@ -3639,98 +3700,6 @@ WE.app = (function () {
       modal.hidden = true;
     });
     document.getElementById("feedbackSend").addEventListener("click", sendFeedback);
-  }
-
-  // ---- 출시 알림(이메일 수집) — Web3Forms 재사용. '가치를 준 뒤'에만 제안(내보내기/저장 완료 후) ----
-  var _notifyOfferedThisSession = false;
-  function hasNotifySubscribed() {
-    try { return localStorage.getItem("we_notify_done") === "1"; } catch (e) { return false; }
-  }
-  function openNotifyModal(reason) {
-    var lead = document.getElementById("notifyLead");
-    // 완료 직후 제안이면 축하 문구, 링크로 직접 열면 기본 문구
-    lead.innerHTML = reason === "after_export"
-      ? WE.i18n.t("완성됐어요! 🎉 정식 출시·새 기능 소식을 이메일로 가장 먼저 알려드릴까요?<br />(스팸 없이 큰 소식만)")
-      : WE.i18n.t("정식 출시·새 기능 소식을 이메일로 가장 먼저 알려드릴게요.<br />(스팸 없이 큰 소식만)");
-    document.getElementById("notifyEmail").value = "";
-    document.getElementById("notifyStatus").textContent = "";
-    document.getElementById("notifyBotcheck").checked = false;
-    document.getElementById("notifyModal").hidden = false;
-    document.getElementById("notifyEmail").focus();
-    track("notify_open", { reason: reason || "manual" });
-  }
-  // 내보내기/저장 완료 후 호출 — 이미 구독했거나 이번 세션에 한 번 제안했으면 다시 안 뜸(벽 방지)
-  function offerNotifyAfterValue() {
-    // ⚠ 출시 후에는 제안하지 않는다. "정식 출시 소식을 알려드릴게요" 는
-    //    이미 출시된 서비스에서는 말이 안 된다. (아래 bindNotify 도 같이 막는다)
-    if (WE.flags && WE.flags.LAUNCH) return;
-    if (hasNotifySubscribed() || _notifyOfferedThisSession) return;
-    _notifyOfferedThisSession = true;
-    setTimeout(function () { openNotifyModal("after_export"); }, 700);   // 저장/다운로드 끝난 뒤 살짝 여유
-  }
-  function bindNotify() {
-    var 알림버튼 = document.getElementById("btnNotify");
-
-    /* ⚠ 출시 후에는 「🔔 출시 알림」 자체가 사라진다.
-       출시 전 베타에서 "정식 출시되면 알려드릴게요" 로 이메일을 받던 기능이라,
-       출시하고 나면 문구도 목적도 성립하지 않는다.
-
-       ⚠ 파일에서 지우지 않고 플래그로 끄는 이유 —
-          app.html(에디터)은 출시준비에만 있다. 예전에는 양쪽 index.html 이 둘 다
-          에디터였는데, 2026-09-11 에 랜딩을 루트로 올리며 에디터를 app.html 로 옮겼다.
-          한쪽에서만 지우면
-          병합할 때 충돌한다(CLAUDE.md §2). 그리고 9/1 에 손으로 지우려면 잊는다.
-          LAUNCH 가 켜지는 순간 자동으로 사라지는 편이 안전하다.
-
-       지금 어디서 꺼지나 — 미리보기 · 로컬(?launch=1) · 출시 후.
-       베타 본서비스(easycable.co.kr)에서는 그대로 보인다. */
-    if (WE.flags && WE.flags.LAUNCH) {
-      if (알림버튼) 알림버튼.hidden = true;
-      return;   // 모달을 여는 길 자체를 막는다
-    }
-
-    알림버튼.addEventListener("click", function () { openNotifyModal("manual"); });
-    document.getElementById("notifyClose").addEventListener("click", function () {
-      document.getElementById("notifyModal").hidden = true;
-    });
-    document.getElementById("notifySend").addEventListener("click", sendNotify);
-    document.getElementById("notifyEmail").addEventListener("keydown", function (e) {
-      if (e.key === "Enter") sendNotify();
-    });
-  }
-  function sendNotify() {
-    var emailEl = document.getElementById("notifyEmail");
-    var email = emailEl.value.trim();
-    var statusEl = document.getElementById("notifyStatus");
-    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { statusEl.textContent = WE.i18n.t("올바른 이메일 주소를 입력해주세요."); emailEl.focus(); return; }
-    if (document.getElementById("notifyBotcheck").checked) { statusEl.textContent = WE.i18n.t("감사합니다!"); return; }   // 허니팟
-    var btn = document.getElementById("notifySend");
-    btn.disabled = true; statusEl.textContent = WE.i18n.t("등록 중…");
-    fetch("https://api.web3forms.com/submit", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Accept: "application/json" },
-      body: JSON.stringify({
-        access_key: WEB3FORMS_KEY,
-        subject: WE.i18n.t("[이지케이블] 출시 알림 신청"),
-        from_name: WE.i18n.t("이지케이블 출시알림"),
-        message: WE.i18n.t("출시 알림 신청 이메일: ") + email,
-        email: email,
-        botcheck: false
-      })
-    }).then(function (r) { return r.json(); }).then(function (res) {
-      btn.disabled = false;
-      if (res.success) {
-        try { localStorage.setItem("we_notify_done", "1"); } catch (e) { /* 무시 */ }
-        track("notify_subscribe");
-        statusEl.textContent = WE.i18n.t("등록됐습니다. 소식이 있을 때 알려드릴게요. 감사합니다! 🙌");
-        setTimeout(function () { document.getElementById("notifyModal").hidden = true; }, 1200);
-      } else {
-        statusEl.textContent = WE.i18n.t("등록 실패: ") + (res.message || WE.i18n.t("잠시 후 다시 시도해주세요."));
-      }
-    }).catch(function () {
-      btn.disabled = false;
-      statusEl.textContent = WE.i18n.t("네트워크 오류로 등록하지 못했습니다.");
-    });
   }
 
   var FEEDBACK_EMAIL = "qksekftkd@gmail.com";
@@ -3830,11 +3799,10 @@ WE.app = (function () {
     libEditModal: "libEditCancel",
     bgModal: "bgCancel",
     welcomeModal: "welcomeStart",
-    betaModal: "betaOk",
+    launchModal: "launchX",    // 바탕을 누르면 ✕ 와 같다 — 닫기만(숨김 없음)
     helpModal: "helpClose",
     feedbackModal: "feedbackClose",
-    historyModal: "historyClose",
-    notifyModal: "notifyClose"
+    historyModal: "historyClose"
   };
   function bindModalBackdrops() {
     Object.keys(MODAL_CLOSE_MAP).forEach(function (mid) {
@@ -4176,7 +4144,6 @@ WE.app = (function () {
         setTimeout(function () { URL.revokeObjectURL(a.href); }, 1000);
         track("export", { method: "png" });
         setHint(WE.i18n.t("이미지 저장 완료 (PNG)"));
-        offerNotifyAfterValue();
       }, "image/png");
     };
     img.onerror = function () { URL.revokeObjectURL(svgUrl); setHint(WE.i18n.t("이미지 생성에 실패했습니다.")); };
@@ -6211,8 +6178,7 @@ WE.app = (function () {
     // '새 배선도로 시작'. 검사가 이 이름으로 부르고 있었는데 노출이 안 돼 있어서
     // WE.app.newProject ? ... : 1 이 조용히 지나갔다 (2026-08-18).
     newProject: startNewProject,
-    drawAnimEnabled: drawAnimEnabled, drawAnimSpeed: drawAnimSpeed,   // 배선 긋기 애니메이션 (render.js 가 묻는다)
-    offerNotifyAfterValue: offerNotifyAfterValue
+    drawAnimEnabled: drawAnimEnabled, drawAnimSpeed: drawAnimSpeed   // 배선 긋기 애니메이션 (render.js 가 묻는다)
   };
 })();
 

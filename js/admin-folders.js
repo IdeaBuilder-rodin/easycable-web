@@ -18,6 +18,10 @@
  *  ★ 2026-09-29 — 링크를 만들 때 **담당자 · 연락처 · 이메일**을 적는다(필수, 고원빈 결정).
  *    관리자만 본다. 학생이 부르는 참여 함수는 이 칸을 읽지 않는다(_ai/sql/2026-09-29_링크_담당자.sql).
  *
+ *  ★ 2026-09-30 — 링크 카드에 **[안내 메일]**. 링크 정보로 안내 메일을 만들어 미리보기 창에 띄우고
+ *    [메일용 복사] 로 Gmail 에 붙여넣는다. 메일 틀은 js/invite-mail.js.
+ *    서버는 부르지 않는다 — admin_links 가 이미 준 값만 쓴다.
+ *
  *  ★ 무엇을 하지 않는가 — **판정은 전부 서버가 한다.** 정원·마감·기간 계산, 날짜 변환(한국 시각 그날 끝)은
  *    SQL 함수 안에 있다. 이 파일은 값을 모아 보내고 결과를 그릴 뿐이다.
  *    같은 판단을 화면에도 두면 **서버와 화면이 다른 말을 하는 날**이 온다(admin-members.js 머리말과 같은 원칙).
@@ -220,6 +224,9 @@
         "</div>" +
         '<div class="adm-fol-link-acts">' +
           '<button type="button" class="adm-edit-btn" data-act="copy" data-code="' + esc(l.code) + '">주소 복사</button>' +
+          // [안내 메일] (9/30) — 「Pro 안 줌(분류만)」 링크에는 안 보인다. 메일이 「Pro 무료」 라고 말하게 되기 때문
+          (l.pro_mode === "none" ? "" :
+            '<button type="button" class="adm-edit-btn" data-act="mail" data-lid="' + esc(l.id) + '">안내 메일</button>') +
           '<button type="button" class="adm-edit-btn" data-act="edit" data-lid="' + esc(l.id) + '">' + (수정중링크 === l.id ? "수정 닫기" : "수정") + "</button>" +
           '<button type="button" class="adm-edit-btn" data-act="stop" data-lid="' + esc(l.id) + '" data-stop="' + (l.stopped_at ? "0" : "1") + '">' +
           (l.stopped_at ? "재개" : "멈춤") + "</button>" +
@@ -445,6 +452,73 @@
     손으로();
   }
 
+  // ── 안내 메일 (2026-09-30) ────────────────────────────────────────────────
+  /* 링크 정보로 안내 메일을 만들어 미리보기 창(admin.html #admMailModal)에 띄운다.
+     [메일용 복사] 를 누르면 서식째 복사되고, Gmail 작성창에 붙여넣어 보낸다.
+     메일 틀은 js/invite-mail.js 한 곳에 있다 — 여기는 값을 넘기고 창을 여닫을 뿐이다.
+     왜 — 예전엔 주소 한 줄을 글로 보냈고, 9/30 에 값을 손으로 적은 시안을 만들었다.
+          기관이 계속 올 것이라 관리자 화면에서 바로 만들어지게 했다(원빈). */
+  var 메일 = null;   // 지금 창에 띄운 { html, text }
+
+  function 안내메일(lid) {
+    var l = 링크들.filter(function (x) { return x.id === lid; })[0];
+    if (!l) return;
+    if (!WE.inviteMail) { msg("안내 메일 틀(js/invite-mail.js)을 읽지 못했습니다. 새로고침해 주세요.", "err"); return; }
+    // 참여를 안 받는 링크로 메일을 보내면 받은 분들이 참여할 수 없다 — 한 번 묻는다(막지는 않는다: 재개 전에 미리 만들 수도 있다)
+    var 상태 = 링크상태(l);
+    if (!상태.열림 && !window.confirm("이 링크는 지금 참여를 받지 않습니다(" + 상태.글 + ").\n메일을 받은 분들이 참여할 수 없습니다.\n\n그래도 만들까요?")) return;
+    /* 메일 속 참여 주소는 **항상 본 서비스 주소**다(2026-09-30 고원빈).
+       메일을 받는 사람은 늘 실제 사용자라 로컬·미리보기 주소가 나가면 못 들어온다 — 로컬 관리자에서 만들었더니
+       127.0.0.1 주소가 나와 보낼 수 없었다. 로컬 관리자도 실제 DB 에 붙어 있어(js/auth.js 의 주소가 하나로 고정)
+       여기서 만든 코드는 진짜이고, 참여 화면(join.html)은 본 서비스에 있다.
+       [주소 복사] 는 그대로 링크주소()(화면 주소 기준) — 로컬에서 직접 눌러 확인하는 용도, verify_folders 가 그걸 전제로 한다 */
+    메일 = WE.inviteMail.build(l, "https://easycable.co.kr/join.html?j=" + l.code);
+    /* 미리보기는 iframe 안에 그린다 — 이 페이지의 전역 CSS(styles.css)가 메일에 얹히지 않게.
+       「새 요소에 전역 CSS 가 몰래 얹히는 것」 이 이 프로젝트의 최다 결함 유형이다(CLAUDE.md §5).
+       메일 조각만 빈 문서에 넣는다 — 받는 쪽 메일 앱도 비슷하게 흰 바탕 위에 그린다 */
+    $("admMailFrame").srcdoc = '<!doctype html><html><head><meta charset="utf-8"></head><body style="margin:0;">' + 메일.html + "</body></html>";
+    $("admMailStatus").textContent = "";
+    $("admMailModal").hidden = false;
+  }
+
+  function 메일닫기() {
+    $("admMailModal").hidden = true;
+    $("admMailFrame").srcdoc = "";
+    메일 = null;
+  }
+
+  /* 서식째(HTML) 복사 — 그래야 Gmail 에 붙여넣었을 때 표·색·버튼이 그대로 간다.
+     평문도 같이 넣는다: 글자만 받는 곳(메모장·일부 메일 앱의 텍스트 모드)에 붙이면 평문이 들어간다.
+     ① ClipboardItem(최신 크롬·엣지) → ② 미리보기 안을 전체 선택해 복사 → ③ 둘 다 안 되면 손으로 하라고 알린다 */
+  function 메일복사() {
+    if (!메일) return;
+    var 알림 = $("admMailStatus");
+    function 됐다() { 알림.textContent = "복사했습니다 — Gmail 작성창에 붙여넣으세요."; }
+    function 선택복사() {
+      try {
+        var f = $("admMailFrame"), d = f.contentDocument;
+        f.contentWindow.focus();
+        var r = d.createRange(); r.selectNodeContents(d.body);
+        var s = d.getSelection(); s.removeAllRanges(); s.addRange(r);
+        var 됐나 = d.execCommand("copy");
+        s.removeAllRanges();
+        if (됐나) return 됐다();
+      } catch (e) { /* 아래로 */ }
+      알림.textContent = "복사하지 못했습니다 — 미리보기를 드래그해 선택한 뒤 Ctrl+C 로 복사하세요.";
+    }
+    try {
+      if (window.ClipboardItem && navigator.clipboard && navigator.clipboard.write) {
+        var 항목 = new ClipboardItem({
+          "text/html": new Blob([메일.html], { type: "text/html" }),
+          "text/plain": new Blob([메일.text], { type: "text/plain" })
+        });
+        navigator.clipboard.write([항목]).then(됐다, 선택복사);
+        return;
+      }
+    } catch (e) { /* 아래로 */ }
+    선택복사();
+  }
+
   function 멈춤(lid, 멈추기) {
     if (멈추기 && !window.confirm("이 링크로 새로 참여하는 것을 막습니다.\n이미 참여한 사람은 그대로입니다.\n\n계속할까요?")) return;
     부르기("admin_link_stop", { p_id: lid, p_stop: 멈추기 }, 멈추기 ? "링크를 멈췄습니다." : "링크를 다시 열었습니다.")
@@ -470,6 +544,7 @@
       if (id === "admLinkEdSave") return 링크수정저장();
       var act = t.dataset && t.dataset.act;
       if (act === "copy") return 주소복사(t.dataset.code);
+      if (act === "mail") return 안내메일(t.dataset.lid);
       if (act === "stop") return 멈춤(t.dataset.lid, t.dataset.stop === "1");
       // [수정] · 수정 양식의 [취소] — 같은 링크를 다시 누르면 닫는다(한 번에 한 링크만 편다)
       if (act === "edit") { 수정중링크 = 수정중링크 === t.dataset.lid ? null : t.dataset.lid; return 그리기(); }
@@ -480,6 +555,15 @@
       var 경고 = t.name === "admLinkMode" ? $("admLinkNoneWarn") : t.name === "admLinkEdMode" ? $("admLinkEdNoneWarn") : null;
       if (경고) 경고.hidden = t.value !== "none";
     });
+    // 안내 메일 창 — #admFolPanel 밖(admin.html 아래쪽)에 있어서 따로 묶는다. 닫기는 삭제 확인 창(admin.js)과 같은 방식
+    var m = $("admMailModal");
+    if (m) {
+      $("admMailCopy").addEventListener("click", 메일복사);
+      $("admMailClose").addEventListener("click", 메일닫기);
+      $("admMailCancel").addEventListener("click", 메일닫기);
+      m.addEventListener("click", function (e) { if (e.target === e.currentTarget) 메일닫기(); });
+      m.addEventListener("keydown", function (e) { if (e.key === "Escape") 메일닫기(); });
+    }
   }
 
   /* 폴더 이름만 바꾼다 — 계정란의 폴더 머리줄 더블클릭(admin-members.js)이 부른다 (2026-09-29 원빈)

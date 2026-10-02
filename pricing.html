@@ -68,8 +68,10 @@
     /* ⚠ align-items 를 start 로 두면 카드가 저마다 내용 높이만큼만 자라서
        세 장의 아래끝이 들쭉날쭉해진다. stretch(기본값)로 두어 높이를 맞춘다.
        내용이 적은 카드는 아래가 비는데, 그 자리는 아래 .plan-feats 가 채운다. */
+    /* row-gap 56px = 1년권 위 「출시 기념가」 띠 36px + 원래 간격 20px.
+       카드가 세로로 쌓일 때 띠가 윗카드와 겹치지 않게 한다(세 장이 한 줄일 땐 쓰이지 않는다). */
     .plan-grid {
-      display: grid; gap: 20px; align-items: stretch;
+      display: grid; gap: 20px; row-gap: 56px; align-items: stretch;
       grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
       max-width: 1040px; margin: 0 auto;
     }
@@ -86,52 +88,59 @@
     .plan-price { display: flex; align-items: baseline; gap: 6px; margin: 0 0 6px; flex-wrap: wrap; }
     .plan-price .num { font-size: 30px; font-weight: 700; letter-spacing: -.02em; color: #202124; }
     .plan-price .per { font-size: 14px; color: #8a9098; }
-    /* 값 아래 한 줄. 높이를 고정해 세 카드의 버튼 높이가 어긋나지 않게 한다. */
-    /* ⚠ min-height 를 26px 로 둔 이유 — 아래 .save b 가 18px 로 커져서
-       그 줄의 높이가 늘었다. 세 카드가 같은 높이를 쓰지 않으면 버튼이 어긋난다. */
+    /* 값 아래 한 줄. 높이를 고정해 세 카드의 버튼 높이가 어긋나지 않게 한다.
+       (무료·1개월 카드는 비어 있다 — 비어도 같은 높이를 차지해야 세 버튼이 한 줄에 선다) */
     .plan-sub { min-height: 26px; margin: 0 0 18px; font-size: 13px; color: #6b7280;
                 display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; }
-    /* 「출시 기념가」 배지 — 1년권에만 붙는다 (2026-09-22).
-       ⚠ 예전엔 이 자리에 취소선 ₩82,800(1개월권×12)이 있었다. 없앤 이유 —
-          정가(58,800)를 따로 두기로 하면서 숫자가 셋(82,800·58,800·46,800)이 되면
-          손님이 어느 것이 값인지 헤맨다. 비교는 아래 목록의 「12번 사는 것보다 N원 저렴」 한 줄로 충분하다.
-       ⚠ 기한은 적지 않는다 — 기간을 상황 봐서 늘릴 수 있어서(고원빈). 정가는 값줄에 취소선으로만
-          (아래 .is-deal 주석 — 조건이 붙는다). 정가로 넘기는 날 이 배지를 뗀다.
-       ⚠ 자리는 카드 **윗변 한가운데, 테두리에 걸치게** (고원빈 2026-09-22 — "여기가 가장 효과적").
-          처음엔 '월 3,900원' 옆 같은 줄에 뒀는데 값 줄에 묻혔다. 카드 밖으로 반쯤 나와 있어야
-          세 장 중 이 카드만 다르다는 게 먼저 보인다.
-       ⚠ 위쪽 「추천」 배지(.plan-tag, 파랑·오른쪽)와 같은 모양이면 둘이 한 묶음으로 읽혀서
-          채운 주황으로 가른다. 흰 테(box-shadow 3px)는 카드 테두리 선이 배지를 관통해 보이지 않게.
-       ⚠ 위로 12px 나가는데 .plans 의 위 여백은 40px, 카드 사이 gap 은 20px 이라 어디서도 안 닿는다.
-          절대 위치라 카드 높이·.plan-sub 정렬에는 영향이 없다(실측: 세 카드 버튼 y 동일). */
-    .plan-promo {
-      position: absolute; top: -12px; left: 50%; transform: translateX(-50%);
-      padding: 4px 12px; border-radius: 999px; white-space: nowrap;
-      background: #e65100; color: #fff; font-size: 12px; font-weight: 700; line-height: 1.3;
-      box-shadow: 0 0 0 3px #fff;
-    }
-    .plan-sub .save { color: #1666b0; font-weight: 600; }
-    /* 값 자체만 키운다 — '꼴' 같은 조사까지 키우면 문장이 뭉툭해진다.
-       line-height:1 을 주는 이유 — 18px 글자가 줄 높이를 밀어올리면
-       그 카드만 4px 내려가서 세 카드의 버튼이 어긋난다. */
-    .plan-sub .save b { font-size: 18px; font-weight: 700; letter-spacing: -.01em;
-                        line-height: 1; }
-    /* ── 1년권 값줄 「~~월 4,900원~~ ▸ 월 3,900원」 (2026-09-22 고원빈 스케치) ──────────
-       배지(윗변 「출시 기념가」)만으로는 "얼마에서 얼마로" 가 없어 할인으로 안 읽혔다.
-       왼쪽에 정가(월 4,900원)를 취소선으로, 바로 옆(8px)에 기념가를 연파랑 상자로 — 왼쪽 정렬.
-       ⚠ 처음엔 양끝 정렬 + 연회색(#aab0b8) 취소선이었는데 "원래 4,900원인지 전혀 인지가 안 된다"(고원빈).
-          원인 둘 — ① 연회색은 대비 2.1:1 이라 눈이 건너뛴다(앵커가 안 보이면 할인이 성립하지 않는다)
-          ② 160px 떨어져 있으면 한 쌍으로 비교되지 않는다(근접성). 그래서 본문색(#5f6771, 5.5:1)·14px 로 올리고
-          붙였다. 완전 검정을 안 쓴 이유 — 할인가(18px 굵게 파랑)와 무게가 붙어 "어느 게 값이냐"가 흔들린다.
-       ⚠ 정가 58,800(월 4,900원)은 아직 판 이력이 없는 값이다. 취소선으로 적어도 되는 조건은
-          **실제로 그 값으로 바꾸는 것**이다. 기념가를 무기한 끌면 '허위 할인'(표시광고법)이 된다.
-          정가로 넘기는 날 취소선을 떼고 월 4,900원을 값으로 올린다(_ai/배포_체크리스트.md 5-1).
-       상자 높이: 18px 글자 + 위아래 3px = 24px → .plan-sub 의 min-height 26px 안에 든다.
-       ⚠ line-height:1 이 없으면 상자가 28px 가 된다 — flex 항목이 된 .save 의 13px 줄상자(strut)가
-          18px 글자보다 커서 위아래를 밀고, 이 카드 버튼만 2px 내려간다(실측으로 잡음). */
-    .plan-sub.is-deal { gap: 8px; }
-    .plan-sub .strike { color: #5f6771; font-size: 14px; text-decoration: line-through; }
-    .plan-sub.is-deal .save { background: #e8f1fc; color: #1565c0; padding: 3px 10px; border-radius: 8px; line-height: 1; }
+
+    /* ── 1년권 가격 블록 (2026-10-01 고원빈 — 시안 「안 1 · 파랑 띠」) ─────────────────
+       위에서 아래로: [띠 출시 기념가] · 1개월권 12번 ~~82,800원~~ · 43% ₩46,800 / 1년 · 월 3,900원 · 정가 월 4,900원
+       ⚠ 알약·연한 색 상자를 쓰지 않는다. 예전의 「추천」·「출시 기념가」 알약과 「월 3,900원」 연파랑 상자를
+          고원빈이 "누가 봐도 AI 스럽다" 며 뺐다. 요금제 25곳(Notion · Linear · Onshape · 미리캔버스 · 컬리 …)을
+          조사해 보니 실제로 그런 상자를 쓴 곳이 없었다. 강조는 띠 · 빨간 숫자 · 굵기 · 테두리 · 채운 버튼으로만 한다.
+       ⚠ index.html 의 1년권 카드와 마크업이 같아야 한다(CSS 는 landing.css 에 .price 접두로 같은 값). */
+
+    /* 「출시 기념가」 띠 — 카드 머리에 붙은 꽉 찬 띠(Dropbox · Grammarly · Proton · Surfshark · ExpressVPN 등 7곳의 방식).
+       떠 있는 알약이 아니라 카드의 일부라서 테두리와 같은 색으로 이어 붙이고, 카드 윗모서리를 각지게 한다.
+       ⚠ 띠·모서리는 .is-pick 이 아니라 .has-band 에 건다. 아래 칠하기() 가 로그인 상태에 따라 .is-pick 을
+          옮기는데, 띠는 1년권에 고정이라 강조가 움직여도 다른 카드로 따라가지 않는다.
+       ⚠ 색 #1565c0 — 흰 14px 굵은 글자는 '큰 글씨' 가 아니어서 대비 4.5:1 이 필요하다. 이 색은 5.8:1.
+          (테두리색 #1e88e5 는 3.7:1 이라 띠에는 못 쓴다 — 그래서 이 카드 테두리를 띠 색으로 맞춘다)
+       ⚠ 기한은 적지 않는다 — 기간을 상황 봐서 늘릴 수 있어서(고원빈 2026-09-22).
+          정가로 넘기는 날 띠를 뗀다(_ai/배포_체크리스트.md 5-1).
+       ⚠ 카드 위로 36px 나간다. 첫 줄 위는 .plans 의 위 여백 40px 안에 들고, 카드가 쌓이는 폭에서는
+          .plan-grid 의 row-gap 56px(띠 36 + 원래 간격 20)이 윗카드와 겹치지 않게 한다. */
+    .plan-band { position: absolute; left: -1px; right: -1px; bottom: 100%; height: 36px; margin: 0;
+                 display: flex; align-items: center; justify-content: center;
+                 background: #1565c0; color: #fff; font-size: 14px; font-weight: 700; letter-spacing: .03em;
+                 border-radius: 16px 16px 0 0; }
+    .plan.has-band { border-color: #1565c0; border-top-left-radius: 0; border-top-right-radius: 0; }
+
+    /* 기준가 줄 「1개월권 12번 ~~82,800원~~」 — 큰 가격 바로 위에 작게(컬리 · 무신사 · Proton · Hostinger 배치).
+       기준을 1개월권 12번으로 잡은 이유 — 지금 실제로 파는 값이라 취소선의 근거가 떳떳하다.
+       (판 적 없는 정가 58,800 에 줄을 긋는 것은 표시광고법상 위험하다 — _ai/결정.md)
+       ⚠ 「₩」 를 쓰지 않는다. ₩ 자체에 가로줄이 두 개 있어서 취소선과 겹치면 숫자 앞이 뭉개진다
+          ("82,800 으로 안 읽힌다", 고원빈 2026-10-01).
+       ⚠ 숫자는 진하게(#4b5563), 줄만 옅게(#aab0b8) 1px — 줄과 숫자 획이 같은 색이면 섞여 보인다.
+          (9/22 에는 숫자까지 연회색으로 했다가 "인지가 안 된다" 였다. 이번엔 글자는 진하고 줄만 옅다)
+       ⚠ 무엇의 값인지를 숫자 앞에 둔다 — 왼쪽부터 「1개월권 12번 → 82,800원」 으로 읽힌다.
+       무료·1개월 카드에도 빈 줄을 둔다(높이 20 + 4px 고정) — 세 카드의 가격·버튼이 같은 높이에 서게.
+       카드가 세로로 쌓이는 폭에서는 옆 카드와 맞출 일이 없으니 빈 줄을 접는다(아래 @media). */
+    .plan-was { height: 20px; margin: 0 0 4px; display: flex; align-items: baseline; gap: 6px; }
+    .plan-was .lbl { font-size: 13px; color: #8a9098; }
+    .plan-was s { font-size: 14px; color: #4b5563; text-decoration-color: #aab0b8; text-decoration-thickness: 1px; }
+
+    /* 할인율 — 가격 바로 앞의 빨간 숫자(국내 쇼핑몰에서 손님이 가장 익숙한 꼴: 컬리 · 무신사 · 29CM).
+       43% = 1 − 46,800 ÷ 82,800 = 43.48% → **내림**(부풀리지 않는다). 색은 로고 빨강, 흰 바탕 대비 4.8:1 */
+    .plan-price .pct { font-size: 24px; font-weight: 800; color: #c8434f; letter-spacing: -.02em; margin-right: 2px; }
+
+    /* 월 환산 · 정가 — 상자 없이 글 한 줄(미리캔버스 「월평균 ₩13,400」 · Raycast 「$96 billed annually」 처럼).
+       정가(월 4,900원)는 취소선 없이 「정가」 라는 말로 알린다 — 카드 안에 취소선이 둘이면
+       82,800 과 4,900 중 어느 게 '원래 값' 인지 헷갈린다.
+       「· 」 는 CSS 로 넣는다 — 영어 사전 키에 문장부호를 섞지 않으려고. */
+    .plan-sub .mo { font-size: 14px; font-weight: 600; color: #374151; }
+    .plan-sub .note { font-size: 13px; color: #6b7280; }
+    .plan-sub .note::before { content: "· "; }
 
     /* word-break: keep-all — 한국어는 기본값이 아무 글자에서나 줄을 끊어서
        「이용 가능합/니다」처럼 단어가 쪼개진다. 띄어쓰기에서만 끊기게 한다. */
@@ -149,7 +158,20 @@
       display: flex; gap: 9px; align-items: flex-start;
       padding: 6px 0; font-size: 13.5px; line-height: 1.55; color: #4b5563;
     }
-    .plan-feats li::before { content: "✓"; flex: none; color: #1e88e5; font-weight: 600; }
+    /* 표시 칸 폭을 10px 로 고정한다 — ✓ 의 실제 폭(실측)이라 글자 시작 위치는 그대로이고,
+       아래 △ 도형이 같은 칸에 들어가 두 종류의 줄 글자가 한 세로줄에 선다.
+       (14px 로 넓혔더니 글자가 4px 밀려 「내 부품 라이브러리 …」 가 두 줄로 넘어갔다) */
+    .plan-feats li::before { content: "✓"; flex: none; width: 10px; text-align: center; color: #1e88e5; font-weight: 600; }
+    /* △ = 쓸 수는 있지만 제한이 있는 항목(무료 카드 위 3줄 — 개수 · 페이지 · 워터마크). 2026-10-01 고원빈.
+       국내에선 ○/△/✕ 가 「된다/제한적으로 된다/안 된다」로 바로 읽혀서, 옆 Pro 카드의 ✓ 줄과 한눈에 갈린다.
+       ⚠ 글꼴 기호(△)가 아니라 SVG 도형이다 — 기호는 글꼴마다 폭·굵기가 달라 줄이 어긋난다(landing.css .cmp .mk 와 같은 규칙).
+       ⚠ 색은 ✓ 와 같은 파랑 — 모양만으로 구분한다(색으로만 뜻을 전하지 않는다). 주황 시안도 봤지만
+          띠(파랑) · 43%(빨강)에 색이 하나 더 늘어 고원빈이 파랑을 골랐다.
+       ⚠ 글자색은 진한 그대로 — 쓸 수 있는 기능이다. 회색으로 하면 ✕(못 쓰는 것)처럼 읽힌다. */
+    .plan-feats li.lim::before {
+      content: ""; height: 12px; margin-top: 5px;
+      background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 13'%3E%3Cpath d='M7 1.6 L12.7 11.6 H1.3 Z' fill='none' stroke='%231e88e5' stroke-width='1.7' stroke-linejoin='round'/%3E%3C/svg%3E") center / 11px 10px no-repeat;
+    }
     /* 무료에 없는 항목 — 줄을 빼지 않고 ✕ 로 **같은 자리에** 남긴다.
        빼 버리면 Pro 카드만 줄이 많아 보이는 게 아니라, 무료 카드를 보는 사람이
        "이게 원래 있는 기능인지" 를 모른다. 자리를 맞춰야 두 카드를 비교할 수 있다. */
@@ -164,12 +186,8 @@
        올라갈 수 있는 것만 활성으로 둔다. 손님이 결제 화면까지 헛걸음하지 않는다. */
     .btn.is-current { background: #f3f4f6; color: #9ca3af; border-color: #e5e7eb;
                       cursor: default; pointer-events: none; box-shadow: none; }
-    /* '추천' 표 — 카드 안 오른쪽 위. */
-    .plan-tag {
-      position: absolute; top: 30px; right: 26px;
-      padding: 4px 11px; border-radius: 999px;
-      background: #e8f1fc; color: #1565c0; font-size: 12px; font-weight: 700;
-    }
+    /* ⚠ 여기 「추천」 알약(.plan-tag, 카드 안 오른쪽 위)이 있었다. 2026-10-01 에 뺐다 —
+       연한 색 알약이 「AI 티」 라서(고원빈). 고를 카드는 파란 테두리 + 채운 버튼이 이미 가리킨다. */
 
     .vat { margin: 26px 0 0; text-align: center; font-size: 12px; color: #8a9098; }
 
@@ -181,6 +199,7 @@
       .plan.is-pick { order: -1; }          /* 추천 요금제를 맨 위로 */
       .plan:not(.is-paid) { order: 1; }     /* 무료는 맨 아래 — 유료 두 장이 붙어야 비교가 된다 */
       .plan-grid { display: flex; flex-direction: column; max-width: 460px; }
+      .plan-was:empty { display: none; }    /* 세로로 쌓이면 옆 카드와 맞출 일이 없다 — 빈 기준가 줄을 접는다 */
     }
     @media (max-width: 640px) {
       .price-hero { padding: 48px 0 4px; }
@@ -194,7 +213,7 @@
        GA4 를 걷어낸 이유: 동의 화면보다 먼저 실행돼 브라우저 식별자가 미국으로 나갔다
        (개인정보보호법 제28조의8 국외이전). CF 는 쿠키를 안 써서 동의가 필요 없다. -->
 </head>
-<body data-freegate-entry="1"><!-- 들어올 때 무료 이용 기간 안내 창(js/freegate.js). 결제를 여는 날 이 속성과 스크립트 줄을 지운다. -->
+<body>
 
 <header class="top">
   <div class="wrap">
@@ -241,6 +260,8 @@
 
       <article class="plan">
         <p class="plan-name">무료</p>
+        <!-- 빈 기준가 줄 — 1년권의 「1개월권 12번 ~~82,800원~~」 줄과 높이를 맞춘다(지우면 이 카드만 가격이 올라간다) -->
+        <p class="plan-was"></p>
         <p class="plan-price"><span class="num">₩0</span></p>
         <!-- ⚠ 비워 두되 요소는 남긴다. .plan-sub 의 min-height 가 세 카드의
              버튼 높이를 맞추는 역할을 하는데, 지우면 이 카드만 버튼이 위로 올라간다. -->
@@ -257,8 +278,8 @@
         <div class="plan-feats">
           <b>계속 무료</b>
           <!-- ⚠ 순서 규칙 (2026-09-07 고원빈): **바뀌는 것을 위로, 같은 것을 아래로.**
-                 위 묶음 = 무료↔Pro 가 다른 항목 (개수 → 페이지 → 워터마크 → 엑셀·CSV)
-                 아래 묶음 = 양쪽이 같은 항목
+                 위 묶음 = 무료↔Pro 가 다른 항목 (개수 → 페이지 → 워터마크) — 무료 카드에선 ✓ 대신 △(li.lim, 2026-10-01)
+                 아래 묶음 = 양쪽이 같은 항목 (엑셀·CSV 는 2026-09-11 부터 무료도 같아서 이쪽이다 — 그래서 굵게 하지 않는다)
                손님이 보는 첫 줄이 "무엇이 달라지는가" 여야 카드 셋을 비교할 수 있다.
                항목을 새로 더할 때 아무 데나 끼우지 말고 이 두 묶음 중 맞는 쪽에 넣는다.
                ⚠ 세 카드는 **같은 항목을 같은 순서로** 적는다. 값만 다르다.
@@ -267,10 +288,10 @@
                ⚠ 여기 숫자는 js/pro.js 의 LIMIT · COMP_LIMIT · SHEET_LIMIT 과 **같아야 한다.**
                한쪽만 고치면 "30개라더니 25개에서 막힌다" 가 된다. verify_plan.mjs 가 지킨다. -->
           <ul>
-            <li><span>도면 하나에 <b>부품 10개 · 배선 30개</b></span></li>
-            <li><span>도면 페이지 <b>1장</b></span></li>
-            <li><span>PNG · PDF 내보내기 (<b>워터마크 포함</b>)</span></li>
-            <li><span>BOM · 결선표 <b>엑셀 · CSV 내보내기</b></span></li>
+            <li class="lim"><span>도면 하나에 <b>부품 10개 · 배선 30개</b></span></li>
+            <li class="lim"><span>도면 페이지 <b>1장</b></span></li>
+            <li class="lim"><span>PNG · PDF 내보내기 (<b>워터마크 포함</b>)</span></li>
+            <li><span>BOM · 결선표 엑셀 · CSV 내보내기</span></li>
             <li><span>부품 사진 올리기 · 배경 자동 제거</span></li>
             <li><span>단자 배치 · 배선 그리기 · 구간 정렬 · 분기</span></li>
             <li><span>내 부품 라이브러리 무제한 · 공용 부품 이용</span></li>
@@ -286,6 +307,7 @@
               1년권 앵커가 깨진다. 월 환산은 1년권에만 쓴다. -->
       <article class="plan is-paid">
         <p class="plan-name">Pro · 1개월</p>
+        <p class="plan-was"></p>   <!-- 빈 기준가 줄 — 무료 카드와 같은 이유 -->
         <p class="plan-price">
           <span class="num">₩6,900</span>
           <span class="per">/ 1개월</span>
@@ -310,7 +332,7 @@
             <li><span>부품 · 배선 <b>무제한</b></span></li>
             <li><span>도면 페이지 <b>무제한</b></span></li>
             <li><span>PNG · PDF 내보내기 (<b>워터마크 없음</b>)</span></li>
-            <li><span>BOM · 결선표 <b>엑셀 · CSV 내보내기</b></span></li>
+            <li><span>BOM · 결선표 엑셀 · CSV 내보내기</span></li>
             <li><span>부품 사진 올리기 · 배경 자동 제거</span></li>
             <li><span>단자 배치 · 배선 그리기 · 구간 정렬 · 분기</span></li>
             <li><span>내 부품 라이브러리 무제한 · 공용 부품 이용</span></li>
@@ -323,39 +345,37 @@
       <!-- 1년권 — 월 환산은 여기에만 쓴다.
            ⚠ 파란 강조(.is-pick)가 여기 있다. 예전에는 1개월권에 있었는데,
               그건 「첫 결제 시 1개월 더」 리본이 붙는 자리였기 때문이다.
-              그 혜택을 없앤 뒤로는(2026-09-08) 1개월권을 들어올릴 이유가 남지 않아,
-              이미 '추천' 인 1년권으로 옮겼다. 안 옮기면 파란 테두리는 1개월권을,
-              '추천' 표는 1년권을 가리켜 화면이 서로 다른 말을 한다. -->
-      <article class="plan is-paid is-pick">
-        <span class="plan-tag">추천</span>
-        <!-- 「출시 기념가」 — 카드 윗변 가운데, 테두리에 걸친 배지. 위치·색 이유는 .plan-promo 주석(pricing.html) -->
-        <span class="plan-promo">출시 기념가</span>
+              그 혜택을 없앤 뒤로는(2026-09-08) 1개월권을 들어올릴 이유가 남지 않아 1년권으로 옮겼다.
+           ⚠ 2026-10-01 — 「추천」·「출시 기념가」 알약을 빼고 카드 머리의 「출시 기념가」 띠로 바꿨다(고원빈).
+              모양·색·위치의 이유는 위 <style> 의 「1년권 가격 블록」 주석. -->
+      <article class="plan is-paid is-pick has-band">
+        <p class="plan-band">출시 기념가</p>
         <p class="plan-name">Pro · 1년</p>
+        <!-- 1개월권 12번(6,900 × 12 = 82,800) 대비 43% — 지금 실제로 파는 1개월권이 기준이라 취소선의 근거가 떳떳하다.
+             ⚠ 2026-09-22 — 46,800 은 정가가 아니라 **출시 기념가**다(정가 58,800 = 월 4,900원, 고원빈 결정).
+                기한은 적지 않는다. 정가로 넘기는 날 바꿀 자리는 _ai/배포_체크리스트.md 「정가 전환」에 모아 뒀다
+                (띠 제거 · 43% → 28% · ₩46,800 → ₩58,800 · 아래 줄 → 「월 4,900원」).
+             ⚠ index.html 의 요금 카드는 이 카드와 **마크업이 같아야 한다.** 한쪽만 고치면 랜딩과 요금제가 다른 말을 한다. -->
+        <p class="plan-was"><span class="lbl">1개월권 12번</span><s>82,800원</s></p>
         <p class="plan-price">
+          <span class="pct">43%</span>
           <span class="num">₩46,800</span>
           <span class="per">/ 1년</span>
         </p>
-        <!-- 이 카드에서 손님을 멈춰 세우는 것은 '월 3,900원' 하나다.
-             ₩46,800 은 얼핏 큰 돈으로 보이지만, 월로 나누면 1개월권(6,900원)의 절반이다.
-             그 숫자만 키워서 눈이 먼저 닿게 한다.
-             ⚠ 2026-09-22 — 46,800 은 정가가 아니라 **출시 기념가**다(정가 58,800 = 월 4,900원, 고원빈 결정).
-                그래서 카드 윗변에 「출시 기념가」 배지를 단다. 기한·정가는 적지 않는다(위 .plan-promo 주석).
-                정가로 넘기는 날 바꿀 자리는 _ai/배포_체크리스트.md 「정가 전환」에 모아 뒀다.
-             ⚠ index.html 의 요금 카드는 이 카드와 **마크업이 같아야 한다.** 한쪽만 고치면 랜딩과 요금제가 다른 말을 한다. -->
-        <p class="plan-sub is-deal"><span class="strike">월 4,900원</span><span class="save"><b>월 3,900원</b></span></p>
+        <p class="plan-sub"><span class="mo">월 3,900원</span><span class="note">정가 월 4,900원</span></p>
         <p class="plan-desc">배선도 작업이 꾸준히 이어지는 경우에 가장 저렴합니다.</p>
         <a class="btn btn-main" href="checkout.html?plan=year">결제하기</a>
 
         <div class="plan-feats">
           <b>12개월 동안</b>
-          <!-- 1개월권과 받는 것은 같다. 그래서 목록도 같게 두고, 이 카드만의 값어치인
-               '싸다' 를 맨 위 한 줄로 올린다. 목록을 줄이면 또 "1년권이 더 적나?" 가 된다. -->
+          <!-- 1개월권과 받는 것은 같다. 그래서 목록도 같게 둔다. 목록을 줄이면 또 "1년권이 더 적나?" 가 된다.
+               ⚠ 맨 위에 「1개월권을 12번 사는 것보다 36,000원 저렴」 한 줄이 있었다. 2026-10-01 에 뺐다(고원빈) —
+                  같은 비교를 이제 카드 윗부분 「1개월권 12번 ~~82,800원~~ · 43% ₩46,800」 이 맡는다. -->
           <ul>
-            <li><span>1개월권을 12번 사는 것보다 <b>36,000원</b> 저렴</span></li>
             <li><span>부품 · 배선 <b>무제한</b></span></li>
             <li><span>도면 페이지 <b>무제한</b></span></li>
             <li><span>PNG · PDF 내보내기 (<b>워터마크 없음</b>)</span></li>
-            <li><span>BOM · 결선표 <b>엑셀 · CSV 내보내기</b></span></li>
+            <li><span>BOM · 결선표 엑셀 · CSV 내보내기</span></li>
             <li><span>부품 사진 올리기 · 배경 자동 제거</span></li>
             <li><span>단자 배치 · 배선 그리기 · 구간 정렬 · 분기</span></li>
             <li><span>내 부품 라이브러리 무제한 · 공용 부품 이용</span></li>
@@ -476,8 +496,8 @@
 
 <!-- 로그인·회원가입을 이 화면에서 바로 처리한다. 순서가 중요하다 —
      flags(동작 스위치) → authmodal(창 마크업) → auth(동작). 랜딩과 같은 차례다. -->
-<!-- 결제하기 앞에서 한 번 묻는 창 — 무료 이용 기간 동안만. 결제를 여는 날 이 줄을 지운다(index.html 도). -->
-<script src="js/freegate.js"></script>
+<!-- ⚠ 여기 「무료 이용 기간」 창(js/freegate.js — 들어올 때 · 결제하기 앞)이 있었다. 2026-10-01 걷었다(고원빈 —
+     결제 시스템이 붙어 의미가 없다). 서버 PAY_OPEN 이 꺼져 있는 동안의 안내는 결제 화면(PAY_NOT_OPEN)이 한다. -->
 <script src="js/flags.js"></script>
 <script src="js/i18n.js"></script>
 <script src="js/authmodal.js"></script>
@@ -694,8 +714,8 @@
     /* ⚠ 여기에 "이미 결제한 사람의 .plan-sub 를 비운다" 는 처리가 있었다.
        「첫 결제 시 1개월 더」 안내가 이미 산 사람에게 거짓말이 되기 때문이었는데,
        그 혜택을 없애면서(2026-09-08) 비울 것이 없어졌다.
-       그대로 두면 1년권 이용자에게 '출시 기념가 · 월 3,900원' 가격줄까지 지워져,
-       지우는 이유가 사라진 채로 화면만 달라진다. (2026-09-22 — 취소선 ₩82,800 은 배지로 바뀌었다) */
+       그대로 두면 1년권 이용자에게 「월 3,900원 · 정가 월 4,900원」 가격줄까지 지워져,
+       지우는 이유가 사라진 채로 화면만 달라진다. */
     }
 
     칠하기();          // 먼저 기억으로 한 번 — 로그인 확인을 기다리지 않는다

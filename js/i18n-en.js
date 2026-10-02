@@ -15,11 +15,9 @@ WE.i18nMaps = WE.i18nMaps || {};
     "프로젝트 이름 (저장 파일명·PDF 제목)": "Project name (file name & PDF title)",
     "프로젝트를 파일로 저장 (Ctrl+S)": "Save project to file (Ctrl+S)",
     "프로젝트 + 사용된 부품을 한 파일로 내보내기 (받는 사람은 파일 하나로 열림)": "Export project + used parts as one file (recipient opens a single file)",
-    "정식 출시·새 기능 소식을 이메일로 받기": "Get launch & feature news by email",
     "의견·버그 제보 보내기": "Send feedback or bug reports",
     "저장": "Save",
     "🔗 공유": "🔗 Share",
-    "🔔 출시 알림": "🔔 Updates",
     "💬 피드백": "💬 Feedback",
 
     // ===== ☰ 메뉴 =====
@@ -583,15 +581,6 @@ WE.i18nMaps = WE.i18nMaps || {};
     "예: 이런 기능이 있으면 좋겠어요 / 이 부분이 잘 안 돼요…": "e.g. I'd love this feature / This part doesn't work well…",
     "보내기": "Send",
 
-    // ===== 출시 알림 =====
-    "🔔 출시 소식 받기": "🔔 Get Launch Updates",
-    "정식 출시·새 기능 소식을 이메일로 가장 먼저 알려드릴게요.": "Be the first to hear about launch & new features.",
-    "(스팸 없이 큰 소식만)": "(No spam — big news only)",
-    "예: myname@gmail.com": "e.g. myname@gmail.com",
-    "알림 받기": "Notify me",
-    "나중에 볼게요": "Maybe later",
-    "입력하신 이메일은 소식 안내에만 사용됩니다.": "Your email is used only for these updates.",
-
     // ===== JS 동적 문구 =====
     "이지케이블 배선도": "EasyCable Diagram",
 
@@ -776,19 +765,7 @@ WE.i18nMaps = WE.i18nMaps || {};
     "배선 ": "Wires ",
     "개 선택됨 (색·두께 일괄 변경)": " selected (bulk color/width edit)",
 
-    // --- 출시 알림 / 피드백 ---
-    "완성됐어요! 🎉 정식 출시·새 기능 소식을 이메일로 가장 먼저 알려드릴까요?<br />(스팸 없이 큰 소식만)": "Nice work! 🎉 Want to be the first to hear about launch & new features?<br />(No spam — big news only)",
-    "정식 출시·새 기능 소식을 이메일로 가장 먼저 알려드릴게요.<br />(스팸 없이 큰 소식만)": "Be the first to hear about launch & new features.<br />(No spam — big news only)",
-    "올바른 이메일 주소를 입력해주세요.": "Please enter a valid email address.",
-    "감사합니다!": "Thank you!",
-    "등록 중…": "Signing up…",
-    "[이지케이블] 출시 알림 신청": "[EasyCable] Launch notification signup",
-    "이지케이블 출시알림": "EasyCable launch notifications",
-    "출시 알림 신청 이메일: ": "Signup email: ",
-    "등록됐습니다. 소식이 있을 때 알려드릴게요. 감사합니다! 🙌": "You're on the list! We'll let you know when there's news. Thanks! 🙌",
-    "등록 실패: ": "Signup failed: ",
-    "잠시 후 다시 시도해주세요.": "Please try again in a moment.",
-    "네트워크 오류로 등록하지 못했습니다.": "Network error — signup failed.",
+    // --- 피드백 ---
     "잠시 후 다시 보내주세요. (": "Please wait before sending again. (",
     "초)": "s)",
     "오늘은 더 보낼 수 없습니다. 급하시면 ": "Daily limit reached. If urgent, email ",
@@ -979,6 +956,9 @@ WE.i18nMaps = WE.i18nMaps || {};
     "이메일 또는 비밀번호가 맞지 않습니다.": "Email or password is incorrect.",
     "로그인에 실패했습니다. 인터넷 연결을 확인해 주세요.": "Sign-in failed. Please check your internet connection.",
     "로그인이 필요합니다.": "Sign-in required.",
+    // Pro 는 한 번에 한 PC — 다른 PC 가 같은 계정으로 로그인해 여기가 로그아웃됐을 때의 가운데 창(auth.js 중복창, 2026-10-01 고원빈)
+    "중복 접속되었습니다": "Signed in elsewhere",
+    "다른 PC에서 같은 계정으로 로그인했습니다.": "This account just signed in on another PC.",
     "로그인 기능을 불러오지 못했습니다. 새로고침해 주세요.": "Could not load sign-in. Please refresh.",
     "동의 기록을 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.": "Could not save your consent. Please try again shortly.",
     "동의 기록을 저장하지 못했습니다. 인터넷 연결을 확인해 주세요.": "Could not save your consent. Please check your internet connection.",
@@ -1314,8 +1294,16 @@ WE.i18nMaps = WE.i18nMaps || {};
     "이용권이 적용되었습니다": "Your plan has been applied",
     "결제가 확인되어 이용권이 적용되었습니다.": "Payment confirmed — your plan has been applied.",
     "HEX 색상": "HEX color",
-    // ===== 환영 · 베타 모달 =====
-    "베타 테스트 중입니다": "Beta test in progress",
+    // ===== 정식 출시 안내 모달 (2026-09-30 · 10/12 이 지나면 함께 지운다) =====
+    // 「무료」 는 다른 곳에서 이미 쓰는 키를 그대로 쓴다 · 「2026」「10.12」「Pro」 는 한글이 없어 번역하지 않는다
+    "정식 출시": "Official launch",
+    "이지케이블이 정식 출시됩니다": "EasyCable is officially launching",
+    "10월 12일(월)부터 무료·Pro 요금제가 적용됩니다.": "Free and Pro plans apply from Monday, October 12.",
+    "부품 10개 · 배선 30개 · 도면 1장 · 워터마크 있음": "10 parts · 30 wires · 1 page · watermark",
+    "모두 무제한 · 워터마크 없음": "Everything unlimited · no watermark",
+    "요금제 확인하기": "See plans",
+    "오늘 하루 보지 않기": "Don't show again today",
+    // ===== 환영 모달 =====
     "작업물은": "Your work is",
     "이 브라우저에 자동 저장": "saved automatically in this browser",
     "됩니다.": ".",
@@ -1414,8 +1402,8 @@ WE.i18nMaps = WE.i18nMaps || {};
     "1장": "1 page",
     "PNG · PDF 내보내기 (": "PNG · PDF export (",
     "워터마크 포함": "with watermark",
-    "BOM · 결선표": "BOM · wire list",
-    "엑셀 · CSV 내보내기": "Excel · CSV export",
+    // 요금제 4번째 줄 — 세 카드가 같아서 굵게를 뺐다(2026-10-01). <b> 가 없어지며 조각 두 개(「BOM · 결선표」·「엑셀 · CSV 내보내기」)가 한 문장이 됐다
+    "BOM · 결선표 엑셀 · CSV 내보내기": "BOM · wire list Excel · CSV export",
     "부품 사진 올리기 · 배경 자동 제거": "Upload part photos · automatic background removal",
     "단자 배치 · 배선 그리기 · 구간 정렬 · 분기": "Terminal placement · wiring · segment alignment · branching",
     "내 부품 라이브러리 무제한 · 공용 부품 이용": "Unlimited part library · public parts",
@@ -1429,17 +1417,17 @@ WE.i18nMaps = WE.i18nMaps || {};
     "부품 · 배선": "Parts · wires",
     "무제한": "Unlimited",
     "워터마크 없음": "No watermark",
-    "추천": "Recommended",
+    // ⚠ 「추천」(알약) · 「1개월권을 12번 사는 것보다 36,000원 저렴」 키가 있었다 — 2026-10-01 화면에서 빠져 지웠다
     "Pro · 1년": "Pro · 1 year",
     "/ 1년": "/ 1 year",
-    "출시 기념가": "Launch price",   // 1년권 카드 윗변 배지(.plan-promo) (2026-09-22). 정가로 넘기는 날 배지와 함께 뺀다
-    "월 4,900원": "₩4,900/month",   // 1년권 정가 월 환산 — 취소선 (2026-09-22)
+    "출시 기념가": "Launch price",   // 1년권 카드 머리의 띠(.plan-band) (2026-10-01). 정가로 넘기는 날 띠와 함께 뺀다
+    "1개월권 12번": "12 monthly passes",   // 1년권 기준가 줄 — 「1개월권 12번 ~~82,800원~~」 (2026-10-01)
+    "82,800원": "₩82,800",
+    "정가 월 4,900원": "Regular ₩4,900/month",
+    "월 4,900원": "₩4,900/month",   // 지금은 화면에 없다 — 정가로 넘기는 날 1년권 아래 줄 값이 된다(_ai/배포_체크리스트.md 5-1)
     "월 3,900원": "₩3,900/month",
     "배선도 작업이 꾸준히 이어지는 경우에 가장 저렴합니다.": "The best value if you draw diagrams regularly.",
     "12개월 동안": "For 12 months",
-    "1개월권을 12번 사는 것보다": "Compared with buying 12 monthly passes,",
-    "36,000원": "₩36,000",
-    "저렴": "cheaper",
     "* VAT가 포함된 가격입니다.": "* Prices include VAT.",
     "가장 많이 물어보시는 것들입니다": "The questions we get most",
     "자동으로 다시 결제되나요?": "Will I be charged again automatically?",
@@ -1469,8 +1457,8 @@ WE.i18nMaps = WE.i18nMaps || {};
     "파일(": "export a file (",
     ")로 내보내": ") and",
     "보관해 두세요.": "keep a copy somewhere safe.",
-    "지금은 무료 이용 기간입니다": "We're in a free-use period",
-    "모든 기능을 결제 없이 쓸 수 있습니다. 지금은 결제하지 않으셔도 됩니다.": "Every feature is available without paying. You don't need to buy anything right now.",
+    // ⚠ 「무료 이용 기간」 창(js/freegate.js) 문구 두 개가 있었다 — 2026-10-01 창과 함께 지웠다.
+    //    결제 화면용 "<b>지금은 무료 이용 기간입니다.</b>" 는 다른 키라 그대로 있다
     // ===== 내 계정 =====
     "불러오는 중…": "Loading…",
     "로그인하러 가기": "Go to sign in",
@@ -1541,7 +1529,6 @@ WE.i18nMaps = WE.i18nMaps || {};
     "알 수 없는 오류": "Unknown error",
     "<b>지금은 무료 이용 기간입니다.</b>": "<b>We're in a free-use period.</b>",
     "<p style='margin-top:8px'>모든 기능을 결제 없이 쓸 수 있어, 지금은 이용권을 판매하지 않습니다.</p>": "<p style='margin-top:8px'>Every feature is available without paying, so passes aren't on sale right now.</p>",
-    "<p style='margin-top:6px'>판매를 시작하면 에디터의 🔔 출시 알림으로 알려 드립니다.</p>": "<p style='margin-top:6px'>We'll announce it through 🔔 Updates in the editor when sales open.</p>",
     "'>에디터로 돌아가기</a></p>": "'>Back to the editor</a></p>",
     "(서버 응답 ": "(server response ",
     "결제가 완료되지 않았습니다.": "The payment was not completed.",

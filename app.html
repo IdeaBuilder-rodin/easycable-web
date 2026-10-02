@@ -28,7 +28,30 @@
           데이터시트(1400) · 공용부품 게시(680) · 환영(500) 창도 같이 560px 이 됐다.
           (2026-09-02 고원빈 보고 — "공용 부품 창이 갑자기 작아져서 내용이 안 보인다") -->
   <link rel="stylesheet" href="auth.css?v=0880ba8a" />
-  <link rel="stylesheet" href="styles.css?v=9b814547" />
+  <link rel="stylesheet" href="styles.css?v=9c491906" />
+  <!-- 첫 화면이 그려지기 **전에** 두 가지를 걸어 둔다 (2026-09-30 고원빈 「새로고침하면 버튼이 움직인다」)
+       ① 「로그인 확인 중」 — 확인이 끝나기 전에는 계정 자리에 회색 동그라미만 둔다.
+          없으면 로그인한 사람에게도 「로그인」 글자가 먼저 보였다가 아바타로 바뀌며 [저장]·[피드백] 이 움직였다.
+          **pricing.html 머리의 것과 같은 코드·같은 원칙**이다(추측하지 않는다 · 2초 뒤 스스로 걷는다 — 그쪽 주석).
+          걷는 곳은 아래 js/auth.js 바로 뒤 인라인. 겉모습은 styles.css 「계정 자리 고정」.
+       ② 끌어서 바꾼 패널 폭 — 예전엔 app.js 초기화(DOMContentLoaded) 때 적용돼, 첫 화면엔 기본 폭으로 그렸다가
+          저장 폭으로 바뀌며 속성창과 [예제] 가 움직였다. CSS 변수로 미리 건다(styles.css #leftPanel·#rightPanel·#hint).
+          ⚠ 한계는 js/app.js 의 PANEL_LIMIT 과 **같은 값**이어야 한다 — 다르면 첫 화면과 초기화 뒤가 또 어긋난다.
+       ⚠ 자바스크립트가 꺼져 있으면 둘 다 안 걸린다 — 그때는 예전처럼 보인다. 그게 맞다. -->
+  <script>
+    (function () {
+      var h = document.documentElement;
+      h.setAttribute("data-auth", "pending");
+      setTimeout(function () { h.removeAttribute("data-auth"); }, 2000);
+      var 한계 = { leftPanel: [160, 420, "--left-w"], rightPanel: [225, 300, "--right-w"] };   // app.js PANEL_LIMIT
+      try {
+        for (var id in 한계) {
+          var w = parseFloat(localStorage.getItem("we_" + id + "W"));
+          if (w > 0) h.style.setProperty(한계[id][2], Math.max(한계[id][0], Math.min(한계[id][1], w)) + "px");
+        }
+      } catch (e) { /* 저장소를 못 읽으면 기본 폭 — app.js 도 같은 때 기본 폭을 쓴다 */ }
+    })();
+  </script>
   <!-- 방문 통계는 Cloudflare Web Analytics 를 쓴다 (Pages 대시보드에서 켜면 비콘이 자동 주입된다).
        GA4 를 걷어낸 이유: 동의 화면보다 먼저 실행돼 브라우저 식별자가 미국으로 나갔다
        (개인정보보호법 제28조의8 국외이전). CF 는 쿠키를 안 써서 동의가 필요 없다. -->
@@ -66,7 +89,6 @@
         <button id="btnSave" title="프로젝트를 파일로 저장 (Ctrl+S)">저장</button>
       </div>
       <div class="tb-divider"></div>
-      <button id="btnNotify" title="정식 출시·새 기능 소식을 이메일로 받기">🔔 출시 알림</button>
       <button id="btnFeedback" class="tb-accent" title="의견·버그 제보 보내기">💬 피드백</button>
       <!-- 계정 — 출시(LAUNCH) 전에는 숨어 있다. auth.js 가 상태에 따라 보이고 문구를 바꾼다 -->
       <!-- Pro/무료 전환 — 미리보기에서만 보인다.
@@ -207,14 +229,6 @@
     </div>
   </div>
 
-  <!-- 지난 작업을 되살렸을 때 알리는 띠. 복원은 기본 동작이고, 새로 시작하려면 여기서 한 번 누르면 된다 -->
-  <div id="restoreBanner" hidden>
-    <span class="rb-icon">⟳</span>
-    <span id="restoreBannerText"></span>
-    <button type="button" id="restoreBannerNew">새 배선도로 시작</button>
-    <button type="button" id="restoreBannerClose" title="닫기" aria-label="닫기">✕</button>
-  </div>
-
   <div id="main">
     <!-- 좌측 라이브러리 패널 (Phase 5에서 채움) -->
     <aside id="leftPanel">
@@ -262,6 +276,18 @@
 
     <!-- 중앙 영역: 캔버스(스크롤) + 하단 탭 바 -->
     <div id="centerCol">
+    <!-- 알림 — 캔버스 위 가운데에 **떠 있다**. 두 가지가 같이 쓴다(js/app.js):
+         ① 지난 작업을 자동으로 되살렸을 때 「이어서 불러왔습니다」 — 5초 뒤 스스로 사라진다.
+            복원이 기본 동작이라 묻지 않고, 새로 시작할 길([새 배선도로 시작])만 열어 둔다.
+         ② 같은 작업을 다른 탭에서 열었을 때 「여기서 고친 내용은 저장되지 않습니다」 — 닫을 때까지 남는다.
+         예전엔 툴바 아래 띠라서 나타나고 사라질 때 작업 영역 전체가 아래위로 밀렸다(2026-09-30 고원빈).
+         #canvasWrap 안이 아니라 밖이다 — 캔버스를 스크롤해도 알림은 제자리. -->
+    <div id="restoreBanner" hidden>
+      <span class="rb-icon">⟳</span>
+      <span id="restoreBannerText"></span>
+      <button type="button" id="restoreBannerNew">새 배선도로 시작</button>
+      <button type="button" id="restoreBannerClose" title="닫기" aria-label="닫기">✕</button>
+    </div>
     <!-- 중앙 캔버스 -->
     <section id="canvasWrap" class="pr-orig">
       <!-- 작성일 — 2026-09-09 에 캔버스 **위로 띄웠다** (고원빈).
@@ -1205,18 +1231,47 @@
     </div>
   </div>
 
-  <!-- 방문 안내 모달: 매번 접속할 때마다 표시(1회성 아님) -->
-  <!-- 베타 안내 — 에디터에 들어오면 한 번 뜬다.
-       ⚠ 랜딩(index.html)에는 넣지 않는다. 루트가 랜딩이라 포트원 심사자가 거기로 들어오는데,
-          첫 화면이 「베타」 모달이면 서비스가 준비 안 된 것처럼 읽힐 수 있다.
-          실제로 작업하는 사람은 에디터에 있고, 알아야 할 사람도 그쪽이다. -->
-  <div id="betaModal" class="modal" hidden>
-    <div class="modal-box beta-box">
-      <p class="beta-title">베타 테스트 중입니다</p>
-      <button id="betaOk" class="beta-ok">확인</button>
+  <!-- 정식 출시 안내 (2026-09-30 고원빈) — 10/12 출시일부터 요금제(무료 한도)가 켜지므로
+       매일 들어오는 사람에게 미리, 착오 없게 알린다. 에디터에 들어오면 뜨고 「오늘 하루 보지 않기」 로만 하루 끈다.
+       10/12 0시(한국)가 되면 코드를 고치지 않아도 안 뜬다(js/app.js bindLaunchNotice).
+       모양은 10/01 고원빈과 다듬은 최종 시안 — 실제 공지 모달 사례(Phrase·Figma: 위 절반 그림 · 제목 한 줄 · 설명 한 줄 · 버튼 하나)를 따랐다.
+         · 머리 그림: 파란 바탕 + 로고의 세 가닥을 「모양만」 옅게(피복 → 직각으로 꺾여 → 커넥터) · 「2026 / 10.12 / 정식 출시」 를 가장 크게
+         · 무료·Pro 는 한 줄씩 — 숫자는 js/pro.js 의 LIMIT·COMP_LIMIT·SHEET_LIMIT 과 pricing.html 무료 카드와 **같아야 한다.**
+         · 「오늘 하루 보지 않기」 는 누르면 바로 닫히는 글자 버튼(한국 사이트 관례 — 체크하고 또 닫을 필요 없게)
+       ⚠ 랜딩(index.html)에는 넣지 않는다 — 루트가 랜딩이라 심사자가 거기로 들어온다. 알아야 할 사람은 에디터에 있다.
+       접근성 — role="dialog"·aria-modal·제목 연결, 열리면 초점이 상자(tabindex=-1)로 간다(W3C 대화상자 패턴). -->
+  <div id="launchModal" class="modal" hidden>
+    <div class="modal-box launch-box" role="dialog" aria-modal="true" aria-labelledby="launchTitle" tabindex="-1">
+      <button type="button" class="launch-x" id="launchX" aria-label="닫기">✕</button>
+      <div class="launch-hero">
+        <!-- 옅은 배선 무늬 — 로고(assets/logo.svg)의 세 가닥을 흰 선으로만. 화면낭독기는 읽지 않는다 -->
+        <svg class="launch-wires" viewBox="0 0 440 210" aria-hidden="true">
+          <g fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="-20" y="150" width="70" height="40" rx="9" />
+            <path d="M50 160 H120 V96 H372" /><path d="M50 170 H134 V108 H372" /><path d="M50 180 H148 V120 H372" />
+            <rect x="372" y="84" width="54" height="48" rx="8" />
+          </g>
+        </svg>
+        <p class="launch-yr">2026</p>
+        <p class="launch-dt">10.12</p>
+        <p class="launch-ln">정식 출시</p>
+      </div>
+      <div class="launch-body">
+        <!-- 제목을 <p> 로 둔다 — h2·h3 는 다른 모달 규칙(.modal-box h3 등)이 얹힐 수 있다 -->
+        <p class="launch-title" id="launchTitle">이지케이블이 정식 출시됩니다</p>
+        <p class="launch-sub">10월 12일(월)부터 무료·Pro 요금제가 적용됩니다.</p>
+        <div class="launch-plans">
+          <div><b>무료</b><span>부품 10개 · 배선 30개 · 도면 1장 · 워터마크 있음</span></div>
+          <div class="launch-plan-pro"><b>Pro</b><span>모두 무제한 · 워터마크 없음</span></div>
+        </div>
+        <!-- 새 탭 — 그리던 도면을 두고 이 창을 떠나지 않게. 누르면 이 창은 닫힌다(js/app.js) -->
+        <a class="launch-go" id="launchGo" href="pricing.html" target="_blank" rel="noopener">요금제 확인하기</a>
+        <button type="button" class="launch-today" id="launchToday">오늘 하루 보지 않기</button>
+      </div>
     </div>
   </div>
 
+  <!-- 방문 안내 모달: 매번 접속할 때마다 표시(1회성 아님) -->
   <div id="welcomeModal" class="modal" hidden>
     <div class="modal-box welcome-box">
       <div class="welcome-body">
@@ -1286,23 +1341,6 @@
         <button id="feedbackClose">취소</button>
         <button id="feedbackSend" class="primary">보내기</button>
       </div>
-    </div>
-  </div>
-
-  <!-- 출시 알림(이메일 수집) 모달 — 내보내기/저장 완료 후 또는 '🔔 출시 알림' 링크로 표시 -->
-  <div id="notifyModal" class="modal" hidden>
-    <div class="modal-box" style="width:min(430px,92vw)">
-      <h3>🔔 출시 소식 받기</h3>
-      <p class="muted" id="notifyLead" style="margin:0 0 14px">정식 출시·새 기능 소식을 이메일로 가장 먼저 알려드릴게요.<br />(스팸 없이 큰 소식만)</p>
-      <div class="notify-row">
-        <input type="email" id="notifyEmail" placeholder="예: myname@gmail.com" autocomplete="email" />
-        <button id="notifySend" class="primary">알림 받기</button>
-      </div>
-      <!-- 허니팟 -->
-      <input type="checkbox" id="notifyBotcheck" style="display:none" tabindex="-1" autocomplete="off" />
-      <p id="notifyStatus" class="muted" style="margin:8px 0 0"></p>
-      <button id="notifyClose" class="notify-later">나중에 볼게요</button>
-      <p class="muted" style="margin:8px 0 0;font-size:11px;text-align:center">입력하신 이메일은 소식 안내에만 사용됩니다. <a href="privacy.html" target="_blank" rel="noopener" style="color:inherit">개인정보처리방침</a></p>
     </div>
   </div>
 
@@ -1531,7 +1569,21 @@
   <!-- 스크립트: file:// 호환 위해 일반 script (모듈 아님), 순서 중요 -->
   <script src="js/authmodal.js?v=2bee75f1"></script>  <!-- 로그인 창 마크업. auth.js 보다 먼저 꽂혀 있어야 한다 -->
   <script src="js/flags.js?v=d53ae8fb"></script>   <!-- 맨 앞: 다른 파일이 WE.flags 를 보고 동작을 정한다 -->
-  <script src="js/auth.js?v=596c2dd8"></script>    <!-- flags 다음. SDK(js/vendor/supabase.js)는 필요할 때만 스스로 불러온다 -->
+  <script src="js/auth.js?v=5d9483ff"></script>    <!-- flags 다음. SDK(js/vendor/supabase.js)는 필요할 때만 스스로 불러온다 -->
+  <!-- 「로그인 확인 중」(머리의 data-auth="pending")을 판정이 확정되면 걷는다.
+       판정은 pricing.html 계정표시() 의 확정됐나() 와 **같다** — 판정 자체는 auth.js 한 곳에만 있다. -->
+  <script>
+    (function () {
+      function 확정됐나() {
+        if (!(window.WE && WE.auth)) return false;          // auth.js 가 아직·영영 없다 → 머리의 2초 해제가 걷는다
+        if (WE.auth._usable && !WE.auth._usable()) return true;   // 로그인을 못 쓰는 환경(file:// 등) — 기다릴 것이 없다
+        return !!(WE.auth.ready && WE.auth.ready());
+      }
+      function 걷기() { if (확정됐나()) document.documentElement.removeAttribute("data-auth"); }
+      if (window.WE && WE.auth && WE.auth.onChange) WE.auth.onChange(걷기);
+      걷기();
+    })();
+  </script>
 <!-- 결제는 됐는데 이용권이 안 붙은 주문을 다음 접속 때 되살린다.
      결제창에서 돌아오는 길이 끊기면(앱 전환·창 닫음·네트워크) 돈만 나가고 끝난다. -->
 <script src="js/payrecover.js?v=da314bdc"></script>
@@ -1561,9 +1613,9 @@
   <script src="js/catalogbackup.js?v=002f523c"></script>   <!-- 게시한 것을 로컬 백업 폴더에도 따라 쓴다 -->
   <script src="js/public-publisher.js?v=27576c1b"></script>
   <script src="js/io.js?v=57ce9f2a"></script>
-  <script src="js/pdf.js?v=39b029e8"></script>
+  <script src="js/pdf.js?v=afc44cb1"></script>
   <script src="js/xlsx.js?v=b4f1d49f"></script>
-  <script src="js/app.js?v=edbaaeca"></script>
+  <script src="js/app.js?v=3a42147e"></script>
   <!-- 라이브러리 부품 자동 수집 — 맨 마지막에 defer. 에디터 로딩에 끼어들지 않는다. 없어도 에디터는 그대로 돈다(library.js 가 있으면 부를 뿐). -->
   <script src="js/libsync.js?v=4308ef03" defer></script>
   <!-- 인쇄 전용: 페이지 전체를 덮는 워터마크. 도면 칸 안에만 찍히던 것을 종이 전체로 넓혔다.

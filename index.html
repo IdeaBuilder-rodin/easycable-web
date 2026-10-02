@@ -22,7 +22,7 @@
        브라우저 탭에서 브랜드가 일정하지 않았다. (2026-08-24 교체) -->
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml" />
   <link rel="apple-touch-icon" href="assets/icon-180.png" />
-  <link rel="stylesheet" href="landing.css?v=abcefcd7" />
+  <link rel="stylesheet" href="landing.css?v=9bea02f9" />
   <!-- 히어로 영상의 정지 그림 = 첫 화면에서 가장 큰 그림(LCP). CSS·스크립트보다 먼저 받게 한다 -->
   <link rel="preload" as="image" href="assets/hero-poster.webp" type="image/webp" fetchpriority="high" />
 <!-- 로그인 창의 겉모습. 에디터와 **같은 파일**을 읽는다(복사본 없음). -->
@@ -281,6 +281,8 @@
 
       <article class="plan">
         <p class="plan-name">무료</p>
+        <!-- 빈 기준가 줄 — 1년권의 「1개월권 12번 ~~82,800원~~」 줄과 높이를 맞춘다(지우면 이 카드만 가격이 올라간다) -->
+        <p class="plan-was"></p>
         <p class="plan-price"><span class="num">₩0</span></p>
         <!-- ⚠ 비워 두되 요소는 남긴다. .plan-sub 의 min-height 가 세 카드의
              버튼 높이를 맞추는 역할을 하는데, 지우면 이 카드만 버튼이 위로 올라간다. -->
@@ -297,8 +299,8 @@
         <div class="plan-feats">
           <b>계속 무료</b>
           <!-- ⚠ 순서 규칙 (2026-09-07 고원빈): **바뀌는 것을 위로, 같은 것을 아래로.**
-                 위 묶음 = 무료↔Pro 가 다른 항목 (개수 → 페이지 → 워터마크 → 엑셀·CSV)
-                 아래 묶음 = 양쪽이 같은 항목
+                 위 묶음 = 무료↔Pro 가 다른 항목 (개수 → 페이지 → 워터마크) — 무료 카드에선 ✓ 대신 △(li.lim, 2026-10-01)
+                 아래 묶음 = 양쪽이 같은 항목 (엑셀·CSV 는 2026-09-11 부터 무료도 같아서 이쪽이다 — 그래서 굵게 하지 않는다)
                손님이 보는 첫 줄이 "무엇이 달라지는가" 여야 카드 셋을 비교할 수 있다.
                항목을 새로 더할 때 아무 데나 끼우지 말고 이 두 묶음 중 맞는 쪽에 넣는다.
                ⚠ 세 카드는 **같은 항목을 같은 순서로** 적는다. 값만 다르다.
@@ -307,10 +309,10 @@
                ⚠ 여기 숫자는 js/pro.js 의 LIMIT · COMP_LIMIT · SHEET_LIMIT 과 **같아야 한다.**
                한쪽만 고치면 "30개라더니 25개에서 막힌다" 가 된다. verify_plan.mjs 가 지킨다. -->
           <ul>
-            <li><span>도면 하나에 <b>부품 10개 · 배선 30개</b></span></li>
-            <li><span>도면 페이지 <b>1장</b></span></li>
-            <li><span>PNG · PDF 내보내기 (<b>워터마크 포함</b>)</span></li>
-            <li><span>BOM · 결선표 <b>엑셀 · CSV 내보내기</b></span></li>
+            <li class="lim"><span>도면 하나에 <b>부품 10개 · 배선 30개</b></span></li>
+            <li class="lim"><span>도면 페이지 <b>1장</b></span></li>
+            <li class="lim"><span>PNG · PDF 내보내기 (<b>워터마크 포함</b>)</span></li>
+            <li><span>BOM · 결선표 엑셀 · CSV 내보내기</span></li>
             <li><span>부품 사진 올리기 · 배경 자동 제거</span></li>
             <li><span>단자 배치 · 배선 그리기 · 구간 정렬 · 분기</span></li>
             <li><span>내 부품 라이브러리 무제한 · 공용 부품 이용</span></li>
@@ -326,6 +328,7 @@
               1년권 앵커가 깨진다. 월 환산은 1년권에만 쓴다. -->
       <article class="plan is-paid">
         <p class="plan-name">Pro · 1개월</p>
+        <p class="plan-was"></p>   <!-- 빈 기준가 줄 — 무료 카드와 같은 이유 -->
         <p class="plan-price">
           <span class="num">₩6,900</span>
           <span class="per">/ 1개월</span>
@@ -350,7 +353,7 @@
             <li><span>부품 · 배선 <b>무제한</b></span></li>
             <li><span>도면 페이지 <b>무제한</b></span></li>
             <li><span>PNG · PDF 내보내기 (<b>워터마크 없음</b>)</span></li>
-            <li><span>BOM · 결선표 <b>엑셀 · CSV 내보내기</b></span></li>
+            <li><span>BOM · 결선표 엑셀 · CSV 내보내기</span></li>
             <li><span>부품 사진 올리기 · 배경 자동 제거</span></li>
             <li><span>단자 배치 · 배선 그리기 · 구간 정렬 · 분기</span></li>
             <li><span>내 부품 라이브러리 무제한 · 공용 부품 이용</span></li>
@@ -363,38 +366,36 @@
       <!-- 1년권 — 월 환산은 여기에만 쓴다.
            ⚠ 파란 강조(.is-pick)가 여기 있다. 예전에는 1개월권에 있었는데,
               그건 「첫 결제 시 1개월 더」 리본이 붙는 자리였기 때문이다.
-              그 혜택을 없앤 뒤로는(2026-09-08) 1개월권을 들어올릴 이유가 남지 않아,
-              이미 '추천' 인 1년권으로 옮겼다. 안 옮기면 파란 테두리는 1개월권을,
-              '추천' 표는 1년권을 가리켜 화면이 서로 다른 말을 한다. -->
-      <article class="plan is-paid is-pick">
-        <span class="plan-tag">추천</span>
-        <!-- 「출시 기념가」 — 카드 윗변 가운데, 테두리에 걸친 배지. 위치·색 이유는 .plan-promo 주석(pricing.html) -->
-        <span class="plan-promo">출시 기념가</span>
+              그 혜택을 없앤 뒤로는(2026-09-08) 1개월권을 들어올릴 이유가 남지 않아 1년권으로 옮겼다.
+           ⚠ 2026-10-01 — 「추천」·「출시 기념가」 알약을 빼고 카드 머리의 「출시 기념가」 띠로 바꿨다(고원빈).
+              모양·색·위치의 이유는 pricing.html <style> 의 「1년권 가격 블록」 주석(CSS 값은 landing.css 에 같게). -->
+      <article class="plan is-paid is-pick has-band">
+        <p class="plan-band">출시 기념가</p>
         <p class="plan-name">Pro · 1년</p>
+        <!-- 1개월권 12번(6,900 × 12 = 82,800) 대비 43% — 지금 실제로 파는 1개월권이 기준이라 취소선의 근거가 떳떳하다.
+             ⚠ 2026-09-22 — 46,800 은 정가가 아니라 **출시 기념가**다(정가 58,800 = 월 4,900원).
+                기한은 적지 않는다. 정가로 넘기는 날 바꿀 자리는 _ai/배포_체크리스트.md 「정가 전환」.
+             ⚠ 이 카드는 pricing.html 1년권 카드와 **마크업이 같아야 한다.** -->
+        <p class="plan-was"><span class="lbl">1개월권 12번</span><s>82,800원</s></p>
         <p class="plan-price">
+          <span class="pct">43%</span>
           <span class="num">₩46,800</span>
           <span class="per">/ 1년</span>
         </p>
-        <!-- 이 카드에서 손님을 멈춰 세우는 것은 '월 3,900원' 하나다.
-             ₩46,800 은 얼핏 큰 돈으로 보이지만, 월로 나누면 1개월권(6,900원)의 절반이다.
-             그 숫자만 키워서 눈이 먼저 닿게 한다.
-             ⚠ 2026-09-22 — 46,800 은 정가가 아니라 **출시 기념가**다(정가 58,800 = 월 4,900원).
-                「출시 기념가」 배지를 카드 윗변에 달고, 기한·정가는 적지 않는다. 자세한 이유는 pricing.html 의
-                .plan-promo 주석 — 이 카드는 pricing.html 1년권 카드와 **마크업이 같아야 한다.** -->
-        <p class="plan-sub is-deal"><span class="strike">월 4,900원</span><span class="save"><b>월 3,900원</b></span></p>
+        <p class="plan-sub"><span class="mo">월 3,900원</span><span class="note">정가 월 4,900원</span></p>
         <p class="plan-desc">배선도 작업이 꾸준히 이어지는 경우에 가장 저렴합니다.</p>
         <a class="btn btn-main" href="checkout.html?plan=year">결제하기</a>
 
         <div class="plan-feats">
           <b>12개월 동안</b>
-          <!-- 1개월권과 받는 것은 같다. 그래서 목록도 같게 두고, 이 카드만의 값어치인
-               '싸다' 를 맨 위 한 줄로 올린다. 목록을 줄이면 또 "1년권이 더 적나?" 가 된다. -->
+          <!-- 1개월권과 받는 것은 같다. 그래서 목록도 같게 둔다. 목록을 줄이면 또 "1년권이 더 적나?" 가 된다.
+               ⚠ 맨 위에 「1개월권을 12번 사는 것보다 36,000원 저렴」 한 줄이 있었다. 2026-10-01 에 뺐다(고원빈) —
+                  같은 비교를 이제 카드 윗부분 「1개월권 12번 ~~82,800원~~ · 43% ₩46,800」 이 맡는다. -->
           <ul>
-            <li><span>1개월권을 12번 사는 것보다 <b>36,000원</b> 저렴</span></li>
             <li><span>부품 · 배선 <b>무제한</b></span></li>
             <li><span>도면 페이지 <b>무제한</b></span></li>
             <li><span>PNG · PDF 내보내기 (<b>워터마크 없음</b>)</span></li>
-            <li><span>BOM · 결선표 <b>엑셀 · CSV 내보내기</b></span></li>
+            <li><span>BOM · 결선표 엑셀 · CSV 내보내기</span></li>
             <li><span>부품 사진 올리기 · 배경 자동 제거</span></li>
             <li><span>단자 배치 · 배선 그리기 · 구간 정렬 · 분기</span></li>
             <li><span>내 부품 라이브러리 무제한 · 공용 부품 이용</span></li>
@@ -525,12 +526,12 @@
 
 <!-- 로그인·회원가입을 이 화면에서 바로 처리한다. 순서가 중요하다 —
      flags(동작 스위치) → authmodal(창 마크업) → auth(동작). -->
-<!-- 결제하기 앞에서 한 번 묻는 창 — 무료 이용 기간 동안만. 결제를 여는 날 이 줄을 지운다(pricing.html 도). -->
-<script src="js/freegate.js?v=bd5fbcf6"></script>
+<!-- ⚠ 여기 결제하기 앞 「무료 이용 기간」 창(js/freegate.js)이 있었다. 2026-10-01 걷었다(고원빈 — 결제 시스템이 붙었다).
+     PAY_OPEN 이 꺼져 있는 동안의 안내는 결제 화면(PAY_NOT_OPEN)이 한다. -->
 <script src="js/flags.js?v=d53ae8fb"></script>
 <script src="js/i18n.js?v=275ab437"></script>
 <script src="js/authmodal.js?v=2bee75f1"></script>
-<script src="js/auth.js?v=596c2dd8"></script>
+<script src="js/auth.js?v=5d9483ff"></script>
 <script>
   /* 로그인·회원가입 — 이 화면에서 바로 연다.
      실패하면 링크(href)가 그대로 살아 있어 에디터로 넘어가 거기서 열린다. */

@@ -140,6 +140,16 @@
     #admDelGo.danger:hover { background: var(--danger-d); }
     #admDelGo:disabled { background: #ddd; border-color: #ccc; cursor: default; }
 
+    /* 참여 링크 안내 메일 미리보기 (2026-09-30, js/admin-folders.js 안내메일)
+       메일 폭(480px)이 다 보이게 넉넉히 준다. 메일 자체는 iframe 안이라 이 페이지의 규칙이 닿지 않는다.
+       머리·바닥은 header/footer 태그 대신 div + 이 창 전용 이름 — 전역 규칙이 얹힐 틈을 안 준다 */
+    .adm-mail-box { width: min(620px, 94vw); padding: 0; display: flex; flex-direction: column; overflow: hidden; }
+    .adm-mail-head, .adm-mail-foot { display: flex; align-items: center; gap: 8px; padding: 10px 14px; flex: none; }
+    .adm-mail-head { justify-content: space-between; border-bottom: 1px solid var(--bd2); }
+    .adm-mail-foot { justify-content: flex-end; border-top: 1px solid var(--bd2); }
+    .adm-mail-foot #admMailStatus { margin-right: auto; font-size: var(--fs-sm); }
+    .adm-mail-frame { display: block; width: 100%; height: min(70vh, 760px); border: 0; background: #eef4fb; }
+
     /* 목록 더 보기 */
     .adm-more { width: 100%; margin-top: var(--sp3); padding: 7px 0; border: 1px solid var(--bd);
       border-radius: var(--r); background: var(--bg); color: var(--tx2); font: inherit; font-size: var(--fs-sm); cursor: pointer; }
@@ -213,6 +223,20 @@
     .adm-col-list .lib-item.is-public { opacity: .55; }        /* 공용 부품에서 가져온 것 — 우리 것 */
     .adm-col-list .lib-item.is-hidden { opacity: .5; }         /* 관리자가 숨긴 것 — 「숨긴 것 보기」를 켰을 때만 보인다 (2026-09-15) */
     .adm-col-list .lib-item input[type=checkbox] { margin: 0 2px 0 4px; }
+    /* 목록 끝 「30 / 75개 표시 · 30개 더 보기」 (2026-10-01) — 보이면 저절로 더 붙는다. 글자만(연한 칩·배경 없이) */
+    .adm-col-more { align-self: center; padding: 8px 12px; border: 0; background: none; font: inherit; font-size: var(--fs-sm); color: var(--tx3); cursor: pointer; }
+    .adm-col-more:hover { color: var(--primary-d); text-decoration: underline; }
+    .adm-col-more[hidden] { display: none; }
+    /* 왼쪽 사람 목록이 길면 200명씩 — 「N명 더 보기」(2026-10-02 서버 집계). 글자만 */
+    .adm-col-users-more { align-self: center; margin: 6px 0; padding: 4px 10px; border: 0; background: none; font: inherit; font-size: var(--fs-sm); color: var(--tx3); cursor: pointer; }
+    .adm-col-users-more:hover { color: var(--primary-d); text-decoration: underline; }
+    .adm-col-list:focus { outline: none; }                       /* 초점은 고른 줄(.on)이 보여 준다 */
+    .adm-col-list:focus-visible .lib-item.on { box-shadow: 0 0 0 2px var(--primary); }
+    /* 상세 「보낸 사람」 — 사람마다 하나. 누르면 그 사람이 올린 그림·단자로 바뀐다(2026-10-02). 글자 링크로만(칩·배경 없이) */
+    .adm-col-member { border: 0; background: none; padding: 0; font: inherit; color: var(--primary-d); cursor: pointer; text-align: left; }
+    .adm-col-member:hover { text-decoration: underline; }
+    .adm-col-member.on { color: var(--tx); font-weight: 700; cursor: default; text-decoration: none; }
+    .adm-col-member-sep { color: var(--tx3); }
     /* 숨김 표 — 줄·기기·상세에 같은 모양으로. 편집함(.adm-col-edited) 배지와 같은 크기, 색만 회색 */
     .adm-col-hidden-tag { font-style: normal; font-size: 10px; color: #6b7280; background: #eceff3; padding: 1px 5px; border-radius: 999px; margin-left: 4px; }
     .adm-col-meta { font-size: 11px; color: var(--tx3); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -613,18 +637,23 @@
     <!-- ── 사용자 부품 (2026-09-14, js/admin-collect.js) ─────────────────────────────
          에디터가 자동으로 보내온 사용자 라이브러리 부품(collect_parts). 왼쪽은 에디터 라이브러리 창과 같은 줄(.lib-item),
          오른쪽은 상세(이미지 위에 단자 그림) + [일괄 등록으로 보내기]. 새 부품은 Realtime 으로 위에 붙는다.
-         "같은 부품" = rev(내용 해시)가 같은 것 — 내용이 하나라도 다르면 다른 부품(고원빈). 관리자만 읽는다(RLS).
+         "같은 부품" = 이름+스펙이 같은 것(공백·대소문자 무시 — 2026-10-02 고원빈, 9/14 의 rev 기준을 바꿈). 관리자만 읽는다(RLS).
+         목록은 글자만 — 그림은 「그림 보기」를 켰을 때(30장+10장씩)와 줄을 눌렀을 때(1장)만 받는다(로그 사용량 — admin-collect.js 머리말).
          숨기기(2026-09-15) — 행을 지우지 않고 hidden_at 만 찍는다(RPC collect_hide). 지우면 사용자가 그 부품을 고칠 때 되살아나기 때문.
          숨긴 것은 목록에서만 빠지고 통계(CSV·엑셀·순위)에는 남는다(고원빈: 1년 모아 통계). 「숨긴 것 보기」로 다시 보고 복원한다. -->
     <section id="admCollect" class="adm-collect" aria-label="사용자 부품" hidden>
       <div class="adm-batch-bar">
         <input type="search" id="admColSearch" class="adm-col-search" placeholder="이름·스펙 검색" autocomplete="off" />
+        <!-- 기본 = 처음 나타난 순(2026-10-02) — 옛 부품을 고쳐 다시 보내도 맨 위로 안 올라온다. 예전 기본(최근 고친 순)은 그대로 고를 수 있다 -->
         <select id="admColSort" class="adm-col-sort" title="정렬">
-          <option value="recent">최근 순</option>
+          <option value="first" selected>처음 나타난 순</option>
+          <option value="recent">최근 고친 순</option>
           <option value="devices">기기 수 순</option>
           <option value="name">이름 순</option>
         </select>
-        <label class="chk"><input type="checkbox" id="admColGroup" checked /> 같은 부품 묶기</label>
+        <label class="chk" title="이름+스펙이 같은 것끼리 한 줄로 묶습니다(앞뒤 공백·대소문자 무시)"><input type="checkbox" id="admColGroup" checked /> 같은 부품 묶기</label>
+        <!-- 그림 보기(2026-10-02) — 기본 꺼짐. 목록은 글자만이고, 켜면 처음 30줄부터 그림이 붙는다(로그·전송량 — admin-collect.js 머리말 ④) -->
+        <label class="chk" title="목록에 그림을 붙입니다. 켜면 처음 30장, 아래로 내릴 때마다 10장씩 받습니다"><input type="checkbox" id="admColThumbs" /> 그림 보기</label>
         <label class="chk"><input type="checkbox" id="admColPublic" /> 공용 출처 포함</label>
         <label class="chk"><input type="checkbox" id="admColHidden" /> 숨긴 것 보기</label>
         <span class="adm-col-stats adm-batch-saved" id="admColStats"></span>
@@ -641,7 +670,10 @@
         <nav id="admColUsers" class="adm-col-users" aria-label="사용자 목록"></nav>
         <div class="adm-col-list-wrap">
           <button type="button" id="admColNew" class="adm-col-new" hidden>▲ 새 부품 <b>0</b>개</button>
-          <div id="admColList" class="adm-col-list" role="list"></div>
+          <!-- tabindex=0 — 줄을 누른 뒤 ↑↓ 로 넘기며 상세(그림 1장)를 본다(2026-10-02) -->
+          <div id="admColList" class="adm-col-list" role="list" tabindex="0" aria-label="사용자 부품 목록 — 위아래 화살표로 옮깁니다"></div>
+          <!-- 30줄 그리고 이 줄이 보이면 10줄씩 더 붙인다(2026-10-01·02, 로그 사용량). 눌러도 된다(키보드). 목록(role=list) 밖에 둔다 -->
+          <button type="button" id="admColMore" class="adm-col-more" hidden></button>
           <div id="admColEmpty" class="adm-batch-empty">아직 모인 부품이 없습니다. 에디터에서 라이브러리에 부품을 추가하면 30초 뒤 여기에 나타납니다.</div>
         </div>
         <aside id="admColDetail" class="adm-col-detail"></aside>
@@ -927,6 +959,24 @@
       </div>
     </div>
 
+    <!-- 참여 링크 안내 메일 (2026-09-30) — 폴더 관리의 링크 카드 [안내 메일] 이 연다(js/admin-folders.js 안내메일).
+         메일 틀은 js/invite-mail.js. 미리보기는 iframe 안에 그린다(이 페이지의 CSS 가 메일에 얹히지 않게).
+         [메일용 복사] 는 서식째 복사한다 → Gmail 작성창에 붙여넣으면 모양이 그대로 간다. -->
+    <div id="admMailModal" class="modal" hidden>
+      <div class="modal-box adm-mail-box">
+        <div class="adm-mail-head">
+          <strong>안내 메일</strong>
+          <button type="button" class="adm-edit-btn" id="admMailClose" aria-label="닫기">✕</button>
+        </div>
+        <iframe id="admMailFrame" class="adm-mail-frame" title="안내 메일 미리보기"></iframe>
+        <div class="adm-mail-foot">
+          <span id="admMailStatus" class="muted"></span>
+          <button type="button" class="btn" id="admMailCancel">닫기</button>
+          <button type="button" class="btn btn-primary" id="admMailCopy">메일용 복사</button>
+        </div>
+      </div>
+    </div>
+
     <!-- 단자 프리셋 관리 모달 — index.html 의 것을 그대로 가져왔다.
          js/presetmodal.js 가 양쪽에서 같은 코드로 이 마크업을 다룬다.
          ⚠ termeditor 는 이 모달의 존재를 키 처리에서 확인한다. 예전엔 여기 없어서
@@ -1023,6 +1073,7 @@
   <script src="js/xlsx.js"></script>          <!-- 사용자 부품 통계 엑셀 내보내기 (에디터의 BOM 엑셀과 같은 작성기) -->
   <script src="js/admin-collect.js"></script> <!-- 사용자 부품 (수집). admin-batch 다음 — 「일괄 등록으로 보내기」가 그 API 를 쓴다 -->
   <script src="js/admin-members.js"></script> <!-- 회원·결제·환불 (2026-09-22). 앞의 것들과 독립이지만 순서를 지켜 admin.js 의 esc·msg 관례를 따라 쓴다 -->
+  <script src="js/invite-mail.js"></script>   <!-- 참여 링크 안내 메일 틀 (2026-09-30). admin-folders 의 [안내 메일] 이 쓴다 — 그보다 앞에 -->
   <script src="js/admin-folders.js"></script> <!-- 폴더 관리 (2026-09-28 · 09-29 회원 화면 오른쪽 칸으로). 계정란(admin-members)이 부른다 -->
 </body>
 </html>

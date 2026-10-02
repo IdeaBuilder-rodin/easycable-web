@@ -373,9 +373,131 @@ WE.auth = (function () {
       });
   }
 
+  /* ── Pro 는 한 번에 한 PC 에서만 — 새로 로그인한 PC 가 이긴다 (2026-10-01 고원빈) ──────────────
+     왜 — 회사에서 Pro 계정 하나를 여러 명이 돌려 쓰는 것을 막는다. 약관 근거: terms.html 「기기 수를 제한할 수 있다」.
+     누구 — **Pro(결제·기관 제공)만.** 무료는 로그인 안 한 것과 조건이 같아 막을 이유가 없다(고원빈).
+            **관리자는 예외** — 본 서비스·미리보기·여러 브라우저로 동시에 시험해야 한다(admin.js 와 같은 판정 is_easycable_admin).
+     어떻게 — DB · Supabase 설정 · 서버 함수를 바꾸지 않고 SDK 기능 둘만 쓴다.
+       ① 선언: 이 세션이 처음 Pro 로 확인되면 signOut({scope:"others"}) — 서버에서 이 계정의 **다른 세션을 전부 지운다.**
+          세션마다 **한 번만**(localStorage we_single_session = 세션 id). 그래야 새로고침할 때마다 두 PC 가 서로 밀어내지 않는다.
+          새 로그인 = 새 세션이라 자동으로 선언된다 → 「새로 로그인한 PC 가 이긴다」.
+          배포 전부터 여러 PC 에 로그인돼 있던 Pro 는 배포 뒤 **먼저 연 PC** 가 선언한다. 무료였다가 Pro 가 되면 그때 선언한다.
+       ② 확인: 서버에 직접(/auth/v1/user) 물어 session_not_found 면 다른 PC 가 선언해 이 세션이 지워진 것이다 → 끊김.
+          (SDK getUser 로 물으면 안 된다 — 아래 세션살아있나 주석)
+          열 때 · 누를 때 · 키를 칠 때 · 창·탭으로 돌아올 때 — **60초에 한 번까지**(아래 시작(), 2026-10-02 고원빈).
+     ⚠ Supabase 내장 「사용자당 세션 하나」 를 안 쓰는 이유 — **프로젝트 전체 설정**이라 무료·관리자까지 한 PC 로 묶이고,
+        끊김이 토큰 만료 때(기본 1시간)에야 드러난다. 그래서 직접 한다.
+     ⚠ 알려진 한계 — 두 PC 가 1초 안에 **동시에** 선언하면 서로의 세션을 지워 둘 다 끊길 수 있다
+        (서버의 「나 빼고 삭제」 가 각자 돈다 — supabase/auth logout.go). 다시 로그인하면 풀린다. 출시 뒤 검토.
+     ⚠ 밀려남은 session_not_found 일 때**만**이다. 인터넷 끊김·서버 오류로 Pro 를 풀면 오프라인 작업 중인 손님이 쫓겨난다.
+     ⚠ 확인은 「서버가 확인한 Pro」(조회상태 확인됨)일 때만 한다 — 유예 기억만 있는 상태로 남을 밀어내지 않는다.
+     ⚠ 한계 — 막는 일을 화면 코드가 한다. 개발자 도구로 요청을 막는 사람까지는 못 막는다(회사 돌려쓰기를 막는 데는 충분).
+        밀려난 탭이 1시간 넘게 숨어 있었다면 SDK 가 토큰 갱신 실패로 먼저 조용히 로그아웃해, 안내 없이 로그아웃 화면만 볼 수 있다.
+     검사: tests/verify_singlesession.mjs */
+  var 선언키 = "we_single_session";
+  var _세션 = null;          // 지금 세션(토큰에서 세션 id 를 읽는다)
+  var _관리자 = null;        // { id, 값 } — 계정이 바뀌면 다시 묻는다
+  var _한PC확인중 = false;
+  var _마지막한PC확인 = 0;
+  var _밀려남 = false;       // 밀려나 로그아웃됐다 — 같은 일을 두 번 하지 않게
+  var _밀려남안내 = false;   // 화면이 한 번 안내한다(consumedKicked)
+
+  // 토큰 가운데 조각(base64url JSON)의 session_id. 못 읽으면 null — 그때는 선언하지 않는다(안전한 쪽)
+  function 세션아이디(session) {
+    try {
+      var t = session && session.access_token; if (!t) return null;
+      var p = String(t.split(".")[1] || "").split("-").join("+").split("_").join("/");
+      while (p.length % 4) p += "=";
+      return JSON.parse(atob(p)).session_id || null;
+    } catch (e) { return null; }
+  }
+  function 선언기록() { try { return localStorage.getItem(선언키); } catch (e) { return null; } }
+
+  // 관리자인가 — cb(true|false|null). null = 확인 실패 → 부르는 쪽이 아무것도 안 한다
+  function 관리자인가(cb) {
+    if (_관리자 && _user && _관리자.id === _user.id) { cb(_관리자.값); return; }
+    var who = _user && _user.id;
+    try {
+      client.rpc("is_easycable_admin").then(function (res) {
+        if (!_user || _user.id !== who) { cb(null); return; }
+        if (res && res.error) { cb(null); return; }
+        _관리자 = { id: who, 값: res.data === true };
+        cb(_관리자.값);
+      }).catch(function () { cb(null); });
+    } catch (e) { cb(null); }
+  }
+
+  /* 이 세션이 서버에 살아 있나 — cb("살아있음" | "끊김" | "모름")
+     ⚠ SDK 의 getUser() 를 쓰지 않고 **서버에 직접** 묻는다(2026-10-01 실시험에서 드러난 결함).
+        실제 SDK 는 서버의 session_not_found 를 「Auth session missing!」(이유 코드 없음)로 바꿔 던지고,
+        그 전에 **스스로 조용히 로그아웃**(_removeSession)해 버린다(js/vendor/supabase.js _getUser).
+        그래서 getUser 로 물으면 「다른 PC 때문에 끊겼다」 를 알 길이 없이 문구 없는 로그아웃만 남았다.
+        직접 물으면 서버의 원래 답(error_code: session_not_found)을 그대로 본다.
+     「끊김」 은 session_not_found 일 때**만**이다. 인터넷 끊김·401(토큰 만료)·5xx 는 「모름」 — 쫓아내지 않는다.
+     ⚠ 답은 **8초까지만** 기다린다(2026-10-02). 응답 없이 걸린 요청 하나(회사 프록시 등)가 _한PC확인중 을 묶으면
+        새로고침 전까지 확인이 영영 멈췄다. 8초가 지나면 「모름」 으로 답하고 요청도 끊는다 — 다음 클릭에서 다시 묻는다.
+        AbortController 가 없는 브라우저도 시간 초과로 답은 나간다(늦게 온 답은 버린다). */
+  function 세션살아있나(cb) {
+    var 토큰 = _세션 && _세션.access_token;
+    if (!토큰 || typeof fetch !== "function") { cb("모름"); return; }
+    var 끝남 = false;
+    var 멈춤 = typeof AbortController === "function" ? new AbortController() : null;
+    function 답(v) { if (끝남) return; 끝남 = true; clearTimeout(시한); cb(v); }   // 한 번만 답한다
+    var 시한 = setTimeout(function () { 답("모름"); if (멈춤) { try { 멈춤.abort(); } catch (e) { /* 무시 */ } } }, 8000);
+    fetch(URL + "/auth/v1/user", { headers: { apikey: KEY, Authorization: "Bearer " + 토큰 }, signal: 멈춤 ? 멈춤.signal : undefined })
+      .then(function (r) {
+        if (r.ok) { 답("살아있음"); return; }
+        return r.json().catch(function () { return {}; }).then(function (b) {
+          var 코드 = String((b && (b.error_code || b.code)) || ""), 글 = String((b && (b.msg || b.message)) || "");
+          답(코드 === "session_not_found" || 글.indexOf("session_id claim in JWT does not exist") >= 0 ? "끊김" : "모름");
+        });
+      })
+      .catch(function () { 답("모름"); });
+  }
+
+  /* 밀려났는지 확인하고, 아직 선언 안 한 세션이면 선언한다.
+     확인은 **60초에 한 번까지**(2026-10-02 고원빈) — 클릭·키 입력마다 불리므로 여기서 아낀다.
+     선언이 필요한 때(새 세션)는 언제나 바로 한다 — 그래야 「새로 로그인한 PC 가 이긴다」 가 늦지 않는다. */
+  function 한PC확인() {
+    if (!client || !_user || !_세션 || _밀려남 || _한PC확인중) return;
+    if (_조회상태 !== "확인됨" || !isPro()) return;
+    var sid = 세션아이디(_세션);
+    var 선언필요 = !!sid && 선언기록() !== sid;
+    if (!선언필요 && Date.now() - _마지막한PC확인 < 60000) return;
+    _한PC확인중 = true; _마지막한PC확인 = Date.now();
+    function 끝() { _한PC확인중 = false; }
+    관리자인가(function (관리자) {
+      if (관리자 !== false) { 끝(); return; }               // 관리자(예외) 또는 확인 실패 → 아무것도 안 한다
+      세션살아있나(function (답) {
+        if (답 === "끊김") { 끝(); 밀려나기(); return; }
+        if (답 !== "살아있음" || !선언필요) { 끝(); return; }   // 모름(인터넷 등)은 그대로 둔다
+        // ⚠ 먼저 살아 있는지 본 뒤에 선언한다 — 끊긴 PC 가 거꾸로 남을 끊지 않게
+        try {
+          client.auth.signOut({ scope: "others" }).then(function (r) {
+            끝();
+            if (!(r && r.error)) { try { localStorage.setItem(선언키, sid); } catch (e) { /* 무시 — 다음에 다시 선언한다 */ } }
+          }).catch(끝);
+        } catch (e) { 끝(); }
+      });
+    });
+  }
+
+  // 밀려났다 — Pro 기억까지 지우고 이 PC 만 로그아웃한다. 도면은 PC 에 그대로 있다(지우는 것 없음)
+  function 밀려나기() {
+    if (_밀려남) return;
+    _밀려남 = true; _밀려남안내 = true;
+    기억지우기();                                            // 유예 기억이 남으면 로그아웃했는데 Pro 로 보인다
+    try { localStorage.removeItem(선언키); } catch (e) { /* 무시 */ }
+    function 정리() { _user = null; _profile = null; _세션 = null; notify(); }
+    try { client.auth.signOut({ scope: "local" }).then(정리).catch(정리); } catch (e) { 정리(); }
+  }
+  function consumedKicked() { var v = _밀려남안내; _밀려남안내 = false; return v; }
+
   function applySession(session, done) {
     _user = session ? session.user : null;
-    loadProfile(function () { _ready = true; notify(); if (done) done(); });
+    _세션 = session || null;
+    if (session) _밀려남 = false;                            // 다시 로그인했다 — 이 세션은 새로 지킨다
+    loadProfile(function () { _ready = true; notify(); if (done) done(); 한PC확인(); });
   }
 
   /* 프로필을 서버에서 다시 읽는다 — '방금 서버 쪽이 바뀌었다'고 아는 순간에 부른다.
@@ -396,6 +518,7 @@ WE.auth = (function () {
     loadProfile(function () {
       notify();
       if (done) done(_조회상태 === "확인됨" ? null : "요금제를 다시 확인하지 못했습니다.");
+      한PC확인();   // 방금 Pro 가 됐으면(결제·제공) 이 세션이 선언한다
     });
   }
 
@@ -467,6 +590,22 @@ WE.auth = (function () {
           applySession(se, done);
         })
         .catch(function () { if (done) done(); });
+
+      /* 「한 번에 한 PC」 확인 시점 — 열 때는 applySession 이 부른다. 여기는 그 뒤로 열려 있는 동안 (2026-10-02 고원빈).
+         · 누를 때(pointerdown) · 키를 칠 때(keydown) — 「새로고침해야 알아챈다」(10/01 실시험)를 없앤다. 일하는 사람만 묻는다
+         · 창으로 돌아올 때(focus) — 크롬·엣지 **창** 전환은 visibilitychange 가 안 난다(10/01 실시험에서 놓친 경우)
+         · 탭이 다시 보일 때(visibilitychange)
+         모두 한PC확인 이 60초에 한 번으로 아낀다. Pro 가 아니면 맨 앞에서 바로 돌아가 비용이 없다.
+         마우스 **이동**은 듣지 않는다 — 드래그 중엔 초당 수십 번 일어난다. capture 로 들어 편집기가 전파를 막아도 듣는다.
+         「보이는 동안 2분마다」 타이머는 뺐다 — 클릭·키가 대신하고, 켜 두고 자리를 비운 탭이 밤새 묻지 않게.
+         왜 10초가 아니라 60초인가 · 왜 실시간 알림이 아닌가 → _ai/제안_한PC_알림방식_2026-10-02.md (Codex 검토 · 업계 조사) */
+      function 활동() { 한PC확인(); }
+      document.addEventListener("pointerdown", 활동, { capture: true, passive: true });
+      document.addEventListener("keydown", 활동, { capture: true, passive: true });
+      window.addEventListener("focus", 활동);
+      document.addEventListener("visibilitychange", function () {
+        if (document.visibilityState === "visible") 한PC확인();
+      });
     });
   }
 
@@ -994,6 +1133,7 @@ WE.auth = (function () {
     signupConsent: signupConsent,
     resendConfirm: resendConfirm,
     consumedSignup: consumedSignup,
+    consumedKicked: consumedKicked,   // 다른 PC 가 로그인해 밀려났다 — 한 번만 참(화면이 안내한다)
     onChange: onChange,
     keepLogin: 유지하나,
     setKeepLogin: 유지설정,
@@ -1722,6 +1862,7 @@ document.addEventListener("DOMContentLoaded", function () { WE.auth.init(); });
       if (WE.auth.user() && WE.auth.consumedSignup()) 열기인증완료();
       // 재설정 링크로 돌아왔으면 새 비밀번호를 받는다 (임시로 로그인된 상태다)
       if (WE.auth.user() && WE.auth.consumedRecovery()) 재설정열기();
+      밀려남안내();
     });
     // 미리보기의 Pro 전환 버튼이 상태를 바꾼 뒤 이걸 불러 다시 그린다
     WE.ui = WE.ui || {};
@@ -1731,5 +1872,74 @@ document.addEventListener("DOMContentLoaded", function () { WE.auth.init(); });
        화면을 통째로 몰지 않고 이 함수만 직접 불러야 그 결함을 정확히 잡는다. */
     WE.ui.칸오류 = 칸오류;
     paint();
+    밀려남안내();   // ⚠ 여기서도 한 번 — 밀려남이 이 화면 준비(듣기 등록)보다 먼저 끝났으면 위 onChange 로는 못 듣는다
   });
+
+  /* 「중복 접속」 창 — 다른 PC 가 같은 계정으로 로그인해 여기가 로그아웃됐을 때(「Pro 는 한 번에 한 PC」, 2026-10-01 고원빈).
+     가운데 작은 창 하나: 제목 「중복 접속되었습니다」 + 한 줄 「다른 PC에서 같은 계정으로 로그인했습니다.」 + [다시 로그인] [확인].
+     ⚠ 처음엔 로그인 창을 열고 그 안에 안내 줄을 끼웠다(회색 → 빨강). 로그인 창은 「로그인하라」 가 먼저 보여서 **이유가 묻혔다** —
+        고원빈이 「가운데 모달 하나로 중복 접속되었습니다」 로 정했다. 이유를 먼저 알리고, 다시 쓸지는 손님이 고른다.
+     ⚠ HTML 과 CSS 를 **여기서 스스로 만든다.** 계정·결제 화면은 auth.css(공용 .modal 규칙)를 싣지 않아서 거기에 기대면 모양이 깨진다.
+     ⚠ class 에 "modal" 을 함께 단다 — 출시 안내 창(app.js)의 「다른 창이 열려 있으면 키를 안 건드린다」 가 이 창도 알아보게.
+        z-index 는 공용 창(100)보다 위 — 10/12 전엔 출시 안내 창과 함께 뜨는데, 이유가 먼저 보여야 한다.
+     · [확인] · Esc · 바탕 누르기 → 닫기만(무료 상태로 계속 작업 — 도면은 그대로)
+     · [다시 로그인] → 닫고 로그인 창(로그인 창이 없는 페이지면 에디터 로그인으로). 다시 로그인하면 저쪽 PC 가 끊긴다
+     · 열리면 초점을 상자로 옮기고 Tab 을 창 안에 가둔다(출시 안내 창과 같은 방식 — 버튼에 초점을 주면 테두리가 버튼 모양처럼 보인다)
+     consumedKicked 는 한 번만 참이라 두 곳(onChange · 준비 끝)에서 불러도 한 번만 뜬다. 검사: tests/verify_singlesession.mjs */
+  var 중복창CSS =
+    ".ezc-dup{position:fixed;inset:0;z-index:1000;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.45);padding:16px}" +
+    ".ezc-dup[hidden]{display:none}" +
+    ".ezc-dup-box{background:#fff;border-radius:14px;width:min(360px,100%);padding:30px 26px 22px;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,.25);font-family:inherit;outline:none}" +
+    ".ezc-dup-box h2{margin:0 0 8px;font-size:18px;font-weight:700;color:#202124}" +
+    ".ezc-dup-box p{margin:0 0 22px;font-size:14px;line-height:1.55;color:#5f6771;word-break:keep-all}" +
+    ".ezc-dup-btns{display:flex;gap:8px}" +
+    ".ezc-dup-btns button{flex:1;font:inherit;font-size:14px;font-weight:600;padding:11px 12px;border-radius:10px;cursor:pointer;border:1px solid #d1d5db;background:#fff;color:#374151}" +
+    ".ezc-dup-btns button.is-main{background:#1e88e5;border-color:#1e88e5;color:#fff}" +
+    ".ezc-dup-btns button:focus-visible{outline:2px solid #1565c0;outline-offset:2px}";
+  function 중복창() {
+    var m = document.getElementById("dupModal");
+    if (m) return m;
+    if (!document.getElementById("ezcDupCss")) {
+      var st = document.createElement("style"); st.id = "ezcDupCss"; st.textContent = 중복창CSS;
+      document.head.appendChild(st);
+    }
+    m = document.createElement("div");
+    m.id = "dupModal"; m.className = "modal ezc-dup"; m.hidden = true;
+    m.innerHTML =
+      '<div class="ezc-dup-box" role="alertdialog" aria-modal="true" aria-labelledby="dupTitle" aria-describedby="dupLine" tabindex="-1">' +
+        '<h2 id="dupTitle">' + 문구("중복 접속되었습니다") + "</h2>" +
+        '<p id="dupLine">' + 문구("다른 PC에서 같은 계정으로 로그인했습니다.") + "</p>" +
+        '<div class="ezc-dup-btns">' +
+          '<button type="button" id="dupRelogin">' + 문구("다시 로그인") + "</button>" +
+          '<button type="button" id="dupOk" class="is-main">' + 문구("확인") + "</button>" +
+        "</div>" +
+      "</div>";
+    document.body.appendChild(m);
+    var 상자 = m.querySelector(".ezc-dup-box");
+    function 닫기() { m.hidden = true; }
+    document.getElementById("dupOk").addEventListener("click", 닫기);
+    document.getElementById("dupRelogin").addEventListener("click", function () {
+      닫기();
+      if (modal() && WE.auth.openAuth) WE.auth.openAuth("login");
+      else location.href = "app.html?auth=login";            // 계정·결제 화면 — 로그인 창이 없다
+    });
+    m.addEventListener("click", function (e) { if (e.target === m) 닫기(); });
+    document.addEventListener("keydown", function (e) {
+      if (m.hidden) return;
+      if (e.key === "Escape") { e.preventDefault(); 닫기(); return; }
+      if (e.key !== "Tab") return;
+      var 칸 = m.querySelectorAll("button"), 처음 = 칸[0], 끝 = 칸[칸.length - 1], 지금 = document.activeElement;
+      if (!m.contains(지금)) { e.preventDefault(); 처음.focus(); return; }
+      if (e.shiftKey && (지금 === 처음 || 지금 === 상자)) { e.preventDefault(); 끝.focus(); }
+      else if (!e.shiftKey && 지금 === 끝) { e.preventDefault(); 처음.focus(); }
+    }, true);   // 캡처 — 뒤에 깔린 창(출시 안내 등)의 키 처리보다 먼저 본다
+    return m;
+  }
+  function 밀려남안내() {
+    if (!(WE.auth && WE.auth.consumedKicked) || WE.auth.user() || !WE.auth.consumedKicked()) return;
+    var m = 중복창();
+    m.hidden = false;
+    var 상자 = m.querySelector(".ezc-dup-box");
+    if (상자) { 상자.focus(); setTimeout(function () { if (!m.hidden) 상자.focus(); }, 0); }
+  }
 })();
