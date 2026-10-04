@@ -16,7 +16,11 @@ WE.bgremove = (function () {
   var cropDrag = null;
   var origImg = null;    // 원본 Image
   var rotation = 0;      // 0/90/180/270
-  var _bgFit = 1;        // 캔버스 원본 픽셀 → 뷰포트에 맞춘 배율(맞춤 기준)
+  /* 좌우 반전 (2026-10-02 사용자 피드백 · 고원빈) — 회전처럼 **사진 자체를** 뒤집어 저장한다.
+     화면에서만 거울처럼 보이게 하는 방식은 배선 정렬·인쇄·목록 그림까지 고쳐야 해서 택하지 않았다.
+     순서는 「회전한 뒤 좌우 반전」 — 편집 창에 보이는 그림 그대로다(받는 쪽 단자 변환도 같은 순서). */
+  var flipX = false;
+  var _bgFit = 1;       // 캔버스 원본 픽셀 → 뷰포트에 맞춘 배율(맞춤 기준)
   var _bgZoom = 1;       // 맞춤 배율 대비 사용자 확대/축소 배수
   var _bgEnable = false; // 배경 제거 켜짐 여부(버튼 토글, 기본 꺼짐 — 사용자가 직접 켜야 함)
   var _bgCropOn = false; // 자르기 켜짐 여부(버튼 토글)
@@ -76,6 +80,11 @@ WE.bgremove = (function () {
     window.addEventListener("pointerup", onCanvasUp);
     document.getElementById("bgRotL").addEventListener("click", function () { rotation = (rotation + 270) % 360; drawSource(); bgCommit(); });
     document.getElementById("bgRotR").addEventListener("click", function () { rotation = (rotation + 90) % 360; drawSource(); bgCommit(); });
+    /* ⚠ 관리자 화면(admin.html)도 이 모듈을 쓰는데 그쪽 편집 창엔 반전 버튼을 **넣지 않았다** —
+       관리자 쪽 사진 편집은 단자를 옮기지 않아(기존 한계) 반전하면 단자가 어긋난다.
+       버튼이 없으면 건너뛴다. 안 그러면 null.addEventListener 로 init 이 통째로 멈춰 편집 창이 무반응이 된다. */
+    var 반전버튼 = document.getElementById("bgFlip");
+    if (반전버튼) 반전버튼.addEventListener("click", function () { flipX = !flipX; drawSource(); bgCommit(); });
     window.addEventListener("keydown", onBgKey);
 
     document.getElementById("bgCancel").addEventListener("click", close);
@@ -93,7 +102,7 @@ WE.bgremove = (function () {
 
   // ---- 지역 undo/redo (Ctrl+Z / Ctrl+Shift+Z·Ctrl+Y) ----
   function bgState() {
-    return JSON.stringify({ r: rotation, c: cropRect, e: _bgEnable, o: _bgCropOn, m: _maxSide });
+    return JSON.stringify({ r: rotation, f: flipX, c: cropRect, e: _bgEnable, o: _bgCropOn, m: _maxSide });
   }
   function bgResetHistory() { bgUndoStack = []; bgRedoStack = []; bgLastState = bgState(); }
   function bgCommit() {
@@ -105,7 +114,8 @@ WE.bgremove = (function () {
   }
   function bgApplyState(json) {
     var s = JSON.parse(json);
-    if (s.r !== rotation) { rotation = s.r; drawSource(); }   // 회전이 다르면 캔버스 재구성(크롭은 아래서 복원)
+    // 회전·반전이 다르면 캔버스 재구성(크롭은 아래서 복원)
+    if (s.r !== rotation || !!s.f !== flipX) { rotation = s.r; flipX = !!s.f; drawSource(); }
     _bgEnable = s.e;
     document.getElementById("bgEnable").classList.toggle("active", s.e);
     cropRect = s.c ? { x: s.c.x, y: s.c.y, w: s.c.w, h: s.c.h } : null;
@@ -145,7 +155,7 @@ WE.bgremove = (function () {
     _maxSide = (initSize && initSize.width > 0) ? Math.max(initSize.width, initSize.height) : 160;
     origImg = new Image();
     origImg.onload = function () {
-      rotation = 0; _bgEnable = false; _bgCropOn = false;
+      rotation = 0; flipX = false; _bgEnable = false; _bgCropOn = false;
       document.getElementById("bgEnable").classList.remove("active");
       document.getElementById("bgCrop").classList.remove("active");
       document.getElementById("bgCropHint").hidden = true;
@@ -249,7 +259,7 @@ WE.bgremove = (function () {
 
   // 배경 제거·자르기·회전 등 편집을 전부 원본 상태로 되돌림
   function resetAll() {
-    rotation = 0; cropRect = null; cropDrag = null;
+    rotation = 0; flipX = false; cropRect = null; cropDrag = null;
     setBgEnable(false);
     setBgCropOn(false);
     drawSource();   // origImg 기준으로 다시 그리며 seeds도 모서리로 초기화됨
@@ -272,7 +282,7 @@ WE.bgremove = (function () {
     applyBgZoom();
   }
 
-  // 원본을 현재 회전값으로 캔버스에 그리고 srcImageData 갱신
+  // 원본을 현재 회전·반전값으로 캔버스에 그리고 srcImageData 갱신
   function drawSource() {
     var w = origImg.width, h = origImg.height;
     if (Math.max(w, h) > MAX_SIDE) {
@@ -286,12 +296,15 @@ WE.bgremove = (function () {
     ctx.save();
     ctx.clearRect(0, 0, W, H);
     ctx.translate(W / 2, H / 2);
+    // 캔버스 변환은 **뒤에 적은 것이 그림에 먼저** 걸린다 → rotate 가 먼저, 그다음 scale(-1,1).
+    // 즉 「회전한 결과를 좌우로 뒤집는다」 — 편집 창에 보이는 순서 그대로다(app.js transformTerminal 과 같은 순서)
+    if (flipX) ctx.scale(-1, 1);
     ctx.rotate(rotation * Math.PI / 180);
     ctx.drawImage(origImg, -w / 2, -h / 2, w, h);
     ctx.restore();
     srcImageData = ctx.getImageData(0, 0, W, H);
     setCornerSeeds();
-    cropRect = null;                 // 회전 시 크롭 초기화
+    cropRect = null;                 // 회전·반전 시 크롭 초기화
     _bgCropOn = false;
     document.getElementById("bgCrop").classList.remove("active");
     document.getElementById("bgCropHint").hidden = true;
@@ -460,7 +473,7 @@ WE.bgremove = (function () {
     var cb = onDone; onDone = null;
     // 좌표계를 바꾸는 편집(회전·크롭) 정보를 함께 전달 —
     // 받는 쪽에서 기존 단자 좌표(rx·ry)를 같은 방식으로 변환해 배치가 깨지지 않게 함
-    var tf = { rotation: rotation, crop: null };
+    var tf = { rotation: rotation, flipX: flipX, crop: null };
     if (cropOn()) tf.crop = { x: cropRect.x / W, y: cropRect.y / H, w: cropRect.w / W, h: cropRect.h / H };
     if (cb) cb(dataUrl, tf, currentSize());
   }
@@ -470,5 +483,23 @@ WE.bgremove = (function () {
     onDone = null; // 취소: 콜백 호출 안 함
   }
 
-  return { init: init, open: open };
+  /* 편집 창 없이 사진만 좌우로 뒤집는다 — 속성 패널 「↔」 버튼이 쓴다(2026-10-02).
+     저장 형식은 편집 창 결과와 같게 encodeForStorage(WebP 0.85, 미지원이면 PNG)로 맞춘다.
+     done(새 dataURL) — 읽기에 실패하면 null 을 준다(부르는 쪽이 아무것도 안 바꾼다). */
+  function flipImage(dataUrl, done) {
+    var im = new Image();
+    im.onload = function () {
+      var cv = document.createElement("canvas");
+      cv.width = im.width; cv.height = im.height;
+      var g = cv.getContext("2d");
+      g.translate(cv.width, 0);
+      g.scale(-1, 1);
+      g.drawImage(im, 0, 0);
+      done(encodeForStorage(cv));
+    };
+    im.onerror = function () { done(null); };
+    im.src = dataUrl;
+  }
+
+  return { init: init, open: open, flipImage: flipImage };
 })();

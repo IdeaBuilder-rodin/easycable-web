@@ -715,21 +715,36 @@ WE.app = (function () {
       죽은.forEach(function (id) { WE.model.removeWire(id); });
   }
 
-  // 배경제거 편집에서 회전/크롭했을 때 단자 좌표(rx·ry)를 이미지와 똑같이 변환
+  // 배경제거 편집에서 회전/반전/크롭했을 때 단자 좌표(rx·ry)를 이미지와 똑같이 변환
   // (안 하면 이미지만 돌아가고 단자는 옛 방향 그대로라 배치가 완전히 깨짐)
+  // 순서는 **회전 → 좌우 반전 → 자르기** — 편집 창(bgremove drawSource)이 그림에 거는 순서와 같다.
+  // 자르기 영역은 회전·반전된 그림 위에서 고른 것이라 마지막이다.
   var LABEL_SIDE_CW = { L: "T", T: "R", R: "B", B: "L" };
-  function transformTerminal(t, tf) {
-    if (!tf || (!tf.rotation && !tf.crop)) return;
+  var LABEL_SIDE_FLIP = { L: "R", R: "L", T: "B", B: "T" };
+  function transformTerminal(t, tf, cmp) {
+    if (!tf || (!tf.rotation && !tf.crop && !tf.flipX)) return;
     var rx = t.rx, ry = t.ry, nrx = rx, nry = ry;
     if (tf.rotation === 90) { nrx = 1 - ry; nry = rx; }
     else if (tf.rotation === 180) { nrx = 1 - rx; nry = 1 - ry; }
     else if (tf.rotation === 270) { nrx = ry; nry = 1 - rx; }
+    if (tf.flipX) nrx = 1 - nrx;             // 좌우 반전(2026-10-02) — 회전한 그림 기준 가로축
     if (tf.crop) { nrx = (nrx - tf.crop.x) / tf.crop.w; nry = (nry - tf.crop.y) / tf.crop.h; }
     t.rx = Math.max(0, Math.min(1, nrx));
     t.ry = Math.max(0, Math.min(1, nry));
     delete t.labelPos;                       // 수동 라벨 위치는 옛 좌표계 기준이라 초기화
     if (t.labelSide && tf.rotation) {        // 수동 라벨 방향은 회전만큼 같이 돌림
       for (var i = 0; i < tf.rotation / 90; i++) t.labelSide = LABEL_SIDE_CW[t.labelSide];
+    }
+    /* 수동 라벨 방향(labelSide)은 **화면 기준**이다(geometry termSideScreen). 그래서 회전은 놓인 각도와 상관없이
+       같이 돌리면 되지만, 반전은 사진의 가로축이 화면에서 어느 쪽인지에 따라 다르다 —
+       0·180° 로 놓였으면 화면 좌우(L↔R), 90·270° 로 놓였으면 화면 위아래(T↔B)가 뒤집힌다. */
+    if (t.labelSide && tf.flipX) {
+      // 회전은 0/90/180/270 만 있다(2026-08-23 확정) → 180 으로 나눠 떨어지면 사진 가로축이 화면에서도 가로다
+      var 각 = (((cmp && cmp.rotation) || 0) % 180 + 180) % 180;
+      var 좌우 = (각 === 0);
+      if (좌우 ? (t.labelSide === "L" || t.labelSide === "R") : (t.labelSide === "T" || t.labelSide === "B")) {
+        t.labelSide = LABEL_SIDE_FLIP[t.labelSide];
+      }
     }
   }
 
@@ -747,7 +762,7 @@ WE.app = (function () {
         if (swap) c.width = Math.max(10, c.height);
         c.height = Math.max(10, Math.round(c.width * aspect));
       }
-      (c.terminals || []).forEach(function (t) { transformTerminal(t, tf); });
+      (c.terminals || []).forEach(function (t) { transformTerminal(t, tf, c); });
       makeComponentIndependent(c, true);
       WE.render.renderAll();
     };
@@ -5861,6 +5876,18 @@ WE.app = (function () {
       if (!c || !c.image) return;
       WE.bgremove.open(c.image, function (url, tf, size) { applyInstanceImage(c, url, tf, size); }, { width: c.width, height: c.height });
     });
+    /* 좌우 반전 ↔ (2026-10-02 사용자 피드백 「사진을 넣은 뒤 좌우 반전」 · 고원빈: 편집 창 + 속성 패널 두 곳).
+       편집 창을 열지 않고 바로 뒤집는다 — 사진 자체를 뒤집고 단자도 같이 옮긴다(편집 창 반전과 같은 길 applyInstanceImage).
+       크기는 그대로다(좌우만 바뀌어 비율이 같다). 공용 부품이면 기존 규칙대로 내 부품으로 독립된다. 되돌리기는 Ctrl+Z 한 번. */
+    var 반전버튼 = document.getElementById("propFlip");
+    if (반전버튼) 반전버튼.addEventListener("click", function () {
+      var c = WE.model.getSelectedComponent();
+      if (!c || !c.image || !WE.bgremove.flipImage) return;
+      WE.bgremove.flipImage(c.image, function (url) {
+        if (!url) return;   // 사진을 못 읽었으면 아무것도 안 바꾼다
+        applyInstanceImage(c, url, { rotation: 0, flipX: true, crop: null }, { width: c.width, height: c.height });
+      });
+    });
     // 삭제·복제 버튼은 두지 않는다 — Delete / Ctrl+D 가 있고, 파괴적 동작을
     // 다른 버튼과 같은 비중으로 패널에 두면 잘못 누르기 쉽다.
   }
@@ -6156,6 +6183,8 @@ WE.app = (function () {
     // 검사가 '표에 보이는 것' 과 '내보내는 것' 이 같은지 맞춰 볼 때 쓴다
     wireListExportRows: wireListExportRows,
     _테스트_csvCell: csvCell,
+    // 검사(verify_flip)가 회전·반전·자르기 순서와 라벨 방향 규칙을 직접 잰다 — 사본에 적용해 돌려준다(원본 불변)
+    _테스트_단자변환: function (t, tf, cmp) { var c = JSON.parse(JSON.stringify(t)); transformTerminal(c, tf, cmp); return c; },
     _테스트_우편함: applyAdminInbox,
     // 인쇄용 결선표(js/pdf.js)도 화면과 **같은 비고**를 찍어야 한다
     wireNoteOf: function (net) { return 비고읽기(비고키(net)); },

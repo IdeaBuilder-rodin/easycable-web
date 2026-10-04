@@ -1031,12 +1031,20 @@ WE.render = (function () {
 
     og.appendChild(el("rect", { x: 0, y: 0, width: W, height: H, "class": "selection-box" }));
 
-    // 우하단 리사이즈 핸들
-    var hs = 9;
-    og.appendChild(el("rect", {
-      x: W - hs / 2, y: H - hs / 2, width: hs, height: hs,
-      "class": "resize-handle", "data-handle": "se"
-    }));
+    /* 크기 손잡이 — 네 모서리 + 네 변 가운데 (2026-10-02 사용자 피드백 「사면을 각자 조절」 · 고원빈).
+       예전엔 오른쪽 아래(se) 하나뿐이라 왼쪽·위쪽으로는 늘릴 수 없었다.
+       변 손잡이는 그 방향으로만, 모서리는 「비율 고정」 을 따른다 — 끄는 계산은 interactions.js 「resize」.
+       변이 28px 보다 짧으면 그 변 가운데 손잡이는 뺀다 — 모서리 손잡이(9px)와 겹쳐 무엇을 잡는지 모르게 된다. */
+    var hs = 9, 짧음 = 28;
+    [["nw", 0, 0], ["n", W / 2, 0], ["ne", W, 0], ["e", W, H / 2],
+     ["se", W, H], ["s", W / 2, H], ["sw", 0, H], ["w", 0, H / 2]].forEach(function (h) {
+      if ((h[0] === "n" || h[0] === "s") && W < 짧음) return;
+      if ((h[0] === "e" || h[0] === "w") && H < 짧음) return;
+      og.appendChild(el("rect", {
+        x: h[1] - hs / 2, y: h[2] - hs / 2, width: hs, height: hs,
+        "class": "resize-handle h-" + h[0], "data-handle": h[0]
+      }));
+    });
 
     // 상단 회전 핸들 (박스 위)
     var rhY = -26;

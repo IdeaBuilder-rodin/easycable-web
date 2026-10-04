@@ -538,6 +538,10 @@ WE.i18nMaps = WE.i18nMaps || {};
     "켜면 사각형 테두리를 지정해 그 안쪽만 남기고 잘라냅니다": "When on, draw a rectangle to crop to its inside",
     "왼쪽 90° 회전": "Rotate 90° left",
     "오른쪽 90° 회전": "Rotate 90° right",
+    // 좌우 반전 (2026-10-02 사용자 피드백) — 편집 창 버튼 · 설명, 속성 패널 ↔ 의 title
+    "↔ 좌우 반전": "↔ Flip",
+    "사진을 좌우로 뒤집습니다": "Flip the photo horizontally",
+    "좌우 반전": "Flip horizontally",
     "↺ 초기화": "↺ Reset",
     "자르기(테두리)": "Crop (border)",
     "배치 크기": "Placed size",

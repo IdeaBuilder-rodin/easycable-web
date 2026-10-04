@@ -28,7 +28,7 @@
           데이터시트(1400) · 공용부품 게시(680) · 환영(500) 창도 같이 560px 이 됐다.
           (2026-09-02 고원빈 보고 — "공용 부품 창이 갑자기 작아져서 내용이 안 보인다") -->
   <link rel="stylesheet" href="auth.css?v=0880ba8a" />
-  <link rel="stylesheet" href="styles.css?v=9c491906" />
+  <link rel="stylesheet" href="styles.css?v=35217ea4" />
   <!-- 첫 화면이 그려지기 **전에** 두 가지를 걸어 둔다 (2026-09-30 고원빈 「새로고침하면 버튼이 움직인다」)
        ① 「로그인 확인 중」 — 확인이 끝나기 전에는 계정 자리에 회색 동그라미만 둔다.
           없으면 로그인한 사람에게도 「로그인」 글자가 먼저 보였다가 아바타로 바뀌며 [저장]·[피드백] 이 움직였다.
@@ -730,6 +730,9 @@
               <div class="icon-btns">
                 <button type="button" id="propRotL" class="icon-btn" title="왼쪽으로 90° 회전">↺</button>
                 <button type="button" id="propRot90" class="icon-btn" title="오른쪽으로 90° 회전">↻</button>
+                <!-- 좌우 반전(2026-10-02 사용자 피드백) — 사진 자체를 뒤집고 단자도 같이 옮긴다(app.js propFlip).
+                     회전 옆에 둔 이유: 둘 다 「부품 방향」 을 바꾸는 조작이라 같은 줄에서 찾게 된다 -->
+                <button type="button" id="propFlip" class="icon-btn" title="좌우 반전">↔</button>
               </div>
             </div>
           </div>
@@ -1217,6 +1220,8 @@
         <span class="sep" style="width:1px;height:18px;background:#ddd"></span>
         <button id="bgRotL" class="small" title="왼쪽 90° 회전">↺ 90°</button>
         <button id="bgRotR" class="small" title="오른쪽 90° 회전">↻ 90°</button>
+        <!-- 좌우 반전(2026-10-02 사용자 피드백). 관리자 화면(admin.html) 편집 창엔 일부러 없다 — js/bgremove.js 참고 -->
+        <button id="bgFlip" class="small" title="사진을 좌우로 뒤집습니다">↔ 좌우 반전</button>
         <span class="sep" style="width:1px;height:18px;background:#ddd"></span>
         <label class="slider" title="도면에 배치될 부품 크기(px). 한쪽을 바꾸면 비율에 맞춰 다른 쪽도 바뀝니다.">배치 크기
           <input type="number" id="bgSizeW" min="10" max="2000" style="width:58px" /> ×
@@ -1595,11 +1600,11 @@
   <script src="js/presetsets.js?v=c15f089a"></script>   <!-- 단자 세트: 부품 단자 목록을 이름 붙여 저장·재사용 -->
   <script src="js/presetmodal.js?v=490a73ee"></script>  <!-- 단자 프리셋 관리 모달 — 관리자 페이지와 공유 -->
   <script src="js/geometry.js?v=996fa4e0"></script>
-  <script src="js/render.js?v=9eed19ba"></script>
+  <script src="js/render.js?v=46011b28"></script>
   <script src="js/colorpicker.js?v=1c21e3c5"></script>   <!-- render 다음: 단자 색상 팝오버. termeditor/app 둘 다 이걸 쓴다 -->
-  <script src="js/bgremove.js?v=8e7d0005"></script>
+  <script src="js/bgremove.js?v=2288d6f3"></script>
   <script src="js/termeditor.js?v=26f12188"></script>
-  <script src="js/interactions.js?v=4ea14e58"></script>
+  <script src="js/interactions.js?v=5e04569e"></script>
   <script src="js/store.js?v=694f5aca"></script>
   <script src="js/assets.js?v=6244ecf7"></script>   <!-- store.js 다음: 자산 풀이 store의 IndexedDB를 쓴다 -->
   <script src="js/history.js?v=f001710d"></script>
@@ -1615,7 +1620,7 @@
   <script src="js/io.js?v=57ce9f2a"></script>
   <script src="js/pdf.js?v=afc44cb1"></script>
   <script src="js/xlsx.js?v=b4f1d49f"></script>
-  <script src="js/app.js?v=3a42147e"></script>
+  <script src="js/app.js?v=879b1bec"></script>
   <!-- 라이브러리 부품 자동 수집 — 맨 마지막에 defer. 에디터 로딩에 끼어들지 않는다. 없어도 에디터는 그대로 돈다(library.js 가 있으면 부를 뿐). -->
   <script src="js/libsync.js?v=4308ef03" defer></script>
   <!-- 인쇄 전용: 페이지 전체를 덮는 워터마크. 도면 칸 안에만 찍히던 것을 종이 전체로 넓혔다.

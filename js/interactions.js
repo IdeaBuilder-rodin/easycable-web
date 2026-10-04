@@ -148,6 +148,9 @@ WE.interactions = (function () {
     if (e.key === "Alt") document.body.classList.remove("label-move-ready");
   }
 
+  // 크기 손잡이 이름 → 방향 (hx, hy). render.js 「크기 손잡이」 가 같은 이름으로 그린다(2026-10-02)
+  var RESIZE_DIR = { nw: [-1, -1], n: [0, -1], ne: [1, -1], e: [1, 0], se: [1, 1], s: [0, 1], sw: [-1, 1], w: [-1, 0] };
+
   function snapVal(v) {
     var m = WE.model.project.meta.canvas;
     return m.snap ? WE.geometry.snap(v, m.grid) : v;
@@ -316,10 +319,18 @@ WE.interactions = (function () {
       // 리사이즈 시작
       var cmp = WE.model.getSelectedComponent();
       if (!cmp) return;
+      /* 어느 손잡이인가 → 방향 (hx, hy) ∈ {-1, 0, 1} (2026-10-02 네 변·네 모서리).
+         hx=1 은 오른쪽 변을, -1 은 왼쪽 변을 끈다. 0 이면 가로는 그대로다(위·아래 변 손잡이). */
+      var 방향 = RESIZE_DIR[handle.getAttribute("data-handle")] || RESIZE_DIR.se;
       drag = {
         mode: "resize", id: cmp.id,
         startX: e.clientX, startY: e.clientY,
-        orig: { width: cmp.width, height: cmp.height },
+        orig: { width: cmp.width, height: cmp.height, x: cmp.x, y: cmp.y },
+        hx: 방향[0], hy: 방향[1],
+        /* 끄는 손잡이의 **반대쪽 점**(모서리면 대각 반대 모서리, 변이면 반대 변 가운데)의 화면 좌표.
+           크기가 바뀌어도 이 점이 화면에서 제자리에 있도록 x·y 를 다시 구한다 — 회전한 부품도 마찬가지다.
+           (예전엔 x·y 를 그대로 둬서, 회전한 부품을 키우면 중심 기준으로 늘어나 반대 모서리가 밀렸다) */
+        anchor: WE.geometry.localToAbs(cmp, (1 - 방향[0]) / 2 * cmp.width, (1 - 방향[1]) / 2 * cmp.height),
         termFollow: beginTermFollow([cmp.id]),   // 단자가 움직이므로 수동배선이 따라와야 한다
         branchFollow: beginBranchFollow([cmp.id])
       };
@@ -1815,17 +1826,31 @@ WE.interactions = (function () {
       /* ⚠ 캔버스보다 크게는 못 키운다. 그렇게 되면 어디에 두어도 밖으로 삐져나가
          "가두기"가 성립하지 않는다. (2026-09-02 고원빈 결정) */
       var lim = WE.geometry.maxSize(cmp);
-      var nw = Math.max(10, Math.min(lim.width, snapVal(drag.orig.width + ldx)));
-      if (WE.model.ui.lockAspect) {
+      var hx = drag.hx, hy = drag.hy;
+      var nw = drag.orig.width, nh = drag.orig.height;
+      if (hx !== 0 && hy !== 0 && WE.model.ui.lockAspect) {
+        /* 모서리 + 비율 고정 — 예전 오른쪽 아래(se)와 같은 계산: 폭을 정하고 높이는 비율로 따라온다 */
         var ratio = drag.orig.width / drag.orig.height;
-        var nh = Math.max(10, Math.round(nw / ratio));
+        nw = Math.max(10, Math.min(lim.width, snapVal(drag.orig.width + hx * ldx)));
+        nh = Math.max(10, Math.round(nw / ratio));
         if (nh > lim.height) { nh = lim.height; nw = Math.max(10, Math.round(nh * ratio)); }
-        cmp.width = nw;
-        cmp.height = nh;
       } else {
-        cmp.width = nw;
-        cmp.height = Math.max(10, Math.min(lim.height, snapVal(drag.orig.height + ldy)));
+        /* 변 손잡이는 「비율 고정」 이 켜져 있어도 **그 방향만** 바꾼다(고원빈 10/02 — 사진이 늘어난다).
+           모서리 + 비율 고정 끔은 가로·세로를 따로 바꾼다(예전과 같다) */
+        if (hx !== 0) nw = Math.max(10, Math.min(lim.width, snapVal(drag.orig.width + hx * ldx)));
+        if (hy !== 0) nh = Math.max(10, Math.min(lim.height, snapVal(drag.orig.height + hy * ldy)));
       }
+      cmp.width = nw;
+      cmp.height = nh;
+      /* 반대쪽 점(drag.anchor)이 화면에서 제자리에 있도록 위치를 다시 구한다.
+         새 크기에서 그 점은 중심에서 로컬로 (-hx·W/2, -hy·H/2) 떨어져 있다 → 회전해 화면 오프셋으로 바꿔 중심을 역산.
+         0° 의 오른쪽 아래(se)는 x·y 가 그대로 나온다(예전 동작과 같다). */
+      var s = cmp.scale || 1;
+      var ox = -hx * nw / 2 * s, oy = -hy * nh / 2 * s;
+      var cx1 = drag.anchor.x - (ox * cos - oy * sin), cy1 = drag.anchor.y - (ox * sin + oy * cos);
+      // 회전값의 cos·sin 이 6e-17 같은 찌꺼기를 남겨 400.00000000000006 이 저장되지 않게 1/1000 에서 끊는다
+      cmp.x = Math.round((cx1 - nw * s / 2) * 1000) / 1000;
+      cmp.y = Math.round((cy1 - nh * s / 2) * 1000) / 1000;
     }
 
     if (drag.mode === "resize") { applyTermFollow(drag.termFollow); applyBranchFollow(drag.branchFollow); }
@@ -1843,7 +1868,8 @@ WE.interactions = (function () {
        끄는 동안에는 각도만 바꾼다 — 매 프레임 당기면 돌리는 중에 부품이 미끄러져 조작이 어렵다.
        속성창 회전 버튼(app.js 회전뒤가두기)과 같은 규칙이다. 평행이동이라 withTermFollow 로
        수동 배선 꺾임점이 이동 때와 똑같이 따라온다. 아래 공통 끝처리에서 renderAll·commit 이 된다. */
-    if (drag.mode === "rotate") {
+    /* 크기 조절도 같다(2026-10-02) — 왼쪽·위쪽 손잡이로 늘리면 캔버스 밖으로 나갈 수 있다. 끄는 중엔 그대로 두고 놓을 때 당긴다 */
+    if (drag.mode === "rotate" || drag.mode === "resize") {
       var 돈부품 = WE.model.getComponent(drag.id);
       if (돈부품 && WE.geometry.pullInside) {
         withTermFollow([돈부품.id], function () { WE.geometry.pullInside(돈부품); });
