@@ -19,11 +19,20 @@
 # 2026-08-24 결제(토스페이먼츠)를 붙이면서 /checkout.html 규칙을 아래에 따로 두었다.
 #    전역은 그대로 조여 두고 결제 페이지 한 장만 푼다 —
 #    전역을 풀면 에디터까지 외부 스크립트를 받을 수 있게 된다.
+#
+# 2026-10-06 HSTS(Strict-Transport-Security)를 넣었다 — 10/06 라이브 실측에서 이것만 빠져 있었다.
+#    http → https 301 은 있었지만 브라우저가 「이 사이트는 항상 https」 를 기억하지 않아
+#    첫 접속마다 http 로 한 번 나갔다.
+#    ⚠ 1일(86400)로 시작한다. 한 번 받은 브라우저는 그 기간 동안 되돌릴 수 없기 때문이다.
+#       1주 문제없으면 1년(31536000)으로 올린다(_ai/이어서.md). 되돌리려면 max-age=0 으로 배포.
+#    ⚠ includeSubDomains · preload 는 붙이지 않는다 — www 를 막 고친 참이고, preload 는 빼는 데 몇 달 걸린다.
+#    /checkout 블록은 ! 로 CSP·Permissions·COOP 만 지우므로 이 줄은 그대로 물려받는다.
 /*
   X-Content-Type-Options: nosniff
   Referrer-Policy: strict-origin-when-cross-origin
   Permissions-Policy: geolocation=(), microphone=(), camera=(), payment=(), usb=()
   Cross-Origin-Opener-Policy: same-origin
+  Strict-Transport-Security: max-age=86400
   Content-Security-Policy: default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self' 'unsafe-inline' https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://ukttsmkenaappsazervx.supabase.co; font-src 'self' data:; connect-src 'self' https://ukttsmkenaappsazervx.supabase.co https://api.web3forms.com https://cloudflareinsights.com; frame-src blob:
 
 

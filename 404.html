@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>페이지를 찾을 수 없습니다 — 이지케이블</title>
+  <meta name="robots" content="noindex" />
+  <!-- 없는 주소에서 Cloudflare Pages 가 이 파일을 「404」 로 준다 (2026-10-06).
+       이 파일이 없던 때는 없는 주소마다 랜딩을 200 으로 줘서(소프트 404)
+       깨진 링크가 검사기에 「정상」 으로 보였고 /robots.txt 까지 HTML 이 나갔다.
+
+       ⚠ 모든 경로를 / 로 시작한다. 이 화면은 /a/b/c 같은 깊은 주소에서도 나온다.
+          상대 경로(landing.css)면 /a/b/landing.css 를 찾다가 그것도 404(이 HTML)를 받아
+          CSS 가 통째로 빠진 화면이 된다.
+       ⚠ 로컬 devserver 는 이 파일을 404 로 쓰지 않는다 — 진짜 동작은 미리보기 주소에서만 잴 수 있다.
+       ⚠ /welcome 은 이 화면이 아니라 랜딩이 나가야 한다 — 배포 스크립트가 index.html 을 welcome.html 로
+          한 벌 더 복사한다(옛 308 을 기억하는 브라우저 때문. ../배포폴더_동기화.ps1 주석). -->
+  <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml" />
+  <link rel="apple-touch-icon" href="/assets/icon-180.png" />
+  <link rel="stylesheet" href="/landing.css" />
+  <style>
+    /* 랜딩 토큰·버튼을 그대로 쓰고 가운데 한 덩어리만 둔다 */
+    .nf { max-width: 760px; margin: 0 auto; padding: 120px 20px 160px; text-align: center; }
+    .nf h1 { font-size: 30px; margin: 0 0 32px; }
+    .nf .acts { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+  </style>
+</head>
+<body>
+
+<header class="top">
+  <div class="wrap">
+    <a class="logo" href="/"><img class="brand-mark" src="/assets/logo.svg" alt="" />이지케이블</a>
+  </div>
+</header>
+
+<main class="nf">
+  <h1>페이지를 찾을 수 없습니다</h1>
+  <div class="acts">
+    <a class="btn btn-main" href="/">홈으로</a>
+    <a class="btn btn-sub" href="/app.html">에디터 열기</a>
+  </div>
+</main>
+
+</body>
+</html>
