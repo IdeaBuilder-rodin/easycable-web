@@ -888,7 +888,7 @@ body.label-mode #canvas, body.label-mode #canvas * { cursor: copy !important; } 
 #wireListTable .wl-member{ width: 190px; text-align: left; word-break: keep-all; }
 /* 색은 견본만 — 좌우로 넓힐 이유가 없다 */
 #wireListTable .wl-mterm { width: 88px; }
-#wireListTable .wl-awg   { width: 60px; }
+#wireListTable .wl-awg   { width: 100px; }   /* 60 → 100 (2026-10-04): 「UL1007 AWG22」 처럼 전선 종류가 붙는다 */
 #wireListTable .wl-count { width: 52px; }
 #wireListTable .wl-thumb {
   display: block; width: 108px; height: 68px; margin: 0 auto 4px;
@@ -905,7 +905,8 @@ body.label-mode #canvas, body.label-mode #canvas * { cursor: copy !important; } 
 }
 #wireListTable .wl-mterm { white-space: nowrap; font-weight: 600; }
 #wireListTable .wl-chk { width: 34px; color: var(--tx3); font-size: 15px; }
-#wireListTable .wl-awg { color: var(--tx2); white-space: nowrap; }
+/* 화면은 줄 높이 계산이 없어 긴 직접 입력 이름은 접어도 된다(인쇄는 접으면 안 된다 — 아래 @media print). 낱말 단위로만 접는다 */
+#wireListTable .wl-awg { color: var(--tx2); white-space: normal; word-break: keep-all; }
 #wireListTable .wl-count { width: 62px; color: var(--tx2); white-space: nowrap; }
 /* 넷이 바뀌는 줄에 윗선을 진하게 — 덩어리 경계가 눈에 들어와야 한다 */
 #wireListTable tr.wl-first td { border-top: 1px solid #b9c2cc; }
@@ -1505,8 +1506,12 @@ body.label-move-ready .term-label {
    열: 색 견본 30 · 이름 160 · 굵기 52 · 규격 78 · 나머지 = 동작 열(× / ＋추가 가 오른쪽 끝에 붙는다).
    이름 칸을 160 으로 못 박은 이유: 창 폭만큼 늘리면 "불필요하게 길다"(2026-09-13 고원빈).
    ⚠ 이 선택자는 id+class 라 .preset-row / .preset-add 의 display:flex 를 이긴다(그래야 grid 가 된다). */
+/* 2026-10-04: 전선(종류) · 허용 열을 더했다 — 같은 AWG 라도 UL1007 / UL1015 에 따라 허용전류가 다르다(고원빈).
+   열: 색 30 · 이름 160 · 굵기 52 · 전선 190(직접 입력이면 [종류 ▾][이름]) · 규격 78 · 허용 64 · 동작 열.
+   칸이 둘 늘어 창을 560 → 720 으로 넓혔다(아래 .modal-box). */
+#paletteModal .modal-box { width: min(780px, 94vw); }   /* 720 → 780 (2026-10-05): 규격 칸에 글자 칸이 붙는다 */
 #paletteModal .pal-grid {
-  display: grid; grid-template-columns: 30px 160px 52px 78px 1fr;
+  display: grid; grid-template-columns: 30px 160px 52px 190px 120px 64px 1fr;   /* 규격 78 → 120 (2026-10-05) */
   gap: 6px; align-items: center;
 }
 #paletteModal .pal-grid > :last-child { justify-self: end; }   /* 동작 열(× · ＋추가)은 오른쪽 끝 */
@@ -1521,7 +1526,37 @@ body.label-move-ready .term-label {
 /* 머리글 글자를 아래 입력칸의 글자 시작점에 맞춘다 (칸 안쪽 여백 6px + 테두리 1px) */
 #paletteModal .pal-head span:nth-child(2) { padding-left: 7px; }
 #paletteModal .pal-head span:nth-child(3) { text-align: center; }
-#paletteModal .pal-head span:nth-child(4) { padding-left: 5px; }
+#paletteModal .pal-head span:nth-child(4),
+#paletteModal .pal-head span:nth-child(5) { padding-left: 5px; }   /* 전선 · 규격 — 드롭다운 글자 시작점 */
+#paletteModal .pal-head span:nth-child(6) { text-align: right; padding-right: 7px; }   /* 허용 — 숫자는 오른쪽 맞춤 */
+/* 전선 칸: 평소엔 드롭다운 하나가 칸을 다 쓰고, 직접 입력이면 [드롭다운 92][이름 나머지] 로 나눈다.
+   ⚠ 위 「.pal-grid input/select { width:100% }」 는 **자손 전체**에 걸린다 — 칸 안의 두 요소가 둘 다 100% 를 먹지 않게
+     여기서 폭을 따로 정한다(id+class 2개라 위 규칙보다 우선). */
+#paletteModal .pcable-cell { display: flex; gap: 4px; min-width: 0; align-items: center; }
+#paletteModal .pcable-cell .pcable { flex: 1 1 auto; width: 100%; }
+#paletteModal .pcable-cell.is-custom .pcable { flex: 0 0 92px; width: 92px; }
+#paletteModal .pcable-cell .pcname { flex: 1 1 0; width: auto; min-width: 0; }
+/* 규격 칸(2026-10-05): 평소엔 드롭다운 하나, 직접 입력 전선에서 「직접 입력」 을 고르면 [드롭다운 56][글자 나머지] —
+   전선 칸과 같은 짜임. 「.pal-grid input/select { width:100% }」 가 자손 전체에 걸리므로 폭을 여기서 따로 정한다. */
+#paletteModal .pawg-cell { display: flex; gap: 4px; min-width: 0; align-items: center; }
+#paletteModal .pawg-cell .pawg { flex: 1 1 auto; width: 100%; }
+#paletteModal .pawg-cell.is-size .pawg { flex: 0 0 56px; width: 56px; }
+#paletteModal .pawg-cell .psize { flex: 1 1 0; width: auto; min-width: 0; }
+#paletteModal .psize {
+  height: 28px; padding: 4px 6px; border: 1px solid #ccc; border-radius: 4px; background: #fff; color: var(--tx); font: inherit;
+}
+#paletteModal .psize[hidden] { display: none; }
+#paletteModal .pcable, #paletteModal .pcname, #paletteModal .pamp {
+  height: 28px; border: 1px solid #ccc; border-radius: 4px; background: #fff; color: var(--tx); font: inherit;
+}
+#paletteModal .pcable { padding: 3px 4px; }
+#paletteModal .pcname { padding: 4px 6px; }
+#paletteModal .pamp { padding: 4px 6px; text-align: right; }
+/* 허용 칸: 카탈로그 값은 글자(읽기만), 직접 입력은 숫자 칸 */
+#paletteModal .pamp-cell { display: flex; align-items: center; justify-content: flex-end; min-width: 0; height: 28px; }
+#paletteModal .pamp-ro { font-size: 12px; color: var(--tx2); white-space: nowrap; padding-right: 7px; cursor: help; }
+/* hidden 이 위 display 규칙에 지지 않게(직접 입력이 아닐 때 이름·숫자 칸, 직접 입력일 때 글자) */
+#paletteModal .pcname[hidden], #paletteModal .pamp[hidden], #paletteModal .pamp-ro[hidden] { display: none; }
 /* 굵기·규격 칸 — 색 행과 추가 줄 양쪽에서 쓴다 */
 #paletteModal .pwidth {
   height: 28px; padding: 4px 6px; text-align: center;
@@ -1533,7 +1568,9 @@ body.label-move-ready .term-label {
 }
 /* 추가 줄: 옆 이름칸(padding 6px → 30px)과 높이를 맞춘다. 색 칸도 행과 같은 정사각 견본으로. */
 #paletteModal .preset-add { padding-left: 2px; padding-right: 2px; }
-#paletteModal .preset-add .pwidth, #paletteModal .preset-add .pawg { height: 30px; }
+#paletteModal .preset-add .pwidth, #paletteModal .preset-add .pawg,
+#paletteModal .preset-add .pcable, #paletteModal .preset-add .pcname, #paletteModal .preset-add .pamp, #paletteModal .preset-add .psize,
+#paletteModal .preset-add .pamp-cell { height: 30px; }
 /* 같은 줄의 높이를 맞춘다(개발_기록 11장 규칙). 실측: 이름칸 25 · 굵기칸 28 · 추가 버튼 25 로 제각각이었다. */
 #paletteModal .pal-grid .plabel { height: 28px; }
 #paletteModal .preset-add input[type=text], #paletteModal .preset-add button.primary { height: 30px; }
@@ -1542,7 +1579,12 @@ body.label-move-ready .term-label {
   /* 좁은 화면: 이름 칸이 남는 폭을 다 쓰고 굵기·규격은 조금 줄인다.
      동작 열은 58px 고정 — ＋추가 버튼(min-width 58px)이 들어가는 폭. auto 로 두면 머리글(빈 칸 0)·
      행(× 28)·추가 줄(버튼 58)의 동작 열 폭이 제각각이 되어 이름 칸이 세 줄에서 서로 어긋난다(실측). */
-  #paletteModal .pal-grid { grid-template-columns: 30px 1fr 44px 64px 58px; gap: 4px; }
+  /* 2026-10-04 전선 · 허용 열이 늘어 좁은 화면 한 줄에 다 안 들어간다(7칸 최소 약 600px).
+     에디터는 PC 화면 기준이라 칸을 접지 않고, 창 안을 가로로 밀어 보게 한다 — 머리글·목록·추가 줄이 같은 폭이라 칸이 안 어긋난다.
+     (예전 5칸: 30px 1fr 44px 64px 58px — 이름 칸이 남는 폭을 다 썼다) */
+  #paletteModal .modal-box { overflow-x: auto; }
+  #paletteModal .pal-grid { grid-template-columns: 30px 120px 44px 150px 104px 52px 58px; gap: 4px; min-width: 640px; }
+  #paletteModal #paletteList { min-width: 640px; }
 }
 .preset-row:not(.editing):hover { background: var(--bg3); }
 .preset-row.editing { box-shadow: inset 0 0 0 1px var(--primary); background: #fff; }
@@ -2127,11 +2169,21 @@ body.pr-multi.pr-first-tall, body.pr-multi.pr-first-tall main { page: pr-tall; }
   .wl-table .wl-member { max-width: 42mm; }
   .wl-table .wl-mterm { width: 18mm; }
   .wl-table .wl-awg { width: 13mm; white-space: nowrap; }
+  /* 전선 종류가 들어간 표(pdf.js 가 .wl-has-cable 을 붙인다) — 규격 칸이 「UL1007 AWG22」 로 길어진다 (2026-10-04 고원빈).
+     ⚠ **두 줄로 접으면 안 된다**: 쪽 나누기(pdf.js)가 한 줄을 5.82mm 로 계산해서, 접히면 표가 종이 밖으로 넘친다
+        (실측: 높이 합 290 → 344mm, 긴 이름이면 421mm).
+     ⚠ 한 줄로 넓히기만 하면 A4 세로 폭(194mm)을 넘는다(실측 191mm, 긴 이름 199~204mm).
+     → 한 줄 유지 · 글자 0.86배 · 26mm 넘는 직접 입력 이름은 「…」 · **비고 최소 폭 40 → 30mm**(고원빈 선택).
+       실측: 표 폭 181.3mm(종류 없을 때 181.6mm 와 같음) · 높이 그대로. 종류가 없는 표는 위 규칙 그대로라 옛 도면 인쇄는 안 바뀐다. */
+  .wl-table.wl-has-cable .wl-awg {
+    width: auto; max-width: 26mm; font-size: 0.86em; overflow: hidden; text-overflow: ellipsis;
+  }
   .wl-table .wl-count { width: 10mm; }
   .wl-table .wl-chk { width: 7mm; font-size: 11px; }
   /* 비고 — 항상 세로 1단으로 바뀌면서 남는 폭을 여기로 몰아준다 (2026-09-13 고원빈:
      "비고 부분이 너무 좁아서 뭘 적기가 힘들다"). 케이블 길이 같은 메모 한두 줄이 줄바꿈 없이 들어간다. */
   .wl-table .wl-note { min-width: 40mm; text-align: left; }
+  .wl-table.wl-has-cable .wl-note { min-width: 30mm; }   /* 전선 종류가 붙은 표만 — 위 규격 칸 설명(2026-10-04 고원빈) */
   /* 넷이 바뀌는 자리에 윗선을 진하게 — 덩어리 경계가 종이에서 보여야 한다 */
   .wl-table tr.wl-first td { border-top: 0.6px solid #666; }
   /* 섹션 머리글 — 1페이지 도면 제목줄과 같은 모양으로 통일 */

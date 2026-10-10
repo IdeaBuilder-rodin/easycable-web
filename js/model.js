@@ -70,7 +70,7 @@ WE.model = (function () {
     meta: defaultMeta(),
     sheets: [makeSheet()],
     // components / wires / annotations 는 아래에서 '현재 시트' 별칭으로 정의한다.
-    palette: DEFAULT_PALETTE.map(function (p) { return { color: p.color, label: p.label }; }),
+    palette: ensurePaletteIds(DEFAULT_PALETTE.map(function (p) { return { color: p.color, label: p.label }; })),   // 항목 id — 배선 연결용(2026-10-04)
     manualBom: [],    // BOM 표에 수동 추가한 품목 [{id, name, spec, qty, price, link}]
     bomPrice: {},     // BOM 단가 프로젝트별 덮어쓰기 { <key>: 숫자 } (라이브러리 기본단가보다 우선)
     /* 결선표 비고 { "<부품id>|<단자id>": "글" } — 케이블 길이 같은 현장 메모 (2026-09-09).
@@ -482,6 +482,9 @@ WE.model = (function () {
     // 원본의 번호를 그대로 들고 오면 도면에 같은 번호가 둘이 된다.
     var 새번호 = maxCmpNo() + 1;
     b.components.forEach(function (c, i) { c.z = base + i + 1; c.no = 새번호++; project.components.push(c); });
+    // 팔레트 연결 바로잡기 — 복사 버퍼는 도면을 바꿔도 안 비워져서 **다른 도면의 항목 id** 를 단 배선이 올 수 있다(2026-10-04).
+    // 같은 도면 안에서 붙여넣은 것은 그대로 연결된다.
+    relinkWires(b.wires);
     b.wires.forEach(function (w) { project.wires.push(w); });
     b.annotations.forEach(function (a) { project.annotations.push(a); });
     return b;
@@ -504,6 +507,12 @@ WE.model = (function () {
     wireColor: "#e53935",      // 새 배선에 적용할 색
     wireWidth: 2,
     wireAwg: "",               // 새 배선에 적용할 규격(AWG). 빈 값은 미지정. 팔레트 색이 정한다.
+    // 새 배선에 적용할 전선 종류 { cable, cableName?, cableAmp? } — 빈 객체는 미지정. 팔레트 색이 정한다(2026-10-04).
+    // awg 와 따로 둔 이유: 같은 AWG 라도 종류(UL1007 / UL1015 …)에 따라 허용전류가 다르다(js/awg.js CABLES).
+    wireCable: {},
+    // 새 배선을 그릴 팔레트 항목 id(2026-10-04) — 그린 배선이 이 항목에 연결된다(w.pal).
+    //   "pal_…" = 그 항목 · "" = 팔레트에서 떨어진 펜(툴바 굵기를 따로 바꾼 경우 등) · null = 아직 모름(처음 켬 → app.js 가 내용으로 찾는다)
+    wirePal: null,
     wireRouting: "ortho",      // 'ortho'(직각) | 'straight'(직선)
     selectedWp: null,          // 선택된 꺾임점 인덱스
     selectedWireLabel: null,   // 라벨(수축튜브)을 직접 클릭해 선택한 배선 id — Delete 시 라벨만 삭제
@@ -760,6 +769,11 @@ WE.model = (function () {
       allowOverlap: true,
       waypoints: []
     };
+    // 전선 종류 — 규격(awg)과 같은 길로 팔레트 → 펜(ui.wireCable) → 여기. 미지정이면 칸을 안 만든다(옛 도면과 같은 모양).
+    // 값은 **직접** 담는다(다른 도면에 붙여넣어도 종류를 잃지 않는다). 항목 id(w.pal)는 아래에서 따로 — 팔레트를 고칠 때 따라가는 데만 쓴다.
+    if (WE.awg && WE.awg.copyCable) WE.awg.copyCable(w, ui.wireCable);
+    // 팔레트 항목 연결 — 펜이 항목이면 그 id, 아니면 「떨어진 배선」("") 으로 남긴다(다음에 열 때 저절로 연결되지 않게)
+    w.pal = ui.wirePal || "";
     project.wires.push(w);
     return w;
   }
@@ -788,6 +802,66 @@ WE.model = (function () {
     return Object.keys(doomed).length - 1;   // 함께 지워진 분기선 수
   }
 
+  /* ---- 팔레트 항목 ↔ 배선 연결 (2026-10-04 고원빈) ----
+     「팔레트로 작업한 배선은 팔레트 정보를 바꾸면 일괄적으로 따라가야 한다. 색이 같아도 속성·명칭이 다르면 다른 것이다.」
+     그래서 기준을 색이 아니라 **항목**으로 둔다: 항목마다 id, 배선은 자기를 그린 항목의 id(pal)를 든다.
+       w.pal 이 없음    → 옛 배선(연결 정보 없음) — 열 때·붙여넣을 때 내용(색+규격+전선 종류)으로 찾아 연결한다
+       w.pal === ""     → **따로 떨어진 배선**(사용자가 색·굵기·규격을 따로 바꿨다) — 다시는 저절로 연결하지 않는다
+       w.pal === "pal_…" → 그 항목에 연결 — 항목을 고치면 따라간다(app.js 팔레트 창)
+     배선은 값(color·width·awg·cable…)을 **그대로** 든다. 결선표·인쇄·CSV 는 지금처럼 배선 값을 읽고,
+     pal 은 「팔레트를 고칠 때 누구를 바꿀지」 에만 쓴다(다른 도면에 붙여넣어도 값은 안 잃는다).
+     id 를 순번(nextId)으로 안 만드는 이유: 새 도면마다 순번이 1 로 돌아가고, 브라우저 기본 팔레트(we_palette)의
+     항목이 여러 도면에 같이 들어가 겹친다 → 무작위. */
+  function paletteId() { return "pal_" + Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
+  // id 가 없거나 겹치는 항목에 새 id. 옛 파일·옛 브라우저 팔레트·검사가 직접 넣은 항목 모두 여기를 거친다.
+  function ensurePaletteIds(pal) {
+    var seen = {};
+    (pal || []).forEach(function (p) {
+      if (!p) return;
+      if (!p.id || seen[p.id]) p.id = paletteId();
+      seen[p.id] = 1;
+    });
+    return pal;
+  }
+  function paletteEntry(id) {
+    if (!id) return null;
+    var pal = project.palette || [];
+    for (var i = 0; i < pal.length; i++) if (pal[i] && pal[i].id === id) return pal[i];
+    return null;
+  }
+  /* 배선이 이 항목 「내용」 과 같은가 — 색(대소문자 무시) + 규격 + 전선 종류(직접 입력이면 이름·허용까지).
+     **굵기는 안 본다**(고원빈 10/04): 예제 도면처럼 팔레트 굵기가 비어 있고 배선은 3 인 도면이 많다. */
+  function paletteMatch(e, w) {
+    if (!e || !w) return false;
+    if (String(e.color || "").toLowerCase() !== String(w.color || "").toLowerCase()) return false;
+    if ((e.awg || "") !== (w.awg || "")) return false;
+    if ((e.cable || "") !== (w.cable || "")) return false;
+    if (e.cable === "custom") {
+      if ((e.cableName || "") !== (w.cableName || "")) return false;
+      if ((+e.cableAmp || 0) !== (+w.cableAmp || 0)) return false;
+      // 직접 적은 규격(1.5sq 등 — 2026-10-05)도 같아야 같은 항목. 팔레트 창에서 아직 비워 둔 "" 는 없는 것과 같다
+      if (String(e.cableSize || "").trim() !== String(w.cableSize || "").trim()) return false;
+    }
+    return true;
+  }
+  /* 배선들의 연결을 바로잡는다 — 열 때(loadProject)와 붙여넣을 때(pasteBundle).
+       연결된 항목이 이 팔레트에 있고 내용도 맞으면 그대로.
+       따로 떨어진 배선("")은 그대로.
+       그 밖(옛 배선 · 다른 도면에서 온 id · 내용이 어긋남)은 내용이 같은 항목을 위에서부터 찾아 연결, 없으면 떨어진 배선("").
+     ⚠ 값은 하나도 안 바꾼다 — 열었더니 도면이 바뀌면 안 된다. */
+  function relinkWires(wires) {
+    var pal = project.palette || [];
+    (wires || []).forEach(function (w) {
+      if (!w) return;
+      if (w.pal === "") return;
+      if (w.pal) { var e = paletteEntry(w.pal); if (e && paletteMatch(e, w)) return; }
+      var 찾음 = "";
+      for (var i = 0; i < pal.length; i++) if (pal[i] && pal[i].id && paletteMatch(pal[i], w)) { 찾음 = pal[i].id; break; }
+      if (찾음) w.pal = 찾음;
+      else if ("pal" in w) w.pal = "";   // 다른 도면 id 였던 것 → 떨어진 배선. 원래 칸이 없던 옛 배선은 칸을 만들지 않는다
+    });
+  }
+
   // ---- 직렬화 ----
   function newProject() {
     project.meta = defaultMeta();
@@ -796,7 +870,7 @@ WE.model = (function () {
     _sheetSeq = 0;
     project.sheets = [makeSheet()];
     _activeSheetId = project.sheets[0].id;
-    project.palette = DEFAULT_PALETTE.map(function (p) { return { color: p.color, label: p.label }; });
+    project.palette = ensurePaletteIds(DEFAULT_PALETTE.map(function (p) { return { color: p.color, label: p.label }; }));
     project.manualBom = [];
     project.bomPrice = {};
     project.wireNote = {};
@@ -850,7 +924,7 @@ WE.model = (function () {
     }
     _activeSheetId = project.sheets[0].id;
     if (data.activeSheetId) setActiveSheet(data.activeSheetId);
-    project.palette = data.palette || project.palette;
+    project.palette = ensurePaletteIds(data.palette || project.palette);   // 옛 파일은 항목 id 가 없다 → 여기서 붙인다
     project.manualBom = data.manualBom || [];
     // 예전 파일: 수동품목에 id 없으면 부여
     project.manualBom.forEach(function (m) { if (!m.id) m.id = nextId("bm"); });
@@ -888,6 +962,10 @@ WE.model = (function () {
         if (w.routing !== "ortho" && w.routing !== "straight") w.routing = ui.wireRouting;
       });
       (s.annotations || []).forEach(function (a) { scan(a.id); });
+      /* 배선 ↔ 팔레트 항목 연결(2026-10-04) — 옛 배선은 내용(색+규격+종류)으로 찾아 잇는다.
+         ⚠ **반드시 여기(loadProject 안)** — 이 뒤에 io 가 「저장된 상태」 기준선을 잡고 되돌리기를 비운다.
+            나중에(그릴 때 등) 하면 방금 연 파일이 「수정됨」 이 되고 가짜 되돌리기 단계가 생긴다. */
+      relinkWires(s.wires);
     });
     _idCounter = maxN + 1;
 
@@ -1062,6 +1140,8 @@ WE.model = (function () {
     loadProject: loadProject,
     newProject: newProject,
     newDocId: newDocId,
+    // 팔레트 항목 ↔ 배선 연결(2026-10-04)
+    ensurePaletteIds: ensurePaletteIds, paletteEntry: paletteEntry, paletteMatch: paletteMatch, relinkWires: relinkWires,
     select: select,
     clearSelection: clearSelection,
     getSelection: getSelection,

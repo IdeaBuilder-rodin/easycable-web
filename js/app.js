@@ -2028,8 +2028,9 @@ WE.app = (function () {
             /* 규격(AWG) — 넷 하나에 하나, 배선수·비고와 같은 자리(2026-09-13 고원빈).
                "22" 처럼 숫자만 적으면 뭘 뜻하는지 안 보여서 "AWG22" 로 단위를 붙인다
                (2026-09-13 고원빈: "AWG인지 뭔지 표현을 적어야 맞을것 같아"). */
+            // 전선 종류가 있으면 앞에 붙인다 — 「UL1007 AWG22」 (2026-10-04). 표기 규칙은 js/awg.js cableLabel 한 곳(인쇄와 같은 글자)
             html += "<td class='wl-awg' rowspan='" + net.count + "'>" +
-              (net.awg ? "AWG" + esc(net.awg) : "") + "</td>";
+              esc(WE.awg.cableLabel(net)) + "</td>";
             html += "<td class='wl-count' rowspan='" + net.count + "'>" +
               net.count + "</td>";
             var k = 비고키(net);
@@ -3948,7 +3949,8 @@ WE.app = (function () {
     wrap.innerHTML = "";
     WE.model.project.palette.forEach(function (p) {
       var sw = document.createElement("div");
-      sw.className = "swatch" + (p.color === WE.model.ui.wireColor ? " active" : "");
+      // 켜짐 = 펜의 항목(색 아님) — 툴바 견본과 같은 규칙(2026-10-04)
+      sw.className = "swatch" + (WE.model.ui.wirePal && p.id === WE.model.ui.wirePal ? " active" : "");
       sw.style.background = p.color;
       sw.title = p.label;
       sw.addEventListener("click", function () { pickQuickColor(p); });
@@ -3969,21 +3971,30 @@ WE.app = (function () {
     document.getElementById("quickColorPicker").hidden = true;
   }
   /* 팔레트 색 하나를 지금 배선에 적용한다 — 색만이 아니라 그 색에 매인 굵기·규격까지.
-     p 는 팔레트 항목 { color, label, width?, awg? }.
-     · width/awg 가 있으면 그 값을, 없으면 색만 바꾸고 굵기·규격은 건드리지 않는다
-       (규격 없는 색을 골랐다고 이미 정한 굵기를 지우면 안 된다).
-     · 배선을 골라 뒀으면 그 배선들에도 같은 값을 입힌다(색과 같은 규칙). */
+     p 는 팔레트 항목 { id, color, label, width?, awg?, cable?… }.
+     · 굵기는 항목에 없으면 기본 2(아래 항목굵기 — 「색을 고르면 그 굵기가 늘 따라온다」), 규격·종류는 없으면 미지정
+       (⚠ 이 자리 옛 설명은 「없으면 굵기는 안 건드린다」 였지만 코드는 그 뒤 늘 굵기를 넣게 바뀌었다 — 2026-10-04 정리)
+     · 배선을 골라 뒀으면 그 배선들에도 같은 값을 입히고 **이 항목에 연결**한다(2026-10-04 — 팔레트를 고치면 따라간다). */
+  // 항목의 굵기 — 미지정이면 기본 2(applyPalette 와 같은 규칙. 펜·배선이 같은 값을 받아야 한다)
+  function 항목굵기(p) {
+    return (p && p.width != null && p.width !== "" && !isNaN(+p.width)) ? +p.width : 2;
+  }
   function applyPalette(p) {
     if (!p) return;
+    // 항목 id — 이 항목으로 그린 배선이 여기에 연결된다(2026-10-04). 검사 등이 id 없이 넣은 항목은 이때 붙인다
+    if (!p.id) WE.model.ensurePaletteIds(WE.model.project.palette);
+    WE.model.ui.wirePal = p.id || "";
     WE.model.ui.wireColor = p.color;
     // 굵기는 색마다 반드시 있다(미지정이면 기본 2). 색을 고르면 그 굵기가 늘 따라온다.
-    var wv = (p.width != null && p.width !== "" && !isNaN(+p.width)) ? +p.width : 2;
+    var wv = 항목굵기(p);
     WE.model.ui.wireWidth = wv;
     var wIn = document.getElementById("wireWidthSel");
     if (wIn) wIn.value = String(wv);
     var hasW = true;
     var hasA = typeof p.awg === "string" && p.awg !== "";
     WE.model.ui.wireAwg = hasA ? p.awg : "";
+    // 전선 종류도 규격과 같은 규칙 — 항목에 없으면 미지정으로 비운다(2026-10-04)
+    WE.model.ui.wireCable = WE.awg.copyCable({}, p);
     saveWireSettings();
     var 대상 = WE.model.getMultiWire();
     if (!대상.length) { var one = WE.model.getSelectedWire(); if (one) 대상 = [one.id]; }
@@ -3991,8 +4002,13 @@ WE.app = (function () {
       대상.forEach(function (id) {
         var w = WE.model.getWire(id); if (!w) return;
         w.color = p.color;
-        if (hasW) w.width = +p.width;
+        /* ⚠ 예전엔 `+p.width` 를 그대로 넣어, 굵기가 없는 기본 색(빨강 등 — 기본 팔레트 5색은 굵기 미지정)을
+             배선을 고른 채 누르면 배선 굵기가 NaN 이 됐다(2026-10-04 재현 — 선 SVG 에 stroke-width="NaN").
+             위에서 정리한 wv(미지정이면 2)를 쓴다 — 펜과 같은 값. */
+        if (hasW) w.width = wv;
         w.awg = hasA ? p.awg : "";
+        WE.awg.copyCable(w, p);   // 종류도 같이 — 다른 색 항목을 입히면 그 항목의 종류로(없으면 미지정)
+        w.pal = p.id || "";       // 이 항목에 연결 — 떨어져 있던 배선도 견본을 누르면 다시 붙는다
       });
       WE.render.renderWires(); WE.render.renderOverlay();
     }
@@ -4369,6 +4385,12 @@ WE.app = (function () {
       if (ag != null) WE.model.ui.wireAwg = ag;
       var r = localStorage.getItem("we_wireRouting");
       if (r === "ortho" || r === "straight") WE.model.ui.wireRouting = r;
+      // 전선 종류(2026-10-04) — JSON 한 덩어리. copyCable 을 거쳐 모르는 종류 id 는 버린다(없어진 종류가 펜에 남지 않게)
+      var cb = localStorage.getItem("we_wireCable");
+      if (cb) WE.model.ui.wireCable = WE.awg.copyCable({}, JSON.parse(cb));
+      // 펜의 팔레트 항목(2026-10-04). 없으면 null 로 두고 renderPalette 가 내용으로 찾는다(처음 켠 사람)
+      var wp = localStorage.getItem("we_wirePal");
+      if (wp != null) WE.model.ui.wirePal = wp;
     } catch (e) { /* 무시 */ }
   }
   function saveWireSettings() {
@@ -4377,6 +4399,9 @@ WE.app = (function () {
       localStorage.setItem("we_wireColor", WE.model.ui.wireColor);
       localStorage.setItem("we_wireAwg", WE.model.ui.wireAwg || "");
       localStorage.setItem("we_wireRouting", WE.model.ui.wireRouting);
+      localStorage.setItem("we_wireCable", JSON.stringify(WE.model.ui.wireCable || {}));
+      // ⚠ 열쇠 이름에 "palette" 를 넣지 않는다 — 팔레트 열쇠는 we_palette 하나뿐이어야 한다(verify_palette)
+      if (WE.model.ui.wirePal != null) localStorage.setItem("we_wirePal", WE.model.ui.wirePal);
     } catch (e) { /* 무시 */ }
   }
   /* 팔레트 창의 "추가" 줄이 기억하는 마지막 규격(AWG) — we_wireAwg(지금 그리는 배선의 규격)과는
@@ -4386,6 +4411,15 @@ WE.app = (function () {
   }
   function saveLastPalAwg(v) {
     try { localStorage.setItem("we_lastPalAwg", v || ""); } catch (e) { /* 무시 */ }
+  }
+  /* 추가 줄이 기억하는 마지막 전선 종류(2026-10-04) — 규격 기억과 같은 이유(비슷한 선을 연달아 등록).
+     ⚠ 열쇠 이름에 "palette" 를 넣지 않는다 — 팔레트 열쇠는 we_palette 하나뿐이어야 한다(verify_palette). */
+  function lastPalCable() {
+    try { var r = localStorage.getItem("we_lastPalCable"); return r ? WE.awg.copyCable({}, JSON.parse(r)) : {}; }
+    catch (e) { return {}; }
+  }
+  function saveLastPalCable(o) {
+    try { localStorage.setItem("we_lastPalCable", JSON.stringify(WE.awg.copyCable({}, o))); } catch (e) { /* 무시 */ }
   }
 
   /* 배선 두께 상한. 도면에서 그 이상은 쓸 일이 없다 (2026-09-09 고원빈).
@@ -4401,6 +4435,10 @@ WE.app = (function () {
          그대로 들어간다. 실제로 막는 것은 여기다. (2026-09-09 상한 30 → 15) */
       if (v > WIRE_WIDTH_MAX) { v = WIRE_WIDTH_MAX; e.target.value = String(v); }
       WE.model.ui.wireWidth = v;
+      /* 펜 굵기를 팔레트 항목과 다르게 따로 바꾸면 펜이 팔레트에서 떨어진다(2026-10-04 고원빈 「따로 바꾸면 떨어진다」).
+         그 펜으로 그린 배선은 항목을 고쳐도 안 따라간다. 견본을 다시 누르면 다시 연결된다. */
+      var 펜항목 = WE.model.paletteEntry(WE.model.ui.wirePal);
+      if (펜항목 && 항목굵기(펜항목) !== v) { WE.model.ui.wirePal = ""; renderPalette(); }
       saveWireSettings();
     });
     // 배선 모양 — 배선색과 완전히 같은 규칙으로 움직인다.
@@ -4441,7 +4479,29 @@ WE.app = (function () {
        기본값은 **지난번에 추가할 때 골랐던 규격**이다 (2026-09-13 고원빈:
        "AWG22로 추가를 한 상태면 기본값을 AWG22로 해놓는거지 — 다음에 바로 변경 없이
        추가 가능하니까"). 브라우저에 저장해 두므로 새로고침·다음 방문에도 이어진다. */
-    fillAwgSelect(document.getElementById("newPalAwg"), lastPalAwg());
+    /* 추가 줄의 전선 칸·허용 칸 (2026-10-04) — 목록 줄과 같은 cableCells 로 **한 번만** 만들어 규격 칸 앞뒤에 끼운다.
+       기본값은 지난번에 추가할 때 골랐던 종류(we_lastPalCable — 규격 기억과 같은 이유).
+       종류를 바꾸면 규격 목록을 그 종류 것으로 다시 채우고(고른 규격이 그 종류에 있으면 그대로) 칸 보이기만 맞춘다. */
+    var 추가줄 = document.getElementById("btnAddPal").parentNode;
+    var 추가규격 = document.getElementById("newPalAwg");
+    var 추가처음 = lastPalCable();
+    var 처음규격 = lastPalAwg();   // 「직접 입력」(__size)을 기억했으면 그대로 — 직접 입력 전선일 때만 뜻이 있다
+    if (처음규격 === 규격직접) { 추가처음.awg = ""; 추가처음.cableSize = 추가처음.cableSize || ""; }
+    else 추가처음.awg = 처음규격;
+    var 추가칸 = cableCells(추가처음, { cable: "newPalCable", name: "newPalCName", amp: "newPalAmp", ro: "newPalAmpRo" });
+    추가줄.insertBefore(추가칸.cell, 추가규격);
+    // 규격 칸 — app.html 의 #newPalAwg 를 [규격 ▾][글자] 칸 안으로 옮긴다(목록 줄과 같은 sizeCell · 2026-10-05)
+    var 규격자리 = 추가규격.nextSibling;
+    var 추가규격칸 = sizeCell(추가처음, { size: "newPalSize" }, 추가규격);
+    추가줄.insertBefore(추가규격칸, 규격자리);
+    추가줄.insertBefore(추가칸.ampCell, document.getElementById("btnAddPal"));
+    추가줄.addEventListener("change", function (e) {
+      if (e.target.id !== "newPalCable" && e.target.id !== "newPalAwg") return;
+      var cid = document.getElementById("newPalCable").value;
+      if (e.target.id === "newPalCable") fillAwgSelect(추가규격, 추가규격.value, cid);   // 직접 입력이 아니면 「직접 입력」 규격이 사라진다
+      syncSizeCell(추가규격칸);
+      syncCableCells(추가칸.cell, 추가칸.ampCell, { cable: cid, awg: 추가규격.value });
+    });
     document.getElementById("btnAddPal").addEventListener("click", function () {
       var label = document.getElementById("newPalLabel").value.trim() || WE.i18n.t("색");
       var color = document.getElementById("newPalColor").value;
@@ -4450,9 +4510,21 @@ WE.app = (function () {
          다시 고쳐야 했다. 굵기가 비었거나 이상하면 기본 2, 규격은 미지정 가능. */
       var wv = parseInt(document.getElementById("newPalWidth").value, 10);
       var width = (isNaN(wv) || wv < 1) ? 2 : Math.min(15, wv);
-      var awg = document.getElementById("newPalAwg").value || "";
-      WE.model.project.palette.push({ color: color, label: label, width: width, awg: awg });
-      saveLastPalAwg(awg);   // 방금 고른 규격을 다음 추가의 기본값으로 남긴다
+      var 규격값 = document.getElementById("newPalAwg").value || "";
+      var awg = 규격값 === 규격직접 ? "" : 규격값;
+      var 새것 = { color: color, label: label, width: width, awg: awg };
+      // 전선 종류 — 직접 입력이면 이름·허용 칸의 지금 값까지(2026-10-04)
+      var 이름칸 = document.getElementById("newPalCName"), 허용칸 = document.getElementById("newPalAmp");
+      setCableOn(새것, document.getElementById("newPalCable").value, 이름칸 ? 이름칸.value : "", 허용칸 ? 허용칸.value : "");
+      // 직접 적은 규격(2026-10-05) — setCableOn(copyCable) 이 지운 뒤라 여기서 넣는다. 직접 입력 전선에서만
+      if (규격값 === 규격직접 && 새것.cable === WE.awg.CUSTOM) {
+        var 규격글 = document.getElementById("newPalSize");
+        새것.cableSize = 규격글 ? 규격글.value.trim() : "";
+      }
+      WE.model.project.palette.push(새것);
+      WE.model.ensurePaletteIds(WE.model.project.palette);   // 새 항목 id — 이 항목으로 그린 배선이 연결된다(2026-10-04)
+      saveLastPalAwg(규격값);   // 방금 고른 규격을 다음 추가의 기본값으로 남긴다(「직접 입력」 이면 그것도)
+      saveLastPalCable(새것); // 종류도 같은 이유
       // 이름만 비운다. 색·굵기·규격은 그대로 둔다 — 비슷한 선을 연달아 등록할 때 다시 고르지 않게.
       document.getElementById("newPalLabel").value = "";
       renderPaletteList(); renderPalette(); saveDefaultPalette();
@@ -4462,34 +4534,111 @@ WE.app = (function () {
       var row = e.target.closest(".preset-row"); if (!row) return;
       var p = WE.model.project.palette[+row.dataset.idx]; if (!p) return;
       if (e.target.classList.contains("pcolor")) {
-        var oldC = p.color, newC = e.target.value;
-        p.color = newC;
-        // 이 색으로 그려진 기존 배선도 함께 갱신
-        WE.model.allWires().forEach(function (w) { if (w.color === oldC) w.color = newC; });   // 전체 시트
-        if (WE.model.ui.wireColor === oldC) WE.model.ui.wireColor = newC;
-        WE.render.renderWires(); WE.render.renderOverlay();
+        p.color = e.target.value;
+        /* 이 **항목에 연결된** 배선만 색을 바꾼다(2026-10-04 고원빈 「색이 같아도 속성·명칭이 다르면 다른 것」).
+           예전엔 「같은 색 배선 전부」 를 바꿔서, 같은 색의 다른 항목 배선과 따로 색을 정한 배선까지 딸려 바뀌었다. */
+        팔레트내려보내기(p, ["color"]);
       } else if (e.target.classList.contains("plabel")) {
-        p.label = e.target.value;
+        p.label = e.target.value;   // 이름은 배선에 없다 — 결선표·범례가 연결된 항목에서 읽는다(labelOf)
       } else if (e.target.classList.contains("pwidth")) {
         var v = parseInt(e.target.value, 10);
         p.width = (isNaN(v) || v < 1) ? "" : Math.min(15, v);
+        if (p.width !== "") 팔레트내려보내기(p, ["width"]);   // 비웠으면(미지정) 배선 굵기는 그대로 둔다
+      } else if (e.target.classList.contains("pcname")) {
+        // 직접 입력 이름 — 비우면 칸을 지운다(빈 글자를 달고 다니지 않게)
+        var nmv = e.target.value.trim();
+        if (nmv) p.cableName = nmv; else delete p.cableName;
+        팔레트내려보내기(p, ["cable"]);
+      } else if (e.target.classList.contains("pamp")) {
+        // 직접 입력 허용전류 — 0·빈칸·글자는 「모름」(칸을 지운다). 그러면 전류 확인만 안 한다
+        var av = parseFloat(e.target.value);
+        if (av > 0) p.cableAmp = av; else delete p.cableAmp;
+        팔레트내려보내기(p, ["cable"]);
+      } else if (e.target.classList.contains("psize")) {
+        /* 직접 적은 규격(2026-10-05) — 빈 글자도 칸은 둔다(「직접 입력」 을 고른 상태를 기억해야 글자 칸이 계속 보인다).
+           배선·펜으로는 빈 글자를 안 옮긴다(copyCable). 연결 배선은 바로 따라간다. */
+        p.cableSize = e.target.value;
+        팔레트내려보내기(p, ["cable"]);
       }
       renderPalette(); saveDefaultPalette();
     });
-    // 규격 드롭다운은 change 로 받는다
+    // 규격·전선 드롭다운은 change 로 받는다
     pl.addEventListener("change", function (e) {
-      if (!e.target.classList.contains("pawg")) return;
       var row = e.target.closest(".preset-row"); if (!row) return;
       var p = WE.model.project.palette[+row.dataset.idx]; if (!p) return;
-      p.awg = e.target.value || "";
-      saveDefaultPalette();
+      if (e.target.classList.contains("pawg")) {
+        /* 「직접 입력」 을 고르면 규격(awg)을 비우고 글자 칸을 연다 · AWG 를 고르면 직접 규격을 지운다(2026-10-05).
+           둘 다 연결 배선에 같이 내려보낸다 — 배선에 옛 직접 규격이나 옛 AWG 가 남지 않게. */
+        if (e.target.value === 규격직접) {
+          p.awg = "";
+          if (typeof p.cableSize !== "string") p.cableSize = "";
+        } else {
+          p.awg = e.target.value || "";
+          delete p.cableSize;
+        }
+        var 칸 = e.target.closest(".pawg-cell");
+        if (칸) {
+          syncSizeCell(칸);
+          if (e.target.value === 규격직접) 칸.querySelector(".psize").focus();   // 바로 적을 수 있게
+        }
+        // 허용 글자만 새로 — 줄 전체를 다시 그리면 드롭다운 초점이 날아간다
+        var ro = row.querySelector(".pamp-ro");
+        if (ro) ro.textContent = cableAmpText(p);
+        팔레트내려보내기(p, ["awg", "cable"]);
+        saveDefaultPalette();
+      } else if (e.target.classList.contains("pcable")) {
+        // 종류가 바뀌면 규격 목록·허용 칸·이름 칸이 다 달라진다 → 목록을 다시 그린다
+        setCableOn(p, e.target.value, p.cableName, p.cableAmp);
+        팔레트내려보내기(p, ["cable", "awg"]);   // 새 종류가 안 파는 규격은 setCableOn 이 비운다 — 그것도 같이
+        renderPaletteList(); renderPalette(); saveDefaultPalette();
+      }
     });
     pl.addEventListener("click", function (e) {
       if (!e.target.classList.contains("pdel")) return;
       var row = e.target.closest(".preset-row");
-      WE.model.project.palette.splice(+row.dataset.idx, 1);
+      var 지운 = WE.model.project.palette.splice(+row.dataset.idx, 1)[0];
+      /* 지운 항목에 연결돼 있던 배선은 **값 그대로** 두고 연결만 끊는다 — 배선을 같이 지우거나 바꾸면 도면이 망가진다.
+         펜이 그 항목이었으면 펜도 떨어진다(다음 배선은 「떨어진 배선」). */
+      if (지운 && 지운.id) {
+        WE.model.allWires().forEach(function (w) { if (w.pal === 지운.id) w.pal = ""; });
+        if (WE.model.ui.wirePal === 지운.id) { WE.model.ui.wirePal = ""; saveWireSettings(); }
+      }
       renderPaletteList(); renderPalette(); saveDefaultPalette();
     });
+  }
+
+  /* 팔레트 항목을 고치면 **그 항목에 연결된 배선**(모든 시트)에 고친 칸만 내려보낸다 (2026-10-04 고원빈).
+       「팔레트로 작업한 배선은 팔레트 정보를 바꾸면 일괄적으로 그 속성이 적용되어야 한다」
+     칸들: "color" · "width" · "awg" · "cable"(종류 · 직접 입력 이름 · 허용).
+     **바뀐 칸만** 보내는 이유: 굵기 미지정 항목의 이름만 고쳤는데 그 항목 배선(예제 도면은 굵기 3)이 2 로 바뀌면 안 된다.
+     펜이 이 항목이면 펜도 — 다음에 그릴 배선이 옛 값으로 그려지지 않게.
+     되돌리기: 팔레트 창이 열린 동안은 기록을 미루므로(history.js busy) 창에서 한 일 전체가 Ctrl+Z 한 번으로 돌아간다. */
+  function 팔레트내려보내기(p, 칸들) {
+    if (!p || !p.id) return;
+    function 입히기(w) {
+      칸들.forEach(function (k) {
+        if (k === "color") w.color = p.color;
+        else if (k === "width") w.width = 항목굵기(p);
+        else if (k === "awg") w.awg = p.awg || "";
+        else if (k === "cable") WE.awg.copyCable(w, p);
+      });
+    }
+    var 바뀐수 = 0;
+    WE.model.allWires().forEach(function (w) { if (w.pal === p.id) { 입히기(w); 바뀐수++; } });   // 전체 시트
+    var ui = WE.model.ui;
+    if (ui.wirePal === p.id) {
+      칸들.forEach(function (k) {
+        if (k === "color") ui.wireColor = p.color;
+        else if (k === "width") {
+          ui.wireWidth = 항목굵기(p);
+          var wIn = document.getElementById("wireWidthSel"); if (wIn) wIn.value = String(ui.wireWidth);
+        }
+        else if (k === "awg") ui.wireAwg = p.awg || "";
+        else if (k === "cable") ui.wireCable = WE.awg.copyCable({}, p);
+      });
+      saveWireSettings();
+    }
+    if (바뀐수) { WE.render.renderWires(); WE.render.renderOverlay(); }
   }
 
   // 배선색 팔레트를 '마지막 = 전역 기본값'으로 저장(BOM 레이아웃과 같은 패턴).
@@ -4508,7 +4657,9 @@ WE.app = (function () {
   // 새 배선도가 마지막으로 저장해둔 팔레트에서 시작하도록 적용
   function applyDefaultPaletteToProject() {
     var saved = loadDefaultPalette();
-    if (saved && saved.length) WE.model.project.palette = saved;
+    /* 항목 id 를 붙인다(옛 we_palette 에는 없다 — 2026-10-04). ⚠ we_palette 에 다시 쓰지는 않는다:
+       팔레트를 고칠 때만 쓴다(verify_palette 「쓰던 팔레트가 그대로」). 이 뒤에 기준선을 잡으므로 「수정됨」 도 안 된다. */
+    if (saved && saved.length) WE.model.project.palette = WE.model.ensurePaletteIds(saved);
   }
 
   // 현재 배선 모양을 버튼에 반영. 배선을 골라 뒀으면 '그 배선의 모양'을 보여 주는 게 맞다 —
@@ -4583,9 +4734,11 @@ WE.app = (function () {
     if (!ws.length) { wrap.hidden = true; return; }
     wrap.hidden = false;
 
-    // 고른 배선들이 서로 다른 색이면 '지금 색'이 하나로 정해지지 않는다 → 표시하지 않는다
-    var 현재 = ws[0].color;
-    var 같은색 = ws.every(function (w) { return w.color === 현재; });
+    /* 켜짐 표시 = 고른 배선들이 **모두 같은 항목에 연결**돼 있을 때 그 항목(2026-10-04).
+       예전엔 색으로 켰다 — 같은 색 항목이 둘이면 둘 다 켜지고, 따로 떨어진 배선도 켜져 구분이 안 됐다.
+       이제 떨어진 배선(pal "")·서로 다른 항목이면 아무것도 안 켜진다 → 「이 배선은 팔레트에서 떨어졌다」 가 보인다. */
+    var 현재항목 = ws[0].pal || "";
+    var 같은항목 = !!현재항목 && ws.every(function (w) { return w.pal === 현재항목; });
 
     var pal = WE.model.project.palette || [];
     // 8개 이상이면 7개만 보이고 마지막 칸은 펼치기 버튼이 된다.
@@ -4595,17 +4748,14 @@ WE.app = (function () {
 
     보일것.forEach(function (p) {
       var sw = document.createElement("div");
-      sw.className = "swatch" + (같은색 && p.color === 현재 ? " active" : "");
+      sw.className = "swatch" + (같은항목 && p.id === 현재항목 ? " active" : "");
       sw.style.background = p.color;
       sw.title = p.label || p.color;
       sw.addEventListener("click", function () {
-        ws.forEach(function (w) { w.color = p.color; });
-        // 앞으로 그릴 기본색도 같이 바꾼다 — 툴바 스와치와 동작을 맞춘다
-        WE.model.ui.wireColor = p.color;
-        saveWireSettings();
-        WE.render.renderWires(); WE.render.renderOverlay();
-        renderPalette();
-        refreshProps();
+        /* 툴바 견본과 **같은 일**을 한다(applyPalette) — 색·굵기·규격·전선 종류 + 그 항목에 연결 + 앞으로 그릴 펜.
+           ⚠ 예전엔 색만 바꿨다(2026-10-04 재현 — 규격·종류가 안 옮겨 갔다). 주석은 「툴바와 맞춘다」 였는데 실제론 달랐다.
+           applyPalette 는 고른 배선(여러 개 포함)에 입힌다 — 여기 ws 와 같은 대상이다. */
+        applyPalette(p);
         WE.history.commit();
       });
       wrap.appendChild(sw);
@@ -4631,13 +4781,23 @@ WE.app = (function () {
     var wrap = document.getElementById("paletteSwatches");
     wrap.innerHTML = "";
     var pal = WE.model.project.palette;
+    var ui = WE.model.ui;
     // 활성 색이 팔레트에 없으면 첫 색으로 보정
-    if (pal.length && !pal.some(function (p) { return p.color === WE.model.ui.wireColor; })) {
-      WE.model.ui.wireColor = pal[0].color;
+    if (pal.length && !pal.some(function (p) { return p.color === ui.wireColor; })) {
+      ui.wireColor = pal[0].color;
+    }
+    /* 펜의 팔레트 항목(2026-10-04):
+         · 아직 모름(null — 처음 켬·옛 설정) → 펜 내용(색+규격+종류)이 같은 항목을 찾아 잇는다(옛 도면 배선과 같은 규칙)
+         · 그 항목이 이 팔레트에 없음(지웠거나 다른 도면 팔레트) → 같은 내용 항목을 찾고, 없으면 떨어진 펜("") */
+    if (ui.wirePal === null || (ui.wirePal && !WE.model.paletteEntry(ui.wirePal))) {
+      var 펜 = WE.awg.copyCable({ color: ui.wireColor, awg: ui.wireAwg || "" }, ui.wireCable);
+      var 맞는 = pal.filter(function (p) { return WE.model.paletteMatch(p, 펜); })[0];
+      ui.wirePal = 맞는 ? 맞는.id : "";
     }
     pal.forEach(function (p) {
       var sw = document.createElement("div");
-      sw.className = "swatch" + (p.color === WE.model.ui.wireColor ? " active" : "");
+      // 켜짐 표시는 색이 아니라 **펜의 항목**으로 — 같은 색 항목이 둘이어도 하나만 켜지고, 떨어진 펜이면 아무것도 안 켜진다
+      sw.className = "swatch" + (ui.wirePal && p.id === ui.wirePal ? " active" : "");
       sw.style.background = p.color;
       sw.title = p.label;
       sw.addEventListener("click", function () { applyPalette(p); });
@@ -4648,15 +4808,140 @@ WE.app = (function () {
   function openPaletteModal() { renderPaletteList(); document.getElementById("paletteModal").hidden = false; }
   /* 규격(AWG) 드롭다운 채우기 — 색 행과 추가 줄이 같은 목록을 쓴다. 한 곳에서만 만든다.
      (두 벌로 두면 한쪽만 고쳐져 목록이 서로 달라진다 — BOM 내보내기에서 이미 겪은 함정) */
-  function fillAwgSelect(sel, current) {
+  /* cableId 를 주면 **그 종류가 파는 AWG 만** 넣는다(2026-10-04) — UL1007 에 12AWG 를 고를 수 있으면
+     허용전류를 말할 수 없는 조합이 생긴다. 미지정·직접 입력은 예전처럼 전체 목록. */
+  function fillAwgSelect(sel, current, cableId) {
     sel.innerHTML = "";
     var opt0 = document.createElement("option"); opt0.value = ""; opt0.textContent = WE.i18n.t("규격");
     sel.appendChild(opt0);
-    (WE.awg ? WE.awg.TABLE : []).forEach(function (e) {
-      var o = document.createElement("option"); o.value = e.awg; o.textContent = e.awg + "AWG";
-      if (current === e.awg) o.selected = true;
+    (WE.awg ? WE.awg.cableAwgs(cableId || "") : []).forEach(function (g) {
+      var o = document.createElement("option"); o.value = g; o.textContent = g + "AWG";
+      if (current === g) o.selected = true;
       sel.appendChild(o);
     });
+    /* 「직접 입력」 전선이면 맨 아래 「직접 입력」 — 고르면 옆에 글자 칸이 나와 1.5sq 처럼 적는다(2026-10-05 고원빈).
+       직접 입력 전선에서만: 허용전류도 사용자가 적으니 전류 확인이 그대로 된다. 카탈로그(UL1007 등)는 허용전류가
+       규격에 매여 있어 목록만, 미지정은 UL1007 기준 추천이 AWG 로만 되므로 목록만. */
+    if (cableId === WE.awg.CUSTOM) {
+      var os = document.createElement("option"); os.value = 규격직접; os.textContent = WE.i18n.t("직접 입력");
+      if (current === 규격직접) os.selected = true;
+      sel.appendChild(os);
+    }
+  }
+  var 규격직접 = "__size";   // 규격 드롭다운의 「직접 입력」 값 — AWG 값과 겹치지 않게
+  // 항목이 「규격 직접 입력」 상태인가 — 고르기만 하고 아직 안 적은 상태("")도 포함(창을 다시 열어도 글자 칸이 보이게)
+  function 규격직접인가(p) { return !!p && p.cable === WE.awg.CUSTOM && typeof p.cableSize === "string"; }
+  /* 규격 칸 = [규격 ▾] + (직접 규격일 때만) [글자] — 전선 칸과 같은 모양(2026-10-05).
+     sel 을 주면(추가 줄 — app.html 에 이미 있는 #newPalAwg) 그것을 칸 안으로 옮겨 쓴다. */
+  function sizeCell(p, ids, sel) {
+    ids = ids || {};
+    var cell = document.createElement("div");
+    cell.className = "pawg-cell";
+    if (!sel) {
+      sel = document.createElement("select");
+      sel.className = "pawg"; sel.title = WE.i18n.t("배선 규격(AWG)");
+    }
+    fillAwgSelect(sel, 규격직접인가(p) ? 규격직접 : p.awg, p.cable);
+    var sz = document.createElement("input");
+    sz.type = "text"; sz.className = "psize"; sz.placeholder = WE.i18n.t("예: 1.5sq"); sz.title = WE.i18n.t("규격");
+    if (ids.size) sz.id = ids.size;
+    sz.value = 규격직접인가(p) ? p.cableSize : "";
+    cell.appendChild(sel); cell.appendChild(sz);
+    syncSizeCell(cell);
+    return cell;
+  }
+  // 드롭다운이 「직접 입력」 이면 글자 칸을 보인다
+  function syncSizeCell(cell) {
+    var on = cell.querySelector(".pawg").value === 규격직접;
+    cell.classList.toggle("is-size", on);
+    cell.querySelector(".psize").hidden = !on;
+  }
+  /* 「전선」 드롭다운 — 미지정 / 제조사 묶음(optgroup) / 직접 입력 (2026-10-04 고원빈 「한 칸에 제조사 묶음」).
+     제조사·종류를 두 칸으로 나누지 않은 이유: 팔레트 창이 좁고, 제조사가 늘어도 묶음만 하나 더 생긴다.
+     목록은 js/awg.js CABLES 에서 만든다 — 종류를 더하면 여기는 손대지 않아도 나온다.
+     줄과 추가 줄이 같은 함수를 쓴다(규격 목록과 같은 이유 — 두 벌이면 한쪽만 고쳐진다). */
+  function fillCableSelect(sel, current) {
+    sel.innerHTML = "";
+    function opt(parent, v, txt) {
+      var o = document.createElement("option"); o.value = v; o.textContent = txt;
+      if ((current || "") === v) o.selected = true;
+      parent.appendChild(o);
+    }
+    opt(sel, "", WE.i18n.t("미지정"));
+    var 묶음 = {};
+    WE.awg.CABLES.forEach(function (c) {
+      if (!묶음[c.maker]) {
+        묶음[c.maker] = document.createElement("optgroup");
+        묶음[c.maker].label = WE.i18n.t(c.maker);
+        sel.appendChild(묶음[c.maker]);
+      }
+      opt(묶음[c.maker], c.id, c.name);
+    });
+    opt(sel, WE.awg.CUSTOM, WE.i18n.t("직접 입력"));
+  }
+  /* 「허용」 칸 글자 — 카탈로그 종류는 그 규격의 값(읽기만, 소수 한 자리: 카탈로그 표기 「17.0」 그대로).
+     기준 조건(주위 40°C · 1가닥 공중)은 말풍선으로만 — 화면에 설명 줄을 늘리지 않는다(「UI 부연설명 금지」). */
+  function cableAmpText(p) {
+    if (!p || !p.cable || p.cable === WE.awg.CUSTOM) return "";
+    var a = WE.awg.cableAmp(p);
+    return a != null ? a.toFixed(1) + "A" : "";
+  }
+  function cableBasisTip(p) {
+    var c = p && WE.awg.cable(p.cable);
+    return c ? c.rating + " · " + WE.i18n.t(c.basis) + " · " + WE.i18n.t(c.src) : "";
+  }
+  /* 전선 칸 · 허용 칸을 만든다 — 줄과 추가 줄이 같은 모양이어야 해서 한 곳에서 만든다.
+     ids 를 주면 추가 줄(요소마다 id), 아니면 목록 줄(class 로만 찾는다).
+       전선 칸 = [전선 ▾] + (직접 입력일 때만) [이름]
+       허용 칸 = 카탈로그: 「17.0A」 글자 / 직접 입력: [숫자] / 미지정: 빈칸 */
+  function cableCells(p, ids) {
+    ids = ids || {};
+    var isCustom = p.cable === WE.awg.CUSTOM;
+    var cell = document.createElement("div");
+    cell.className = "pcable-cell" + (isCustom ? " is-custom" : "");
+    var sel = document.createElement("select");
+    sel.className = "pcable"; sel.title = WE.i18n.t("전선 종류");
+    if (ids.cable) sel.id = ids.cable;
+    fillCableSelect(sel, p.cable || "");
+    var nm = document.createElement("input");
+    nm.type = "text"; nm.className = "pcname"; nm.placeholder = WE.i18n.t("예: UL1569");
+    nm.title = WE.i18n.t("전선 이름");
+    if (ids.name) nm.id = ids.name;
+    nm.value = isCustom ? (p.cableName || "") : "";
+    cell.appendChild(sel); cell.appendChild(nm);
+
+    var ampCell = document.createElement("div");
+    ampCell.className = "pamp-cell";
+    var ro = document.createElement("span");
+    ro.className = "pamp-ro";
+    if (ids.ro) ro.id = ids.ro;
+    var amp = document.createElement("input");
+    amp.type = "number"; amp.className = "pamp"; amp.min = "0"; amp.step = "any";
+    amp.title = WE.i18n.t("허용전류(A)");
+    if (ids.amp) amp.id = ids.amp;
+    amp.value = isCustom && p.cableAmp > 0 ? String(p.cableAmp) : "";
+    ampCell.appendChild(ro); ampCell.appendChild(amp);
+    syncCableCells(cell, ampCell, p);
+    return { cell: cell, ampCell: ampCell };
+  }
+  // 종류에 따라 보일 칸을 맞춘다 — 만들 때와, 추가 줄에서 종류를 바꿀 때(추가 줄은 다시 만들지 않는다:
+  // 드롭다운을 새로 만들면 사용자가 잡고 있던 칸이 사라진다).
+  function syncCableCells(cell, ampCell, p) {
+    var isCustom = p.cable === WE.awg.CUSTOM;
+    cell.classList.toggle("is-custom", isCustom);
+    cell.querySelector(".pcname").hidden = !isCustom;
+    var ro = ampCell.querySelector(".pamp-ro");
+    ro.hidden = isCustom;
+    ro.textContent = cableAmpText(p);
+    ro.title = cableBasisTip(p);
+    ampCell.querySelector(".pamp").hidden = !isCustom;
+  }
+  /* 「전선」 을 바꿨을 때 항목 p 를 맞춘다 — 목록 줄과 추가 줄이 같이 쓴다.
+     · 직접 입력으로 갈 때만 이름·허용을 살린다(카탈로그로 가면 옛 이름이 몰래 남지 않게 지운다)
+     · 새 종류가 안 파는 규격이면 규격을 비운다 — 「UL1007 12AWG」 처럼 허용전류를 말할 수 없는 조합을 남기지 않는다 */
+  function setCableOn(p, cableId, name, amp) {
+    WE.awg.copyCable(p, { cable: cableId, cableName: name, cableAmp: amp });
+    if (p.awg && WE.awg.cableAwgs(cableId).indexOf(p.awg) < 0) p.awg = "";
   }
   function renderPaletteList() {
     var pl = document.getElementById("paletteList");
@@ -4674,10 +4959,10 @@ WE.app = (function () {
       width.type = "number"; width.className = "pwidth"; width.min = "1"; width.max = "15"; width.step = "1";
       width.title = WE.i18n.t("선 두께(px)");
       width.value = String((p.width != null && p.width !== "" && !isNaN(+p.width)) ? +p.width : 2);
-      // 규격(AWG) — 결선표에 나온다. 미지정 가능.
-      var awg = document.createElement("select");
-      awg.className = "pawg"; awg.title = WE.i18n.t("배선 규격(AWG)");
-      fillAwgSelect(awg, p.awg);
+      // 전선 종류 · 허용 (2026-10-04) — 규격 목록이 이 종류를 따른다
+      var cc = cableCells(p);
+      // 규격(AWG) — 결선표에 나온다. 미지정 가능. 직접 입력 전선이면 글자로도 적는다(2026-10-05 — sizeCell)
+      var awg = sizeCell(p);
       var del = document.createElement("button");
       /* ⚠ 글자는 반드시 × 하나여야 한다.
          .pdel 은 28×28 정사각(styles.css)이라 "삭제" 두 글자를 넣으면 줄바꿈이 나서
@@ -4687,7 +4972,9 @@ WE.app = (function () {
          뜻은 title·aria-label 이 전한다(눈으로도, 화면읽기 프로그램에도). */
       del.className = "pdel"; del.type = "button"; del.textContent = "×";
       del.title = WE.i18n.t("삭제"); del.setAttribute("aria-label", WE.i18n.t("삭제"));
-      row.appendChild(color); row.appendChild(label); row.appendChild(width); row.appendChild(awg); row.appendChild(del);
+      // 열 순서 = app.html 머리글(.pal-head) 순서: 색 · 이름 · 굵기 · 전선 · 규격 · 허용 · ×
+      row.appendChild(color); row.appendChild(label); row.appendChild(width);
+      row.appendChild(cc.cell); row.appendChild(awg); row.appendChild(cc.ampCell); row.appendChild(del);
       pl.appendChild(row);
     });
   }
@@ -4731,16 +5018,22 @@ WE.app = (function () {
   function bindWireProps() {
     // 선택된 배선들(다중선택 포함)을 반환
     var selectedWires = 고른배선들;
+    /* 배선을 **따로** 바꾸면(색·굵기) 그 배선은 팔레트에서 떨어진다(w.pal = "") — 2026-10-04 고원빈 결정.
+       떨어진 배선은 그 뒤 팔레트를 고쳐도 안 바뀐다(따로 정한 값이 지켜진다). 팔레트 견본을 다시 누르면 다시 연결된다.
+       값이 실제로 바뀔 때만 떨어뜨린다 — 같은 값을 다시 넣은 것은 「따로 바꾼」 게 아니다.
+       (선 종류·라벨은 팔레트 칸이 아니라 연결과 상관없다) */
     document.getElementById("wireColor").addEventListener("input", function (e) {
       var ws = selectedWires(); if (!ws.length) return;
-      ws.forEach(function (w) { w.color = e.target.value; });
+      ws.forEach(function (w) { if (w.color !== e.target.value) { w.color = e.target.value; w.pal = ""; } });
       WE.render.renderWires(); WE.render.renderOverlay();
+      renderWirePalette();   // 떨어진 배선은 견본 켜짐이 꺼진다
     });
     document.getElementById("wireWidth").addEventListener("input", function (e) {
       var v = parseInt(e.target.value, 10); if (isNaN(v)) return;
       var ws = selectedWires(); if (!ws.length) return;
-      ws.forEach(function (w) { w.width = Math.max(1, v); });
+      ws.forEach(function (w) { var nv = Math.max(1, v); if (w.width !== nv) { w.width = nv; w.pal = ""; } });
       WE.render.renderWires(); WE.render.renderOverlay();
+      renderWirePalette();
     });
     /* 선 종류. 값이 빈 문자열이면 '실선'이고, 그때는 필드를 아예 지운다.
        기본값을 파일에 안 남겨야 예전 파일과 새로 만든 파일이 같은 모양이 된다. */
@@ -4840,24 +5133,64 @@ WE.app = (function () {
   }
 
   // ---- 배선 규격(AWG) ----
+  /* 전류(A) → 규격 추천 — **그 배선의 전선 종류 표로** 고른다(2026-10-04 고원빈).
+       카탈로그 종류 → 그 종류가 파는 규격 중 가장 얇은 것(허용 ≥ 전류 × 여유)
+       미지정       → UL1007(대영) 표로 — 화면에 「UL1007 기준」
+       직접 입력    → 표가 없어 규격을 바꾸지 않는다. 적어 둔 허용전류와 비교만 한다(updateWireAwgOut)
+       그 종류로 모자라면(범위 초과) 규격을 **바꾸지 않는다** — 다른 종류로 몰래 넘어가지 않고 화면에 알린다.
+     종류(cable…)는 여기서 절대 안 건드린다 — 전류를 비워도(신호선) 종류는 남는다. */
   function applyWireGauge(w, currentA) {
+    var 전 = (w.awg || "") + "|" + w.width;
     if (currentA > 0) {
       w.current = currentA;
-      var e = WE.awg.recommend(currentA);
-      w.awg = e ? e.awg : null;
-      w.width = WE.awg.widthPx(e);
+      var r = WE.awg.recommendCable(currentA, w.cable || "");
+      if (r && !r.over) {
+        w.awg = r.awg;
+        w.width = WE.awg.widthPx(WE.awg.get(r.awg));
+      }
     } else {
       delete w.current; delete w.awg;
       w.width = WE.model.ui.wireWidth || 2;   // 신호선 기본 두께
     }
+    // 전류로 규격·굵기가 실제로 바뀌면 그 배선은 팔레트에서 떨어진다(2026-10-04 고원빈 — 따로 정한 값을 팔레트가 덮어쓰지 않게)
+    if ((w.awg || "") + "|" + w.width !== 전) w.pal = "";
     WE.render.renderWires(); WE.render.renderOverlay();
+    renderWirePalette();   // 떨어졌으면 속성창 견본 켜짐도 꺼진다
   }
+  /* 속성창 한 줄 — 예:
+       권장 UL1015 24AWG · Ø0.511mm · 허용 7.5A (여유 ×1.25)
+       권장 22AWG · Ø0.644mm · 허용 6.8A (UL1007 기준 · 여유 ×1.25)
+       UL1007 범위 초과 (필요 17.5A)
+       UL1569 · 허용 4.5A — 초과 (필요 5A)        ← 직접 입력
+     기준 조건(주위 40°C · 1가닥 공중 · 출처)은 말풍선(title) — 설명 줄을 늘리지 않는다(「UI 부연설명 금지」).
+     ⚠ 예전엔 WE.awg.get(w.awg) 가 null(표에 없는 규격)이면 e.dia 에서 터졌다 — 여기선 null 을 거른다. */
   function updateWireAwgOut(w) {
     var out = document.getElementById("wireAwgOut");
-    if (w && w.current > 0 && w.awg) {
-      var e = WE.awg.get(w.awg);
-      out.textContent = WE.i18n.t("권장 AWG ") + w.awg + " · Ø" + e.dia + WE.i18n.t("mm · 허용 ") + e.ampEff + WE.i18n.t("A (여유 ×") + WE.awg.MARGIN + ")";
-    } else out.textContent = "";   // 미입력 시 설명 문구 없이 비움 (속성창 정돈)
+    out.textContent = ""; out.title = "";   // 미입력 시 설명 문구 없이 비움 (속성창 정돈)
+    if (!w || !(w.current > 0)) return;
+    var t = WE.i18n.t, 여유 = WE.awg.MARGIN;
+    var 필요 = Math.round(w.current * 여유 * 100) / 100;
+    if (w.cable === WE.awg.CUSTOM) {
+      // 이름 + 규격(직접 적은 1.5sq 또는 AWG) — 결선표 규격 칸과 같은 글자(cableLabel · 2026-10-05)
+      var 이름 = WE.awg.cableLabel(w);
+      var a = WE.awg.cableAmp(w);
+      out.textContent = (이름 ? 이름 + " · " : "") +
+        (a == null ? t("허용 미입력")
+                   : t("허용 ") + a + "A" + (WE.awg.exceeds(w.current * 여유, a) ? t(" — 초과 (필요 ") + 필요 + "A)" : ""));
+      return;
+    }
+    var r = WE.awg.recommendCable(w.current, w.cable || "");
+    if (!r) return;
+    var c = WE.awg.cable(r.cable);
+    out.title = c ? c.name + " " + c.rating + " · " + t(c.basis) + " · " + t(c.src) : "";
+    if (r.over) {
+      out.textContent = c.name + t(" 범위 초과 (필요 ") + 필요 + "A)";
+      return;
+    }
+    var e = WE.awg.get(r.awg);
+    out.textContent = t("권장 ") + (r.isDefault ? "" : c.name + " ") + r.awg + "AWG" +
+      (e ? " · Ø" + e.dia + "mm" : "") + t(" · 허용 ") + r.amp + "A (" +
+      (r.isDefault ? c.name + t(" 기준 · ") : "") + t("여유 ×") + 여유 + ")";
   }
   // 부하 부품(전력 있는 load) 체크박스 목록
   function renderWireLoadList() {
@@ -5161,6 +5494,14 @@ WE.app = (function () {
     for (var i = 0; i < pal.length; i++) if (pal[i].color === color) return pal[i].label;
     return color;
   }
+  /* 배선 → 결선표 색 이름 (2026-10-04). **연결된 팔레트 항목의 이름**을 쓴다.
+     예전(colorLabel)엔 색으로 찾아 같은 색 첫 항목 이름이 나왔다 — 빨강 「+ (전원)」 과 빨강 「모터 전원」 이 있으면
+     모터 전원 배선도 「+ (전원)」 으로 적혔다(10/04 재현). 연결이 없는 배선(옛 배선·떨어진 배선)은 예전처럼 색으로. */
+  function labelOf(w) {
+    if (!w) return "";
+    var e = WE.model.paletteEntry(w.pal);
+    return e ? e.label : colorLabel(w.color);
+  }
   /* ⚠ 예전에는 여기 wireListData(배선 한 가닥씩, 라벨 붙은 것만)가 있었다. 지웠다.
         · 라벨 붙은 배선만 담아서 목록이 거의 비었고 그래서 기능이 통째로 꺼져 있었다
         · 한 가닥씩 늘어놓으면 "이 단자에 몇 군데가 물리는지" 를 알 수 없다
@@ -5212,9 +5553,12 @@ WE.app = (function () {
                       // tid: 결선표 비고를 매다는 키. 이름은 바뀌지만 id 는 안 바뀐다.
                       cmpId: cc.id, tid: tt.id,
                       image: cc.image || (lib && lib.image) || null,
-                      color: 내배선 ? colorLabel(내배선.color) : "",
+                      color: 내배선 ? labelOf(내배선) : "",   // 연결된 항목 이름(같은 색 항목이 둘이어도 맞게 — 2026-10-04)
                       colorHex: 내배선 ? 내배선.color : "#000",
                       awg: (내배선 && 내배선.awg) || "",
+                      // 전선 종류(2026-10-04) — 규격과 같은 배선에서 읽는다(규격과 종류가 서로 다른 선 것이면 거짓말이 된다)
+                      cable: (내배선 && 내배선.cable) || "", cableName: (내배선 && 내배선.cableName) || "",
+                      cableAmp: (내배선 && 내배선.cableAmp) || "", cableSize: (내배선 && 내배선.cableSize) || "",
                       role: (lib && lib.role) || (cc.publicSnapshot && cc.publicSnapshot.role) || "load" });
         });
         if (멤버.length < 2) return;                        // 한쪽만 남은 것은 결선이 아니다
@@ -5247,10 +5591,14 @@ WE.app = (function () {
         /* 넷을 대표하는 색·굵기는 **기준 단자에 꽂히는 배선** 것을 쓴다.
            연결부 쪽 색은 멤버가 각자 들고 있다(위 참고) — 분기 구간마다 다를 수 있어서다. */
         var w0 = WE.model.getWire(net.wireIds[0]);
+        /* 전선 종류는 **규격을 가져온 그 배선**에서 같이 가져온다 — 규격은 기준 단자 배선, 없으면 넷 첫 배선(아래 awg 와 같은 순서).
+           규격이 둘 다 비었으면 종류라도 있는 쪽. (2026-10-04) */
+        var 규격원 = 기준.awg ? 기준 : (w0 && w0.awg) ? w0 : (기준.cable ? 기준 : (w0 || {}));
         out.push({
-          color: 기준.color || (w0 ? colorLabel(w0.color) : ""),
+          color: 기준.color || (w0 ? labelOf(w0) : ""),
           colorHex: 기준.colorHex || (w0 ? w0.color : "#000"),
           awg: 기준.awg || (w0 && w0.awg) || "",
+          cable: 규격원.cable || "", cableName: 규격원.cableName || "", cableAmp: 규격원.cableAmp || "", cableSize: 규격원.cableSize || "",
           origin: 기준,          // 왼쪽에 세우는 기준 단자
           targets: 상대,         // 거기서 뻗어나가는 단자들
           count: 상대.length,    // = 그 단자에서 나가야 하는 가닥 수
@@ -5394,16 +5742,22 @@ WE.app = (function () {
      넷 하나에 순번 하나 = 화면과 같은 번호. 색은 화면의 색 견본 자리 — 팔레트 이름으로 적는다. */
   function wireListExportRows() {
     var nets = netListData();
+    /* 「전선 종류」 열(2026-10-04) — 규격(AWG) 바로 앞. 화면은 한 칸(「UL1007 AWG22」)이지만 파일은 둘로 나눈다:
+       규격은 숫자로 남아야 엑셀에서 정렬되고, 종류는 제조사까지 적어(「대영전선 UL1007」) 구매 목록으로 쓸 수 있게. */
     var head = [WE.i18n.t("순번"), WE.i18n.t("부품"), WE.i18n.t("시작 단자"), WE.i18n.t("색"),
-                WE.i18n.t("연결 부품"), WE.i18n.t("연결부 단자"), WE.i18n.t("규격(AWG)"),
+                WE.i18n.t("연결 부품"), WE.i18n.t("연결부 단자"), WE.i18n.t("전선 종류"), WE.i18n.t("규격(AWG)"),
                 WE.i18n.t("배선"), WE.i18n.t("비고")];
     var rows = [];
     nets.forEach(function (net, i) {
       var awg = net.awg === "" || net.awg == null ? "" : (isFinite(Number(net.awg)) ? Number(net.awg) : net.awg);
+      /* 직접 적은 규격(1.5sq 등)은 **같은 열에 글자 그대로**(2026-10-05 고원빈) — 단위가 글자에 들어 있어 AWG 숫자와 헷갈리지 않고
+         열이 늘지 않는다. 엑셀 정렬에선 숫자 뒤에 글자가 모인다. 직접 입력 전선에서만 생긴다(awg 는 그때 비어 있다). */
+      if (net.cable === WE.awg.CUSTOM && String(net.cableSize || "").trim()) awg = String(net.cableSize).trim();
+      var kind = WE.awg.cableKind(net);
       var note = 비고읽기(비고키(net));
       net.targets.forEach(function (m) {
         rows.push([i + 1, net.origin.cmp, net.origin.term, net.color,
-                   m.cmp, m.term, awg, net.count, note]);
+                   m.cmp, m.term, kind, awg, net.count, note]);
       });
     });
     return { head: head, rows: rows, nets: nets.length };
@@ -5703,14 +6057,18 @@ WE.app = (function () {
   // 팔레트 전체를 넣으면 안 쓴 색까지 나와 칸만 길어진다. (인쇄는 pdf.js가 이 목록을 그린다)
   function legendItems() {
     var proj = WE.model.project;
-    var used = {};
+    var used = {}, 쓴항목 = {};
     // proj.wires 는 '현재 시트' 별칭이다. 그것만 보면 시트 2에만 쓴 색이
     // 인쇄물 범례에서 빠져, 보는 사람은 그 색이 무슨 뜻인지 알 길이 없다.
+    /* 연결된 배선은 **그 항목**을 쓴 것으로, 연결이 없는 배선(옛·떨어진)만 예전처럼 색으로 센다 (2026-10-04).
+       같은 색 항목이 둘이어도 실제로 쓴 항목만 범례에 나온다. */
     WE.model.allWires().forEach(function (w) {
-      if (w && w.color) used[String(w.color).toLowerCase()] = 1;
+      if (!w) return;
+      if (w.pal && WE.model.paletteEntry(w.pal)) 쓴항목[w.pal] = 1;
+      else if (w.color) used[String(w.color).toLowerCase()] = 1;
     });
     return (proj.palette || []).filter(function (p) {
-      return p && p.label && used[String(p.color).toLowerCase()];
+      return p && p.label && (쓴항목[p.id] || used[String(p.color).toLowerCase()]);
     });
   }
 

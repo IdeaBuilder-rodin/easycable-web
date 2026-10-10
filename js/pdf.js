@@ -335,6 +335,9 @@ WE.pdf = (function () {
       function wireTable(nets, startNo) {
         var t = document.createElement("table");
         t.className = "bom wl-table";
+        /* 전선 종류가 하나라도 있으면 표에 표시를 단다 — CSS(styles.css .wl-has-cable)가 규격 칸을 한 줄로 두고
+           비고 칸을 30mm 로 줄여 A4 세로 폭 안에 넣는다(2026-10-04). 종류가 없는 표(옛 도면)는 예전 모양 그대로. */
+        if (nets.some(function (g) { return g.rows.some(function (n) { return !!n.cable; }); })) t.className += " wl-has-cable";
         var head = document.createElement("thead");
         // 칸마다 t() — 화면 결선표(app.js renderWireList)와 같은 목록. HTML 통째 키는 사전과 안 맞았다(2026-09-14 영어판 검토)
         var 표머리 = ["순번", "부품", "시작", "연결 부품", "연결부 단자", "규격", "배선", "비고"];
@@ -419,7 +422,8 @@ WE.pdf = (function () {
                 var gtd = document.createElement("td");
                 gtd.className = "wl-awg";
                 if (net.count > 1) gtd.rowSpan = net.count;
-                gtd.textContent = net.awg ? "AWG" + net.awg : "";
+                // 전선 종류까지 — 「UL1007 AWG22」 (2026-10-04). 화면 결선표와 같은 함수(js/awg.js cableLabel)
+                gtd.textContent = WE.awg.cableLabel(net);
                 tr.appendChild(gtd);
               }
 

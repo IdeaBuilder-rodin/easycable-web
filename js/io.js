@@ -407,6 +407,8 @@ WE.io = (function () {
     init: init, save: save, saveAs: saveAs, clearFileHandle: clearFileHandle,
     currentFileName: currentFileName,
     loadProjectText: loadProjectText, loadProjectBuffer: loadProjectBuffer,
-    buildBundle: buildBundle   // 테스트·진단용
+    buildBundle: buildBundle,   // 테스트·진단용
+    // 테스트·진단용 — 「연 직후 수정됨이 아니다」 를 잰다(verify_pallink: 팔레트 연결이 여는 과정 안에서 끝나는가, 2026-10-04)
+    isDirty: isDirty
   };
 })();
