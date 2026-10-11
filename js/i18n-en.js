@@ -860,9 +860,19 @@ WE.i18nMaps = WE.i18nMaps || {};
     // ---- 무료/Pro 경계 (pro.js) ----
     // 숫자는 {} 자리표시자로 두고 코드에서 채운다. 문장을 조각내면 어순이 깨진다.
     // 제목 — 어느 쪽 때문에 막혔는지로 갈린다
-    "배선 한도에 도달했습니다": "Wire limit reached",
-    "부품 한도에 도달했습니다": "Component limit reached",
-    "무료 한도에 도달했습니다": "Free plan limit reached",
+    // 무료 한도 창(10/11) — 머리 「무료 한도 초과」 + 제목 「무엇을 더 할 수 없나」
+    "무료 한도 초과": "Free limit exceeded",
+    "배선을 더 추가할 수 없습니다": "You can't add more wires",
+    "부품을 더 추가할 수 없습니다": "You can't add more components",
+    "배선과 부품을 더 추가할 수 없습니다": "You can't add more wires or components",
+    "페이지를 더 추가할 수 없습니다": "You can't add more pages",
+    // 머리 작은 줄 — 이름·숫자 한 문장 키(따로 번역해 붙였더니 「Part 13 / 10」 이 나왔다 — js/pro.js 사용량)
+    "배선 {n} / {max}": "Wires {n} / {max}",
+    "부품 {n} / {max}": "Components {n} / {max}",
+    "도면 페이지 {n} / {max}": "Pages {n} / {max}",
+    "배선 {n}/{max}": "Wires {n}/{max}",
+    "부품 {n}/{max}": "Components {n}/{max}",
+    "페이지 {n}/{max}": "Pages {n}/{max}",
 
     // 현재 상태 — 상태줄과 모달 본문에 같은 문장을 쓴다
     "배선 {w}/{wmax} · 부품 {c}/{cmax}": "Wires {w}/{wmax} · Components {c}/{cmax}",
@@ -875,25 +885,25 @@ WE.i18nMaps = WE.i18nMaps || {};
     "무료 버전은 배선 {wmax}개 · 부품 {cmax}개까지입니다.": "The free plan allows {wmax} wires and {cmax} components.",
     "열어서 보거나 지우는 것은 됩니다. 새로 추가하는 것만 막힙니다.": "You can still open, view and delete. Only adding new items is blocked.",
 
-    // 한도 창의 결제 버튼 · 안심 문구 · 돌아왔을 때 Pro 적용 알림 — 2026-09-28 (pro.js)
-    "Pro로 계속 그리기": "Continue with Pro",
-    "지금까지 그린 도면은 그대로 저장돼 있습니다.": "Everything you've drawn so far is saved.",
-    "Pro로 바꾸면 부품·배선·페이지 제한 없이 이어서 그리고, 내보내기·인쇄 워터마크도 빠집니다.": "With Pro you can keep going with no limit on parts, wires or pages, and exports and prints have no watermark.",
+    // 무료 한도 창(#limitModal) — 2026-10-11. 「막힌 것 + 업그레이드하면 되는 것」 한 줄(Figma 문구 틀 — 영어도 그 말투).
+    // (9/28 의 「Pro로 계속 그리기」 · 안심 문구 2줄은 10/11 에 뺐다)
+    "Pro로 업그레이드": "Upgrade to Pro",
+    "Pro로 업그레이드하면 배선을 무제한으로 그릴 수 있습니다.": "Upgrade to Pro for unlimited wires.",
+    "Pro로 업그레이드하면 부품을 무제한으로 놓을 수 있습니다.": "Upgrade to Pro for unlimited components.",
+    "Pro로 업그레이드하면 배선과 부품을 무제한으로 쓸 수 있습니다.": "Upgrade to Pro for unlimited wires and components.",
+    "Pro로 업그레이드하면 페이지를 무제한으로 만들 수 있습니다.": "Upgrade to Pro for unlimited pages.",
+    "이 작업에는 배선 {w}개가 필요합니다.": "This action needs {w} wires.",
+    "이 작업에는 부품 {c}개가 필요합니다.": "This action needs {c} components.",
+    // 다른 탭에서 결제하고 돌아왔을 때 Pro 적용 알림 — 2026-09-28 (pro.js)
     "이제 제한 없이 이어서 그릴 수 있습니다.": "You can keep drawing without limits.",
 
     // 도면 페이지(시트) 한도 — 2026-09-06 신설
-    "페이지 한도에 도달했습니다": "Page limit reached",
     "도면 페이지 {n}/{max}": "Pages {n}/{max}",
     "무료 버전은 도면 하나에 페이지 {max}장까지 만들 수 있습니다.": "The free plan allows up to {max} pages per project.",
 
-    // 파일 내보내기(CSV·엑셀)는 Pro 전용 — 화면에서 보는 것은 무료다
-    "Pro 전용 기능입니다": "This is a Pro feature",
-    "BOM·결선표를 CSV·엑셀 파일로 내보내는 것은 Pro 이용권이 필요합니다.": "Exporting the BOM and connection table to CSV or Excel requires a Pro plan.",
-    "화면에서 보고 인쇄하는 것은 무료로 그대로 쓸 수 있습니다.": "Viewing and printing them on screen stays free.",
+    // (2026-10-11) 「CSV·엑셀은 Pro 전용」 안내 문구 3개를 지웠다 — 표 내보내기는 무료도 된다(js/app.js exportBomCSV 위)
 
-    // 위 checkOpened 문구에 페이지 수가 붙었다
-    "이 도면에는 배선 {w}개 · 부품 {c}개 · 페이지 {s}장이 있습니다.": "This project has {w} wires, {c} components and {s} pages.",
-    "무료 버전은 배선 {wmax}개 · 부품 {cmax}개 · 페이지 {smax}장까지입니다.": "The free plan allows {wmax} wires, {cmax} components and {smax} pages.",
+    // (2026-10-11) 한도 넘는 도면 안내의 「이 도면에는 … 있습니다 / 무료 버전은 … 까지입니다」 두 줄은 뺐다 — 머리 숫자 「35 / 30」 이 대신한다
 
     // 결선표 엑셀 파일 이름
     "_결선표.xlsx": "_connections.xlsx",
@@ -1320,15 +1330,7 @@ WE.i18nMaps = WE.i18nMaps || {};
     "이용권이 적용되었습니다": "Your plan has been applied",
     "결제가 확인되어 이용권이 적용되었습니다.": "Payment confirmed — your plan has been applied.",
     "HEX 색상": "HEX color",
-    // ===== 정식 출시 안내 모달 (2026-09-30 · 10/12 이 지나면 함께 지운다) =====
-    // 「무료」 는 다른 곳에서 이미 쓰는 키를 그대로 쓴다 · 「2026」「10.12」「Pro」 는 한글이 없어 번역하지 않는다
-    "정식 출시": "Official launch",
-    "이지케이블이 정식 출시됩니다": "EasyCable is officially launching",
-    "10월 12일(월)부터 무료·Pro 요금제가 적용됩니다.": "Free and Pro plans apply from Monday, October 12.",
-    "부품 10개 · 배선 30개 · 도면 1장 · 워터마크 있음": "10 parts · 30 wires · 1 page · watermark",
-    "모두 무제한 · 워터마크 없음": "Everything unlimited · no watermark",
-    "요금제 확인하기": "See plans",
-    "오늘 하루 보지 않기": "Don't show again today",
+    // (정식 출시 안내 모달 문구는 10/11 모달과 함께 지웠다)
     // ===== 환영 모달 =====
     "작업물은": "Your work is",
     "이 브라우저에 자동 저장": "saved automatically in this browser",

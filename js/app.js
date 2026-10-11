@@ -60,7 +60,8 @@ WE.app = (function () {
     bindSettings();
     bindModalBackdrops();
     bindWelcome();
-    bindLaunchNotice();
+    // (bindLaunchNotice — 정식 출시 안내 모달은 10/11 에 지웠다. 오늘 밤 배포로 「10/12 부터」 를 알릴 일이 끝났다)
+    bindLimitModal();   // 무료 한도 창 — 출시 안내 모달의 모양을 물려받았다(2026-10-11)
     bindFeedback();
     bindQuickColorPicker();
     bindHelp();
@@ -162,10 +163,9 @@ WE.app = (function () {
     WE.store.claimCurrent();   // 이 문서는 내가 편집한다고 표시 (다른 탭이 겹쳐 열지 않게)
     // 되살린 시점을 즉시 스냅샷으로 남긴다 — 바로 '새 배선도로 시작'을 눌러도 되돌릴 수 있게
     WE.store.pushSnapshot();
-    /* 「지난 작업을 이어서 불러왔습니다」 — 10/12 정식 출시 전까지는 띄우지 않는다(2026-09-30 고원빈).
-       그동안은 들어올 때 출시 안내 모달이 뜨는데, 이 알림이 그 뒤에서 같이 떴다가 안 보인 채 사라졌다.
-       10/12 0시(출시안내끝)부터는 코드를 고치지 않아도 다시 뜬다. 복원 자체는 그대로 된다 */
-    if (Date.now() >= 출시안내끝) showRestoreBanner(saved._savedAt);
+    /* 「지난 작업을 이어서 불러왔습니다」 — 9/30~10/11 에는 출시 안내 모달 뒤에 가려져서 안 띄웠다.
+       10/11 에 그 모달을 지웠으므로 다시 늘 띄운다(원래 동작). */
+    showRestoreBanner(saved._savedAt);
     return true;
   }
 
@@ -2462,42 +2462,16 @@ WE.app = (function () {
     setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
   }
 
-  /* 표 내보내기는 Pro 전용이다 (2026-09-06).
-     화면에서 보는 것·인쇄하는 것은 무료로 그대로 둔다 — 막는 것은 '파일로 빼는 것'뿐이다.
-
-     ⚠ 기준이 limited() 인 이유 (watermark() 와 일부러 다르다).
-        limited() 는 FREE_LIMIT 을 함께 본다. 심사 기간에는 그 값이 false 라
-        아무도 안 막힌다 — 그게 맞다. 아직 실결제가 안 되는 때(포트원 테스트 채널)
-        내보내기를 막으면 "막히는데 살 수는 없는" 상태가 되고, 그건 FREE_LIMIT 을
-        만든 이유 그 자체다(js/flags.js). 개수 한도만 그 규칙을 따르고 내보내기는
-        안 따르면 같은 실수를 다시 하는 것이다.
-
-        워터마크는 반대로 isPro() 를 본다 — 그건 **막는 것이 아니라** 결과물에
-        서명을 남기는 것이라, 심사 기간에도 남겨야 Pro 의 값어치가 보인다.
-
-     ⚠ 실채널로 넘어가면서 FREE_LIMIT 을 true 로 되돌리면 이 차단도 함께 켜진다.
-        스위치가 하나라 되돌리는 것을 잊을 수가 없다. */
-  function 내보내기막힘() {
-    if (!WE.pro || !WE.pro.limited()) return false;
-    if (WE.app && WE.app.notice) {
-      WE.app.notice(
-        WE.i18n.t("Pro 전용 기능입니다"),
-        WE.i18n.t("BOM·결선표를 CSV·엑셀 파일로 내보내는 것은 Pro 이용권이 필요합니다.")
-        + "\n\n"
-        + WE.i18n.t("화면에서 보고 인쇄하는 것은 무료로 그대로 쓸 수 있습니다.")
-      );
-    }
-    return true;
-  }
-
+  /* 표 내보내기(BOM·결선표 CSV·엑셀)는 **무료·Pro 모두 된다** (2026-10-11 고원빈).
+     9/06 에 Pro 전용 게이트(내보내기막힘)를 넣었고, 요금제 화면은 9/11 부터 무료 카드에도 이 항목을 적었는데
+     코드만 그대로 남아 있었다 — FREE_LIMIT 을 켜는 출시일(10/12)에 무료 손님이 막힐 뻔했다.
+     무료·Pro 의 차이는 개수·페이지 한도와 워터마크뿐이다(js/pro.js). 검사: tests/verify_plan.mjs 「무료도 된다」 */
   function exportBomCSV() {
-    if (내보내기막힘()) return;
     csvDownload((WE.model.project.meta.name || "BOM") + "_BOM.csv", bomExportRows());
   }
 
   /* 엑셀(.xlsx) — CSV 와 같은 표를 진짜 엑셀 파일로 낸다(js/xlsx.js). */
   function exportBomXlsx() {
-    if (내보내기막힘()) return;
     var t = bomExportRows();
     WE.xlsx.download((WE.model.project.meta.name || "BOM") + "_BOM.xlsx",
       [{ name: "BOM", headRows: 1, rows: [t.head].concat(t.rows) }]);
@@ -3598,71 +3572,70 @@ WE.app = (function () {
         여기 것은 보조 안내였다. (로그인할 때는 별도 동의 절차가 그대로 있다) */
   var SHOW_WELCOME = false;
 
-  /* ---- 정식 출시 안내 모달 (2026-09-30 고원빈) ------------------------
-     10/12 정식 출시일부터 요금제(무료 한도)가 켜진다. 매일 들어오는 사람에게 미리, 착오 없게 알린다.
+  /* ---- 무료 한도 창 (2026-10-11 고원빈) ------------------------
+     무료 한도에 막힐 때 뜬다. js/pro.js 는 지금처럼 WE.app.notice(제목, 설명, opts) 를 부르고,
+     opts.limit = { count: "배선 30 / 30" } 이 오면 공용 안내 창(#noticeModal) 대신 이 창(#limitModal)에 그린다.
+     ⚠ 같은 notice() 를 거치게 한 이유 — 「안내가 떴나」 를 notice 가로채기로 세는 검사(verify_prolimit)와
+        「이미 떠 있으면 또 열지 않는다」(isNoticeOpen) 규칙을 그대로 살리려고.
+     모양·초점·키보드는 정식 출시 안내 모달(9/30~10/11 — 오늘 밤 배포로 목적이 끝나 지웠다)의 것을 물려받았다. */
+  var _limitPrevFocus = null;   // 닫을 때 초점을 돌려줄 자리 (W3C 대화상자 패턴)
+  /* 「Pro로 업그레이드」 가 할 일 — 공용 안내 창의 _noticeRun 과 **따로** 둔다(10/11 버그 분석).
+     같이 쓰면 한도 창이 떠 있는 동안 다른 안내(다른 탭에서 결제하고 돌아오면 뜨는 「이용권이 적용되었습니다」 등)가
+     그 변수를 비워서, 한도 창의 주 버튼을 눌러도 요금제가 안 열리고 창만 닫혔다. */
+  var _limitRun = null;
 
-     언제 뜨나 — 둘 다 맞아야 한다
-       · 출시 전: Date.now() < 출시안내끝(10/12 0시 한국). **그날이 되면 코드를 고치지 않아도 안 뜬다.**
-         (출시 알림 버튼처럼 목적이 끝났는데 잊혀 남는 일을 막는다 — 9/30 에 그걸 지웠다)
-       · 「오늘 하루 보지 않기」 를 안 눌렀다: 누르면 **한국 시각 오늘 자정까지** 안 뜬다(localStorage)
-     그 밖에는 **들어올 때마다(새로고침 포함) 뜬다** — 끄는 길은 「오늘 하루 보지 않기」 하나뿐이다.
-     (10/01 고원빈 「닫기 누르고 새로고침하면 다시 떠야 하지 않아?」 — 착오 없게 계속 안내한다는 목적에 맞다)
-     ⚠ 시간은 Date.now() 한 곳에서만 읽는다 — 검사(verify_launchnotice)가 시계를 바꿔 10/12 이후를 흉내 낸다.
-     10/12 이 지나면 이 블록·app.html 의 #launchModal·styles.css 의 .launch-*·그 검사를 함께 지워도 된다. */
-  var 출시안내끝 = Date.parse("2026-10-12T00:00:00+09:00");
-  var 출시안내숨김키 = "we_launchHideUntil";
-
-  // 한국 시각 「오늘」 의 다음 자정. 사용자 컴퓨터의 시간대와 상관없이 한국 날짜로 끊는다
-  function 한국다음자정(ms) {
-    var 날 = new Date(ms + 9 * 3600000).toISOString().slice(0, 10);   // 한국 시각의 날짜 YYYY-MM-DD
-    return Date.parse(날 + "T00:00:00+09:00") + 86400000;
+  function limitNotice(title, text, opts) {
+    var modal = document.getElementById("limitModal");
+    var L = opts.limit || {};
+    // 큰 글자 「무료 한도 초과」 는 마크업에 고정 — 여기는 그 아래 작은 줄 「배선 30 / 30」 만 채운다(10/11 고원빈).
+    // 문장은 js/pro.js 사용량() 이 번역까지 끝내서 준다(이름·숫자 한 문장 키)
+    document.getElementById("limitCount").textContent = L.count || "";
+    document.getElementById("limitTitle").textContent = title;
+    document.getElementById("limitText").textContent = text || "";
+    _limitRun = (typeof opts.run === "function") ? opts.run : null;
+    var go = document.getElementById("limitGo");
+    go.hidden = !_limitRun;
+    if (opts.label) go.textContent = opts.label;
+    if (opts.dismiss) document.getElementById("limitLater").textContent = opts.dismiss;
+    modal.hidden = false;
+    /* 열리면 초점을 **상자**로 옮긴다 — 화면낭독기가 창 제목부터 읽고, Tab 이 창 안에서 시작한다.
+       ⚠ 버튼에 focus() 를 주지 않는다 — 검은 포커스 링이 버튼 테두리처럼 보인다(2026-09-03 고원빈 지적).
+       초기화 뒤 다른 코드가 초점을 가져갈 수 있어 한 박자 뒤에 한 번 더 옮긴다 */
+    _limitPrevFocus = document.activeElement;
+    var 상자 = modal.querySelector(".limit-box");
+    if (상자) { 상자.focus(); setTimeout(function () { if (!modal.hidden) 상자.focus(); }, 0); }
   }
 
-  function bindLaunchNotice() {
-    var modal = document.getElementById("launchModal");
+  function bindLimitModal() {
+    var modal = document.getElementById("limitModal");
     if (!modal) return;
-    var 지금 = Date.now();
-    var 숨길때까지 = 0;
-    try { 숨길때까지 = Number(localStorage.getItem(출시안내숨김키) || 0); } catch (e) { /* 무시 */ }
-    var 상자 = modal.querySelector(".launch-box");
-    var 이전초점 = null;   // 닫을 때 초점을 돌려줄 자리 (W3C 대화상자 패턴)
-    if (지금 < 출시안내끝 && 지금 >= 숨길때까지) {
-      modal.hidden = false;
-      /* 열리면 초점을 **상자**로 옮긴다 — 화면낭독기가 창 제목부터 읽고, Tab 이 창 안에서 시작한다.
-         ⚠ 버튼에 focus() 를 주지 않는다 — 검은 포커스 링이 버튼 테두리처럼 보인다(2026-09-03 고원빈 지적).
-            상자는 tabindex=-1 이고 styles.css 에서 테두리를 끈다.
-         초기화 뒤 다른 코드가 초점을 가져갈 수 있어 한 박자 뒤에 한 번 더 옮긴다 */
-      이전초점 = document.activeElement;
-      if (상자) { 상자.focus(); setTimeout(function () { if (!modal.hidden) 상자.focus(); }, 0); }
-    }
-
-    /* 닫는 길은 넷 — 「오늘 하루 보지 않기」 만 숨김을 남긴다(10/01 고원빈 — 끄는 길은 그것 하나뿐)
-         · 「오늘 하루 보지 않기」(글자 버튼) → 누르는 즉시 한국 자정까지 숨김 + 닫기. 체크하고 또 닫을 필요 없게(한국 사이트 관례)
-         · ✕ · 바탕 누르기(MODAL_CLOSE_MAP 이 ✕ 를 누른다) · Esc → 닫기만 — 새로고침하면 또 뜬다
-         · 「요금제 확인하기」 → 요금제는 새 탭으로 열리고(링크 기본 동작) 이 창은 닫는다 — 숨김은 남기지 않는다 */
-    function 닫기(오늘숨김) {
-      if (오늘숨김) {
-        try { localStorage.setItem(출시안내숨김키, String(한국다음자정(Date.now()))); } catch (e) { /* 무시 */ }
-      }
+    var 상자 = modal.querySelector(".limit-box");
+    function 닫기() {
       modal.hidden = true;
-      try { if (이전초점 && 이전초점.focus && 이전초점 !== document.body) 이전초점.focus(); else if (상자) 상자.blur(); } catch (e) { /* 무시 */ }
+      try { if (_limitPrevFocus && _limitPrevFocus.focus && _limitPrevFocus !== document.body) _limitPrevFocus.focus(); else if (상자) 상자.blur(); } catch (e) { /* 무시 */ }
     }
-    document.getElementById("launchToday").addEventListener("click", function () { 닫기(true); });
-    document.getElementById("launchX").addEventListener("click", function () { 닫기(false); });
-    document.getElementById("launchGo").addEventListener("click", function () { 닫기(false); });   // 기본 동작(새 탭)은 막지 않는다
+    /* 닫는 길 — ✕ · 「나중에 하기」 · 바탕 누르기(MODAL_CLOSE_MAP 이 「나중에 하기」 를 누른다) · Esc.
+       「Pro로 업그레이드」 는 **먼저 닫고** 요금제를 연다 — 새 탭에서 돌아오면 작업 화면이 그대로 보이게(공용 안내 창과 같은 순서) */
+    document.getElementById("limitX").addEventListener("click", 닫기);
+    document.getElementById("limitLater").addEventListener("click", 닫기);
+    document.getElementById("limitGo").addEventListener("click", function () {
+      var run = _limitRun;
+      닫기();
+      if (run) run();
+    });
 
     /* 키보드 — 이 앱에는 「모든 모달을 Esc 로 닫는」 공용 규칙이 없어 모달마다 따로 붙인다.
-       · Esc · Enter → 닫기(숨김 없음)
-         ⚠ 버튼·링크 위의 Enter 는 브라우저가 이미 누른다 — 여기서 또 누르면 두 번 눌리고,
-            「요금제 확인하기」 가 안 열리고 창만 닫힌다. 그래서 그 둘에서는 가로채지 않는다
+       · Esc · Enter → 닫기(「나중에 하기」 와 같다)
+         ⚠ 버튼 위의 Enter 는 브라우저가 이미 누른다 — 여기서 또 누르면 두 번 눌리고,
+            「Pro로 업그레이드」 가 안 열리고 창만 닫힌다. 그래서 버튼 위에서는 가로채지 않는다
        · Tab → 창 안에서만 돈다(W3C 대화상자 패턴 — 뒤의 에디터로 초점이 빠져나가지 않게) */
     document.addEventListener("keydown", function (e) {
       if (modal.hidden) return;
-      /* ⚠ 다른 창이 함께 열려 있으면 키를 건드리지 않는다 (2026-10-01 버그 — 실측으로 잡음).
-         이 창이 떠 있는 동안 위에 로그인 창이 함께 뜨는 길이 있다 — 에디터를 열자마자 「다른 PC에서 접속」 으로 밀려났을 때,
+      /* ⚠ 다른 창이 함께 열려 있으면 키를 건드리지 않는다 (2026-10-01 출시 안내 모달 버그 — 실측으로 잡음. 같은 길이 이 창에도 있다).
+         이 창이 떠 있는 동안 위에 로그인 창이 함께 뜨는 길이 있다 — 「다른 PC에서 접속」 으로 밀려났을 때,
          랜딩에서 ?auth=login 으로 넘어와 로그인 창이 바로 열릴 때. 그때 이 처리가 위 창의 키를 가로채서
            · Tab  → 커서를 뒤에 깔린 이 창의 ✕ 로 끌어갔다(이메일 다음 비밀번호로 못 감)
-           · Enter(로그인 제출) → 뒤의 이 창이 몰래 닫혀 출시 안내를 못 보고 지나갔다
+           · Enter(로그인 제출) → 뒤의 이 창이 몰래 닫혀 안내를 못 보고 지나갔다
            · Esc  → 로그인 창과 이 창이 한꺼번에 닫혔다
          원인은 이 앱에 「맨 위 창만 키를 받는」 공용 규칙이 없다는 것. 공용 규칙(창 48개 수정)은 출시 직전엔 위험해서
          이 창만 물러서게 했다 — 뒤에 깔린 창은 키를 받지 않는다. 위 창이 닫히면 아래 처리가 그대로 다시 산다.
@@ -3679,8 +3652,8 @@ WE.app = (function () {
         return;
       }
       if (e.key !== "Escape" && e.key !== "Enter") return;
-      if (e.key === "Enter" && e.target && e.target.closest && e.target.closest("#launchModal a, #launchModal button")) return;
-      닫기(false);
+      if (e.key === "Enter" && e.target && e.target.closest && e.target.closest("#limitModal button")) return;
+      닫기();
     }, true);   /* ⚠ 캡처 단계(true)로 듣는다 — 「다른 창이 열려 있는가」 를 키를 누른 **그 순간** 의 상태로 봐야 한다.
                    로그인 창의 Esc 처리(auth.js)가 먼저 등록돼 먼저 돌며 자기를 닫는데, 그 뒤에 이 처리가 돌면
                    「다른 창 없음」 으로 보여 이 창까지 닫혔다(Esc 한 번에 둘 다 닫힘 — 실측). 캡처는 그 처리들보다 먼저 돈다.
@@ -3815,7 +3788,7 @@ WE.app = (function () {
     libEditModal: "libEditCancel",
     bgModal: "bgCancel",
     welcomeModal: "welcomeStart",
-    launchModal: "launchX",    // 바탕을 누르면 ✕ 와 같다 — 닫기만(숨김 없음)
+    limitModal: "limitLater",  // 무료 한도 창 — 바탕을 누르면 「나중에 하기」 와 같다(2026-10-11, 출시 안내 모달 자리)
     helpModal: "helpClose",
     feedbackModal: "feedbackClose",
     historyModal: "historyClose"
@@ -5766,7 +5739,6 @@ WE.app = (function () {
   function exportWireListCSV() {
     var t = wireListExportRows();
     if (!t.nets) { setHint(wireListEmptyHint()); return; }
-    if (내보내기막힘()) return;
     csvDownload((WE.model.project.meta.name || WE.i18n.t("배선도")) + WE.i18n.t("_결선표.csv"), t);
     setHint(WE.i18n.t("결선표 내보내기: ") + t.nets + WE.i18n.t("개 넷"));
   }
@@ -5774,7 +5746,6 @@ WE.app = (function () {
   function exportWireListXlsx() {
     var t = wireListExportRows();
     if (!t.nets) { setHint(wireListEmptyHint()); return; }
-    if (내보내기막힘()) return;
     WE.xlsx.download((WE.model.project.meta.name || WE.i18n.t("배선도")) + WE.i18n.t("_결선표.xlsx"),
       [{ name: WE.i18n.t("결선표"), headRows: 1, rows: [t.head].concat(t.rows) }]);
     setHint(WE.i18n.t("결선표 내보내기: ") + t.nets + WE.i18n.t("개 넷"));
@@ -6417,11 +6388,14 @@ WE.app = (function () {
   // 화면 가운데서 한 번 막고 알린다. 되돌릴 수 없는 실패에만 쓴다 —
   // 성공·진행 상황까지 이걸로 알리면 곧 닫기 바쁜 창이 되어 정작 중요한 순간에도 안 읽힌다.
   /* opts(선택) = { label, dismiss, run } — 안내에 '할 일' 버튼을 붙인다 (2026-09-28).
-     무료 한도 창이 쓴다: 「Pro로 계속 그리기」(주 버튼) + 「나중에 하기」. 누르면 창을 닫고 run() 을 부른다.
+     (무료 한도 창은 10/11 부터 opts.limit 으로 전용 창 #limitModal 에 그린다 — limitNotice. 버튼 「Pro로 업그레이드」 + 「나중에 하기」)
+     누르면 창을 닫고 run() 을 부른다.
      ⚠ 매번 처음 모양으로 되돌린다 — 안 그러면 앞선 한도 창의 버튼·글자가 다음 평범한 안내에 남는다.
      ⚠ 초점은 「나중에 하기」에 둔다 — 막힌 순간 습관처럼 Enter 를 눌렀는데 결제 페이지가 열리면 불쾌하다. */
   var _noticeRun = null;
   function notice(title, text, opts) {
+    // 무료 한도 안내(opts.limit — js/pro.js)는 전용 창에 그린다(2026-10-11). 그 밖의 안내는 아래 공용 창 그대로.
+    if (opts && opts.limit && document.getElementById("limitModal")) { limitNotice(title, text, opts); return; }
     var m = document.getElementById("noticeModal");
     if (!m) { alert(title + "\n\n" + (text || "")); return; }   // 마크업이 없으면 최소한 알리기는 한다
     document.getElementById("noticeTitle").textContent = title;
@@ -6445,7 +6419,8 @@ WE.app = (function () {
      또 열지 않으려고 쓴다. (겹치는 것만 막고, 닫은 뒤에는 다시 뜬다) */
   function isNoticeOpen() {
     var m = document.getElementById("noticeModal");
-    return !!(m && !m.hidden);
+    var L = document.getElementById("limitModal");   // 무료 한도 창도 안내 창이다 — 떠 있는 동안 또 열지 않게(2026-10-11)
+    return !!(m && !m.hidden) || !!(L && !L.hidden);
   }
   function bindNotice() {
     var m = document.getElementById("noticeModal"); if (!m) return;

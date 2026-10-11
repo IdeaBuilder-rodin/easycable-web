@@ -28,7 +28,7 @@
           데이터시트(1400) · 공용부품 게시(680) · 환영(500) 창도 같이 560px 이 됐다.
           (2026-09-02 고원빈 보고 — "공용 부품 창이 갑자기 작아져서 내용이 안 보인다") -->
   <link rel="stylesheet" href="auth.css?v=0880ba8a" />
-  <link rel="stylesheet" href="styles.css?v=2080eadc" />
+  <link rel="stylesheet" href="styles.css?v=a658034a" />
   <!-- 첫 화면이 그려지기 **전에** 두 가지를 걸어 둔다 (2026-09-30 고원빈 「새로고침하면 버튼이 움직인다」)
        ① 「로그인 확인 중」 — 확인이 끝나기 전에는 계정 자리에 회색 동그라미만 둔다.
           없으면 로그인한 사람에게도 「로그인」 글자가 먼저 보였다가 아바타로 바뀌며 [저장]·[피드백] 이 움직였다.
@@ -830,7 +830,7 @@
       <p id="noticeText" style="line-height:1.6"></p>
       <div class="modal-actions">
         <button id="noticeOk" type="button" class="primary">확인</button>
-        <!-- '할 일' 버튼 — 무료 한도 창의 「Pro로 계속 그리기」 처럼 안내에 행동이 붙을 때만 보인다 (2026-09-28).
+        <!-- '할 일' 버튼 — 안내에 행동이 붙을 때만 보인다 (2026-09-28. 무료 한도 창은 10/11 부터 아래 #limitModal 로 옮겼다).
              평소에는 숨겨 두고, 보일 때는 이게 주 버튼이 되고 확인은 「나중에 하기」로 물러난다(app.js notice). -->
         <button id="noticeAction" type="button" class="primary" hidden></button>
       </div>
@@ -1238,42 +1238,40 @@
     </div>
   </div>
 
-  <!-- 정식 출시 안내 (2026-09-30 고원빈) — 10/12 출시일부터 요금제(무료 한도)가 켜지므로
-       매일 들어오는 사람에게 미리, 착오 없게 알린다. 에디터에 들어오면 뜨고 「오늘 하루 보지 않기」 로만 하루 끈다.
-       10/12 0시(한국)가 되면 코드를 고치지 않아도 안 뜬다(js/app.js bindLaunchNotice).
-       모양은 10/01 고원빈과 다듬은 최종 시안 — 실제 공지 모달 사례(Phrase·Figma: 위 절반 그림 · 제목 한 줄 · 설명 한 줄 · 버튼 하나)를 따랐다.
-         · 머리 그림: 파란 바탕 + 로고의 세 가닥을 「모양만」 옅게(피복 → 직각으로 꺾여 → 커넥터) · 「2026 / 10.12 / 정식 출시」 를 가장 크게
-         · 무료·Pro 는 한 줄씩 — 숫자는 js/pro.js 의 LIMIT·COMP_LIMIT·SHEET_LIMIT 과 pricing.html 무료 카드와 **같아야 한다.**
-         · 「오늘 하루 보지 않기」 는 누르면 바로 닫히는 글자 버튼(한국 사이트 관례 — 체크하고 또 닫을 필요 없게)
-       ⚠ 랜딩(index.html)에는 넣지 않는다 — 루트가 랜딩이라 심사자가 거기로 들어온다. 알아야 할 사람은 에디터에 있다.
+  <!-- 무료 한도 창 (2026-10-11 고원빈) — 무료 한도에 막힐 때마다 뜬다.
+       부르는 길: js/pro.js deny · denySheet · checkOpened → WE.app.notice(제목, 설명, { limit: … }) → js/app.js limitNotice
+       ⚠ 예전(9/28~10/11)엔 공용 안내 창(#noticeModal)에 네 문단 글로 띄웠다 — 「구구절절하다」(10/11 고원빈).
+       모양은 정식 출시 안내 모달(9/30~10/11, 오늘 밤 배포로 목적이 끝나 지웠다)의 틀을 줄여 물려받았다:
+         파란 머리 그림(로고 세 가닥 무늬) 에 「지금 / 한도」 숫자 → 제목 한 줄 → 설명 한 줄 → 큰 버튼 → 글자 버튼.
+       문구는 「막힌 것 + 업그레이드하면 되는 것」 둘만 — Figma 공식 문구 틀
+         「The Starter plan only comes with 3 pages. Upgrade to Professional for unlimited pages.」 (몇 개까지인지는 머리 숫자가 보여 준다)
        접근성 — role="dialog"·aria-modal·제목 연결, 열리면 초점이 상자(tabindex=-1)로 간다(W3C 대화상자 패턴). -->
-  <div id="launchModal" class="modal" hidden>
-    <div class="modal-box launch-box" role="dialog" aria-modal="true" aria-labelledby="launchTitle" tabindex="-1">
-      <button type="button" class="launch-x" id="launchX" aria-label="닫기">✕</button>
-      <div class="launch-hero">
-        <!-- 옅은 배선 무늬 — 로고(assets/logo.svg)의 세 가닥을 흰 선으로만. 화면낭독기는 읽지 않는다 -->
-        <svg class="launch-wires" viewBox="0 0 440 210" aria-hidden="true">
+  <div id="limitModal" class="modal" hidden>
+    <!-- 화면낭독기 — 창 이름 = 「무료 한도 초과」 + 제목, 설명 = 숫자 줄 + 설명(10/11 Codex 지적: 예전엔 제목만 이름이었다).
+         제목 태그(h2)로 바꾸지 않는다 — .modal-box h3 같은 전역 규칙이 얹힌다. 대신 id 로 묶는다 -->
+    <div class="modal-box limit-box" role="dialog" aria-modal="true" aria-labelledby="limitHead limitTitle" aria-describedby="limitCount limitText" tabindex="-1">
+      <button type="button" class="limit-x" id="limitX" aria-label="닫기">✕</button>
+      <div class="limit-hero">
+        <!-- 옅은 배선 무늬 — 로고(assets/logo.svg)의 세 가닥을 흰 선으로만(출시 모달 것 그대로, 머리가 낮아져 보이는 칸만 잘랐다) -->
+        <svg class="limit-wires" viewBox="0 60 440 130" aria-hidden="true">
           <g fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
             <rect x="-20" y="150" width="70" height="40" rx="9" />
             <path d="M50 160 H120 V96 H372" /><path d="M50 170 H134 V108 H372" /><path d="M50 180 H148 V120 H372" />
             <rect x="372" y="84" width="54" height="48" rx="8" />
           </g>
         </svg>
-        <p class="launch-yr">2026</p>
-        <p class="launch-dt">10.12</p>
-        <p class="launch-ln">정식 출시</p>
+        <!-- 큰 글자는 다섯 경우 모두 「무료 한도 초과」 로 통일(10/11 고원빈 — 그리다 막히든 넘는 도면을 열든 손님에겐 같은 상황).
+             처음엔 큰 글자가 「31 / 30」 이었는데 「창이 뜨자마자 이게 뭐지?」 가 된다(고원빈) → 무슨 창인지 먼저, 숫자는 그 아래 작게 -->
+        <p class="limit-head" id="limitHead">무료 한도 초과</p>
+        <p class="limit-count" id="limitCount"></p>
       </div>
-      <div class="launch-body">
+      <div class="limit-body">
         <!-- 제목을 <p> 로 둔다 — h2·h3 는 다른 모달 규칙(.modal-box h3 등)이 얹힐 수 있다 -->
-        <p class="launch-title" id="launchTitle">이지케이블이 정식 출시됩니다</p>
-        <p class="launch-sub">10월 12일(월)부터 무료·Pro 요금제가 적용됩니다.</p>
-        <div class="launch-plans">
-          <div><b>무료</b><span>부품 10개 · 배선 30개 · 도면 1장 · 워터마크 있음</span></div>
-          <div class="launch-plan-pro"><b>Pro</b><span>모두 무제한 · 워터마크 없음</span></div>
-        </div>
-        <!-- 새 탭 — 그리던 도면을 두고 이 창을 떠나지 않게. 누르면 이 창은 닫힌다(js/app.js) -->
-        <a class="launch-go" id="launchGo" href="pricing.html" target="_blank" rel="noopener">요금제 확인하기</a>
-        <button type="button" class="launch-today" id="launchToday">오늘 하루 보지 않기</button>
+        <p class="limit-title" id="limitTitle"></p>
+        <p class="limit-sub" id="limitText"></p>
+        <!-- 요금제는 새 탭으로 연다(js/pro.js 요금제열기) — 그리던 도면을 덮지 않게 -->
+        <button type="button" class="limit-go" id="limitGo">Pro로 업그레이드</button>
+        <button type="button" class="limit-later" id="limitLater">나중에 하기</button>
       </div>
     </div>
   </div>
@@ -1575,7 +1573,7 @@
 
   <!-- 스크립트: file:// 호환 위해 일반 script (모듈 아님), 순서 중요 -->
   <script src="js/authmodal.js?v=2bee75f1"></script>  <!-- 로그인 창 마크업. auth.js 보다 먼저 꽂혀 있어야 한다 -->
-  <script src="js/flags.js?v=d53ae8fb"></script>   <!-- 맨 앞: 다른 파일이 WE.flags 를 보고 동작을 정한다 -->
+  <script src="js/flags.js?v=8ec58a06"></script>   <!-- 맨 앞: 다른 파일이 WE.flags 를 보고 동작을 정한다 -->
   <script src="js/auth.js?v=5d9483ff"></script>    <!-- flags 다음. SDK(js/vendor/supabase.js)는 필요할 때만 스스로 불러온다 -->
   <!-- 「로그인 확인 중」(머리의 data-auth="pending")을 판정이 확정되면 걷는다.
        판정은 pricing.html 계정표시() 의 확정됐나() 와 **같다** — 판정 자체는 auth.js 한 곳에만 있다. -->
@@ -1594,7 +1592,7 @@
 <!-- 결제는 됐는데 이용권이 안 붙은 주문을 다음 접속 때 되살린다.
      결제창에서 돌아오는 길이 끊기면(앱 전환·창 닫음·네트워크) 돈만 나가고 끝난다. -->
 <script src="js/payrecover.js?v=da314bdc"></script>
-  <script src="js/pro.js?v=f0422889"></script>     <!-- 무료/Pro 경계. LAUNCH 가 꺼져 있으면 제한이 안 걸린다 -->
+  <script src="js/pro.js?v=98418148"></script>     <!-- 무료/Pro 경계. LAUNCH 가 꺼져 있으면 제한이 안 걸린다 -->
   <script src="js/i18n.js?v=275ab437"></script>   <!-- 가장 먼저: DOMContentLoaded 번역이 app.js 초기화보다 앞서야 함 -->
   <script src="js/awg.js?v=c5d1b877"></script>
   <script src="js/model.js?v=5712dcd4"></script>
@@ -1622,7 +1620,7 @@
   <script src="js/io.js?v=2600ad33"></script>
   <script src="js/pdf.js?v=e096e886"></script>
   <script src="js/xlsx.js?v=b4f1d49f"></script>
-  <script src="js/app.js?v=1fea5b9b"></script>
+  <script src="js/app.js?v=b7cdcbd6"></script>
   <!-- 라이브러리 부품 자동 수집 — 맨 마지막에 defer. 에디터 로딩에 끼어들지 않는다. 없어도 에디터는 그대로 돈다(library.js 가 있으면 부를 뿐). -->
   <script src="js/libsync.js?v=4308ef03" defer></script>
   <!-- 인쇄 전용: 페이지 전체를 덮는 워터마크. 도면 칸 안에만 찍히던 것을 종이 전체로 넓혔다.
