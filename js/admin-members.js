@@ -18,7 +18,7 @@
  *    admin_members() 는 연락처를 아예 안 돌려주고 admin_member_orders() 만 준다.
  *
  *  ★ 데이터 경로 (전부 관리자 가드가 서버에 있다)
- *      회원 목록   rpc("admin_members")        _ai/sql/2026-09-22_관리자_회원결제.sql
+ *      회원 목록   rpc("admin_members")        _ai/sql/2026-09-22_관리자_회원결제.sql (지금 모양은 2026-10-12_회원_구독분리.sql)
  *      주문 내역   rpc("admin_member_orders")  같은 파일
  *      환불        functions.invoke("payment-cancel")
  *
@@ -34,8 +34,10 @@
   var PAGE = 60;            // 한 번에 읽는 회원 수. 더 필요하면 「더 보기」
 
   /* ★ 왼쪽 계정란은 두 모양이다 (2026-09-29 — 폴더를 이 화면으로 합침, 고원빈 결정)
-       · 폴더 묶음(기본) — 「일반 회원」(폴더 없음) 과 폴더들이 파일 탐색기처럼 펼침·접힘으로 묶인다.
-         묶음마다 따로 서버에서 60명씩 읽는다(일반 회원은 수천 명이 될 수 있어 한 번에 다 안 읽는다).
+       · 폴더 묶음(기본) — 폴더들과, 폴더 없는 회원의 「구독 중」 · 「무료 회원」 이 파일 탐색기처럼 펼침·접힘으로 묶인다.
+         묶음마다 따로 서버에서 60명씩 읽는다(무료 회원은 수천 명이 될 수 있어 한 번에 다 안 읽는다).
+         ⚠ 구독 중·무료는 **서버가 나눠서** 준다(admin_members 의 p_pro — _ai/sql/2026-10-12_회원_구독분리.sql).
+            화면이 60명을 받아 나누면 61번째부터 틀린다. (10/12 고원빈 — 구독 중인 사람과 무료 이용자를 나눠 보고 싶다)
        · 검색 결과(평평) — 이메일로 찾을 때만. 묶음을 풀고 결과를 나열한다(9/28 까지의 목록 모양 그대로).
          누가 어느 폴더에 있든 한 번에 찾을 수 있어야 해서다. 검색창을 비우고 Enter 하면 묶음으로 돌아온다. */
   var 평평 = false;
@@ -43,7 +45,7 @@
   var 전체수 = 0;
   var 읽는중 = false;
   var 읽기오류 = null;
-  /* 묶음 — 키: "none"(일반 회원 = 폴더 없음) 또는 폴더 id
+  /* 묶음 — 키: "pro"(폴더 없음 · 결제 Pro 이용 중) · "free"(폴더 없음 · 그 밖) 또는 폴더 id
      값: { 열림, 회원: [], 전체, 읽는중, 오류, 읽음, 차례 } — 차례는 늦게 온 응답을 버리려고 센다 */
   var 묶음 = {};
   var 폴더목록 = [];        // admin_folders — 묶음 머리줄 · 「회원 설정」 의 폴더 고르기에 쓴다
@@ -116,6 +118,10 @@
     return null;
   }
   function 새묶음(열림) { return { 열림: !!열림, 회원: [], 전체: 0, 읽는중: false, 오류: null, 읽음: false, 차례: 0 }; }
+  /* 폴더가 아닌 묶음인가 — 「구독 중」 · 「무료 회원」 은 둘 다 폴더 없는 회원이라 이름 바꾸기·폴더 관리가 없다 */
+  function 일반키(k) { return k === "pro" || k === "free"; }
+  /* 폴더 없는 회원이 어느 묶음에 있나 — 서버(p_pro)와 같은 기준인 프로인가(m) 로 가른다 */
+  function 일반묶음(m) { return 프로인가(m) ? "pro" : "free"; }
 
   var 상태이름 = {
     pending: "미완료", paid: "결제완료", failed: "실패", canceled: "취소",
@@ -165,8 +171,8 @@
       });
   }
 
-  // ── 묶음 읽기 (폴더 하나 · 일반 회원) ────────────────────────────────────
-  /* 키 = "none"(폴더 없음) 또는 폴더 id. admin_members 의 p_no_folder / p_folder 로 그 묶음만 읽는다 */
+  // ── 묶음 읽기 (폴더 하나 · 구독 중 · 무료 회원) ──────────────────────────
+  /* 키 = "pro" · "free"(폴더 없음) 또는 폴더 id. admin_members 의 p_no_folder + p_pro / p_folder 로 그 묶음만 읽는다 */
   function 묶음읽기(키, 이어서) {
     var c = client(); var g = 묶음[키];
     if (!g) return Promise.resolve();
@@ -176,7 +182,8 @@
     var 이번 = ++g.차례;
     회원그리기();
     var 인자 = { p_q: null, p_limit: PAGE, p_offset: g.회원.length };
-    if (키 === "none") 인자.p_no_folder = true; else 인자.p_folder = 키;
+    // 구독 중 = 결제 Pro 이용 중(만료 전)만 · 무료 = 그 밖. 기관 제공은 폴더에서 보므로 기준에 안 넣는다(10/12 고원빈)
+    if (일반키(키)) { 인자.p_no_folder = true; 인자.p_pro = 키 === "pro"; } else 인자.p_folder = 키;
     return c.rpc("admin_members", 인자).then(function (res) {
       if (이번 !== g.차례) return;                    // 그 사이 같은 묶음을 또 읽었으면 늦게 온 것은 버린다
       g.읽는중 = false;
@@ -248,9 +255,11 @@
     }
   }
 
-  /* 폴더 묶음 — 맨 위 폴더들(처음엔 접힘, 한 줄씩) → 새 폴더 입력줄 → 맨 아래 「일반 회원」(폴더 없음, 펼침).
+  /* 폴더 묶음 — 맨 위 폴더들(처음엔 접힘, 한 줄씩) → 새 폴더 입력줄 → 맨 아래 폴더 없는 회원
+     「구독 중」(펼침) · 「무료 회원」(접힘). 10/12 까지는 이 자리가 「일반 회원」 하나였다.
      ⚠ 9/29 오전까지는 「일반 회원」 이 맨 위였다. 60명이 먼저 펼쳐져 폴더와 [새 폴더] 가 목록 한참 아래에 묻혔고,
-        원빈이 "링크 만들기가 안 보인다" 고 했다(스크린샷으로 확인). 폴더 머리줄은 한 줄씩이라 몇 개든 첫 화면에 들어간다. */
+        원빈이 "링크 만들기가 안 보인다" 고 했다(스크린샷으로 확인). 폴더 머리줄은 한 줄씩이라 몇 개든 첫 화면에 들어간다.
+        무료 회원을 접어 두는 것도 같은 이유다 — 수가 가장 많은 묶음이 펼쳐지면 아래로 길어진다. */
   function 묶음그리기() {
     var box = $("admMemUsers"); if (!box) return;
     var stats = $("admMemStats");
@@ -276,24 +285,27 @@
     box.appendChild(form);
     if (적던) $("admFolNewName").value = 적던;
 
-    묶음하나(box, "none");
+    묶음하나(box, "pro");
+    묶음하나(box, "free");
   }
 
   /* 묶음 하나 — 머리줄(▸/▾ 이름 · 인원) + 펼쳤으면 회원 줄들 */
   function 묶음하나(box, 키) {
-      var g = 묶음[키] || (묶음[키] = 새묶음(키 === "none"));
-      var f = 키 === "none" ? null : 폴더찾기(키);
-      var 수 = 키 === "none"
+      var 일반 = 일반키(키);
+      var g = 묶음[키] || (묶음[키] = 새묶음(키 === "pro"));
+      var f = 일반 ? null : 폴더찾기(키);
+      var 수 = 일반
         ? (g.읽음 ? g.전체 + "명" : "")
         : (f.member_count || 0) + "명" + (f.granted_count ? " · 제공 " + f.granted_count : "");
+      var 이름 = 키 === "pro" ? "구독 중" : 키 === "free" ? "무료 회원" : f.name;
 
       var head = document.createElement("button");
       head.type = "button";
-      head.className = "adm-mem-grp" + (키 !== "none" && 키 === 고른폴더 ? " on" : "");
+      head.className = "adm-mem-grp" + (!일반 && 키 === 고른폴더 ? " on" : "");
       head.dataset.grp = 키;
-      if (키 !== "none") head.title = "더블클릭하면 이름을 바꿉니다";
+      if (!일반) head.title = "더블클릭하면 이름을 바꿉니다";
       head.innerHTML = '<span class="arr">' + (g.열림 ? "▾" : "▸") + "</span>" +
-        "<b>" + esc(키 === "none" ? "일반 회원" : f.name) + "</b>" +     // ⚠ 폴더 이름은 관리자가 적은 글
+        "<b>" + esc(이름) + "</b>" +     // ⚠ 폴더 이름은 관리자가 적은 글
         '<span class="adm-col-meta">' + esc(수) + "</span>";
       box.appendChild(head);
 
@@ -308,7 +320,8 @@
         } else if (g.읽는중 && !g.회원.length) {
           body.innerHTML = '<div class="adm-col-meta">읽는 중…</div>';
         } else if (!g.회원.length) {
-          body.innerHTML = '<div class="adm-col-meta">' + (키 === "none" ? "폴더 없는 회원이 없습니다." : "아직 참여한 회원이 없습니다.") + "</div>";
+          body.innerHTML = '<div class="adm-col-meta">' +
+            (키 === "pro" ? "구독 중인 회원이 없습니다." : 키 === "free" ? "무료 회원이 없습니다." : "아직 참여한 회원이 없습니다.") + "</div>";
         } else {
           g.회원.forEach(function (m) { body.appendChild(회원줄(m, false)); });
           if (g.회원.length < g.전체) {
@@ -332,7 +345,7 @@
       폴더오류 = null;
       폴더목록 = res.data || [];
       // 지워진 폴더의 묶음은 버린다 · 오른쪽 칸에 떠 있던 폴더가 지워졌으면 닫는다
-      Object.keys(묶음).forEach(function (k) { if (k !== "none" && !폴더찾기(k)) delete 묶음[k]; });
+      Object.keys(묶음).forEach(function (k) { if (!일반키(k) && !폴더찾기(k)) delete 묶음[k]; });
       if (고른폴더 && !폴더찾기(고른폴더)) 고른폴더 = null;
       회원그리기(); 오른쪽그리기(true);
     }).catch(function (e) { 폴더오류 = (e && e.message) || "서버에 닿지 못했습니다."; 회원그리기(); });
@@ -367,10 +380,10 @@
   }
 
   /* 폴더 머리줄을 눌렀다 — 처음 누르면 펼치고 오른쪽에 그 폴더 관리, 떠 있는 폴더를 다시 누르면 접는다.
-     「일반 회원」 머리줄은 펼침·접힘만 한다(관리할 폴더가 아니다). */
+     「구독 중」 · 「무료 회원」 머리줄은 펼침·접힘만 한다(관리할 폴더가 아니다). */
   function 머리줄누름(키) {
     var g = 묶음[키] || (묶음[키] = 새묶음(false));
-    if (키 !== "none" && 고른폴더 !== 키) {
+    if (!일반키(키) && 고른폴더 !== 키) {
       고른폴더 = 키; 고른회원 = null; 주문들 = []; 고른주문 = null; 계산결과 = null;
       g.열림 = true;
     } else {
@@ -481,7 +494,8 @@
       if (평평) { 회원읽기(false, m.user_id); return; }
       /* 묶음: **옮기기 전·후 두 묶음을 다시 읽는다** — 한쪽만 읽으면 그 회원이 두 곳에 보이거나 사라진다.
          옮겨 간 묶음은 펼친다 — 고른 회원이 어디로 갔는지 그 자리에서 보이고, 선택도 이어진다. */
-      var 전 = m.folder_id || "none", 후 = 폴더 || "none";
+      // 폴더 없는 쪽은 구독 중·무료 중 어디인가 — 회원 설정은 결제 상태를 안 바꾸므로 전·후 모두 지금 상태로 가른다
+      var 전 = m.folder_id || 일반묶음(m), 후 = 폴더 || 일반묶음(m);
       if (!묶음[후]) 묶음[후] = 새묶음(true); else 묶음[후].열림 = true;
       폴더읽기();                                      // 머리줄의 인원수
       묶음읽기(후, false);
@@ -700,7 +714,7 @@
     // 폴더 이름 더블클릭 → 그 자리에서 바꾸기 (2026-09-29 원빈 — 파일 탐색기처럼)
     if (users) users.addEventListener("dblclick", function (e) {
       var 머리 = e.target.closest(".adm-mem-grp");
-      if (!머리 || 머리.dataset.grp === "none") return;          // 「일반 회원」 은 폴더가 아니다
+      if (!머리 || 일반키(머리.dataset.grp)) return;             // 「구독 중」 · 「무료 회원」 은 폴더가 아니다
       이름바꾸기(머리);
     });
     // 새 폴더 입력줄 — 계정란을 다시 그릴 때마다 새로 생기므로 상위에서 받는다
@@ -749,26 +763,30 @@
       else { 평평 = false; 회원그리기(); 오른쪽그리기(); }
     });
     // 새로 읽기 — 지금 모양 그대로 다시 읽는다(묶음이면 폴더 목록과 **펼쳐 둔** 묶음만)
+    //   구독 중·무료 회원은 접혀 있어도 읽는다 — 머리줄 인원수가 낡으면 둘을 견줄 수 없다(폴더 인원은 폴더 목록이 준다)
     var refresh = $("admMemRefresh");
     if (refresh) refresh.addEventListener("click", function () {
       if (평평) { 회원읽기(false); return; }
       폴더읽기();
-      Object.keys(묶음).forEach(function (k) { if (묶음[k].열림) 묶음읽기(k, false); });
+      Object.keys(묶음).forEach(function (k) { if (묶음[k].열림 || 일반키(k)) 묶음읽기(k, false); });
     });
   }
 
   /* 탭에 들어올 때 읽는다 (admin-batch.js 의 setMode 가 부른다).
      ⚠ 처음 한 번만 자동으로 읽는다 — 탭을 오갈 때마다 전체 회원을 다시 읽으면
         관리자가 「더 보기」로 불러 놓은 목록과 고른 회원이 매번 초기화된다.
-     처음 모양은 폴더 묶음 — 「일반 회원」 만 펼쳐 읽고, 폴더들은 접어 둔다(누를 때 읽는다). */
+     처음 모양은 폴더 묶음 — 「구독 중」 은 펼쳐 읽고, 폴더들은 접어 둔다(누를 때 읽는다).
+     「무료 회원」 은 접어 두지만 **읽기는 같이 한다** — 머리줄에 인원수가 보여야 구독 중과 견줄 수 있다. */
   function enter() {
     if (들어온적) return;
     들어온적 = true;
     bind();
     평평 = false;
-    묶음.none = 새묶음(true);
+    묶음.pro = 새묶음(true);
+    묶음.free = 새묶음(false);
     폴더읽기();
-    묶음읽기("none", false);
+    묶음읽기("pro", false);
+    묶음읽기("free", false);
     주문그리기(); 상세그리기();
   }
 
@@ -776,7 +794,7 @@
     enter: enter,
     foldersChanged: foldersChanged,     // 폴더 관리(admin-folders.js)가 바꾼 뒤 부른다
     _테스트_폴더심기: function (목록) { 폴더목록 = 목록 || []; 폴더오류 = null; 회원그리기(); 오른쪽그리기(); },
-    /* 묶음 하나를 읽은 것처럼 채운다 (키 = "none" 또는 폴더 id) */
+    /* 묶음 하나를 읽은 것처럼 채운다 (키 = "pro" · "free" 또는 폴더 id) */
     _테스트_묶음심기: function (키, 목록, 총수) {
       var g = 묶음[키] || (묶음[키] = 새묶음(true));
       g.열림 = true; g.회원 = 목록 || []; g.전체 = 총수 == null ? g.회원.length : 총수;
