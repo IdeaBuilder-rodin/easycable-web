@@ -199,6 +199,53 @@ WE.auth = (function () {
            /[?&](code|error|error_description)=/.test(q);
   }
 
+  /* ── 접속자 세기 (관리자 「접속자」 — 2026-10-12) ────────────────────
+     기기당 하루 1명. 그날 처음 열 때만 서버의 「오늘 숫자」 를 +1 한다(count_visit).
+       · 중복은 **브라우저가** 거른다 — localStorage 에 「오늘 셌음」 날짜 하나만 적는다(기기 id 아님)
+       · 서버로는 **아무 값도 안 보낸다** — 서버 표엔 날짜·숫자만 남는다(_ai/sql/2026-10-12_접속자_집계.sql)
+       · SDK 없이 fetch 한 번 — 랜딩의 「SDK 늦게 받기」(위) 를 깨지 않는다
+     왜 직접 세나: Cloudflare 방문 통계는 쿠키를 안 써서 같은 사람이 다시 오면 또 센다(중복 제외 불가).
+     검사: tests/verify_adminstats.mjs */
+  var 방문키 = "we_visit_day";
+  var 로봇들 = /bot|crawl|spider|slurp|headless|lighthouse|externalhit/i;
+
+  /* 서울 날짜(yyyy-mm-dd). 서버 count_visit 도 서울 날짜로 센다 — 기준이 다르면 자정 무렵 두 번 센다 */
+  function 서울오늘(ms) { return new Date((ms || Date.now()) + 9 * 3600 * 1000).toISOString().slice(0, 10); }
+
+  /* 셀까 — **순수 함수**(인자만 보고 판단, 아무것도 저장하지 않는다. flags.js 의 _isPreviewHost 와 같은 이유: 검사가 조합을 연달아 묻는다)
+     · 본 서비스 주소에서만 — 미리보기는 고원빈 시험, 127.0.0.1 은 검사 서버다. 거기서 세면 숫자가 섞이고
+       검사 15개가 실서버로 요청을 보낸다
+     · 자동화 브라우저·검색 로봇은 안 센다(100% 는 아니다 — 스스로 밝히는 것만 거른다)
+     · 오늘 이미 셌으면 안 센다 */
+  function 셀까(host, ua, webdriver, 저장날, 오늘) {
+    if (host !== "easycable.co.kr") return false;
+    if (webdriver) return false;
+    if (로봇들.test(String(ua || ""))) return false;
+    return 저장날 !== 오늘;
+  }
+
+  /* host·ua·webdriver 를 인자로 받는 건 검사가 본 서비스 조건을 흉내 내기 위해서다(실제로는 아래 init 이 진짜 값을 넘긴다).
+     돌려줌: 요청을 보냈으면 true */
+  function 방문세기(host, ua, webdriver) {
+    try {
+      var 오늘 = 서울오늘(), 저장날 = null;
+      // 저장소를 못 쓰면 **안 센다** — 날짜를 못 적으면 열 때마다 +1 이 된다. 덜 세는 쪽이 낫다
+      try { 저장날 = localStorage.getItem(방문키); } catch (e) { return false; }
+      if (!셀까(host, ua, webdriver, 저장날, 오늘)) return false;
+      // 날짜를 **먼저** 적는다 — 탭 두 개를 동시에 열어도 한 번만 나간다. 요청이 실패하면 그날은 안 세진다(덜 세는 쪽)
+      try { localStorage.setItem(방문키, 오늘); } catch (e) { return false; }
+      // keepalive 는 일부러 안 쓴다 — 이 요청은 apikey 헤더 때문에 사전 확인(preflight)이 붙는데,
+      // keepalive 와 사전 확인을 같이 못 하는 브라우저가 있다(그 브라우저 손님은 아예 안 세진다).
+      // 안 쓸 때의 손해는 「열자마자 0.1초 안에 다른 페이지로 넘어간 사람」 정도라 이쪽이 작다
+      fetch(URL + "/rest/v1/rpc/count_visit", {
+        method: "POST",
+        headers: { apikey: KEY, "Content-Type": "application/json" },
+        body: "{}"
+      }).catch(function () { /* 세기 실패는 조용히 — 로그인·편집과 무관하다 */ });
+      return true;
+    } catch (e) { return false; }
+  }
+
   /* ── 로그인 상태 유지 ───────────────────────────────
      세션은 항상 localStorage 에 둔다. 탭마다 따로 놓으면(sessionStorage)
      관리자 페이지를 새 탭으로 열기만 해도 로그인이 풀린다.
@@ -530,6 +577,10 @@ WE.auth = (function () {
   function init(done) {
     // 출시 전에는 로그인을 안 하지만, 주소에 토큰이 붙어 왔다면 지우고 끝낸다
     if (!usable()) { 남은토큰지우기(); if (done) done(); return; }
+
+    // 접속자 세기 — 「SDK 늦게 받기」 분기보다 **앞**이라 랜딩 첫 방문자도 SDK 없이 센다(위 「접속자 세기」)
+    var 자동화 = false; try { 자동화 = !!navigator.webdriver; } catch (e) { /* 무시 */ }
+    방문세기(location.hostname, navigator.userAgent, 자동화);
 
     // 랜딩 첫 방문자 — SDK 없이 '로그아웃' 으로 확정한다. 상태는 SDK 를 받은 뒤의 로그아웃과 같다
     // (applySession(null) → 프로필 없음 → _ready → notify). 위 「SDK 늦게 받기」 참조
@@ -1140,6 +1191,9 @@ WE.auth = (function () {
     // 검사·디버깅용 — 클라이언트가 실제로 만들어졌는지 확인한다
     _client: function () { return client; },
     _usable: usable,
+    _셀까: 셀까,             // 접속자 세기 판정(순수 함수) — tests/verify_adminstats.mjs
+    _방문세기: 방문세기,     // 본 서비스 조건을 흉내 내 실제로 보내 본다(검사는 요청을 가로챈다)
+    _서울오늘: 서울오늘,
   };
 })();
 

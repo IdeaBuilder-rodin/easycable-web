@@ -550,18 +550,21 @@ WE.adminBatch = (function () {
   function setMode(next) {
     // 폴더·참여 링크는 「회원·결제」 안에 있다(2026-09-29 합침) — 따로 된 화면(folders)은 없다
     mode = next === "batch" ? "batch" : next === "collect" ? "collect"
-         : next === "members" ? "members" : "parts";
+         : next === "members" ? "members" : next === "stats" ? "stats" : "parts";
     var body = $("admBody"), search = $("admSearchForm"), batch = $("admBatch"),
-        collect = $("admCollect"), members = $("admMembers");
+        collect = $("admCollect"), members = $("admMembers"), stats = $("admStats");
     if (body) body.hidden = mode !== "parts";
     if (search) search.hidden = mode !== "parts";
     if (batch) batch.hidden = mode !== "batch";
     if (collect) collect.hidden = mode !== "collect";
     if (members) members.hidden = mode !== "members";
+    if (stats) stats.hidden = mode !== "stats";
     // 사용자 부품 탭 — 들어갈 때 읽는다 (admin-collect.js). 없어도(옛 배포) 조용히 넘어간다
     if (mode === "collect" && WE.adminCollect && WE.adminCollect.enter) { try { WE.adminCollect.enter(); } catch (e) { /* 무시 */ } }
     // 회원·결제 탭도 같은 방식 — 들어갈 때 읽는다 (admin-members.js, 2026-09-22)
     if (mode === "members" && WE.adminMembers && WE.adminMembers.enter) { try { WE.adminMembers.enter(); } catch (e) { /* 무시 */ } }
+    // 접속자 탭도 같은 방식 — 들어갈 때마다 읽는다 (admin-stats.js, 2026-10-12)
+    if (mode === "stats" && WE.adminStats && WE.adminStats.enter) { try { WE.adminStats.enter(); } catch (e) { /* 무시 */ } }
     Array.prototype.forEach.call(document.querySelectorAll("#admMode .adm-mode-btn"), function (b) {
       b.classList.toggle("on", b.dataset.mode === mode);
     });

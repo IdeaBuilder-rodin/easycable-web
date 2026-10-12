@@ -274,6 +274,23 @@
        같은 모양을 쓰는 이유: 관리자가 화면마다 다른 조작법을 외우지 않게. */
     /* ⚠ 섹션 자체가 남은 높이를 다 가져가야 3열이 화면 끝까지 선다.
        .adm-collect·.adm-batch 와 같은 값이다 — 이걸 빠뜨리면 내용 높이(172px)로 쪼그라든다(실측으로 잡음). */
+    /* ── 접속자 (2026-10-12) — js/admin-stats.js. 색은 변수만: 지난날 막대는 회색, 오늘만 주색 ── */
+    .adm-stats { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+    .adm-stats-body { flex: 1; min-height: 0; overflow: auto; padding: 18px 24px; display: flex; flex-direction: column; gap: 14px; }
+    .adm-stats-today { display: flex; align-items: baseline; gap: 6px; color: var(--tx2); font-size: var(--fs); }
+    .adm-stats-today b { color: var(--tx); font-size: 32px; font-weight: 700; line-height: 1; }
+    .adm-stats-chart { display: block; width: 100%; max-width: 960px; height: auto; }
+    .adm-stats-err { color: var(--danger); }
+    .adm-stats-grid { stroke: var(--bd2); stroke-width: 1; stroke-dasharray: 3 3; }
+    .adm-stats-axis { stroke: var(--bd); stroke-width: 1; }
+    .adm-stats-hit { fill: transparent; }
+    .adm-stats-bar { fill: var(--tx3); }
+    .adm-stats-bar.today { fill: var(--primary-d); }
+    .adm-stats-day:hover .adm-stats-bar:not(.today) { fill: var(--tx2); }
+    .adm-stats-ylab, .adm-stats-xlab { fill: var(--tx3); font-size: 12px; }
+    .adm-stats-xlab.today { fill: var(--primary-d); font-weight: 600; }
+    .adm-stats-val { fill: var(--primary-d); font-size: 13px; font-weight: 700; }
+
     .adm-members { flex: 1; min-height: 0; display: flex; flex-direction: column; }
     .adm-mem-body { flex: 1; min-height: 0; display: flex; }
     .adm-mem-users { width: 300px; flex: none; overflow: auto; padding: 10px 8px; border-right: 1px solid var(--bd2); display: flex; flex-direction: column; gap: 4px; }
@@ -527,6 +544,7 @@
         <button type="button" class="adm-mode-btn" data-mode="batch">일괄 등록</button>
         <button type="button" class="adm-mode-btn" data-mode="collect">사용자 부품</button>
         <button type="button" class="adm-mode-btn" data-mode="members">회원·결제</button>
+        <button type="button" class="adm-mode-btn" data-mode="stats">접속자</button>   <!-- 2026-10-12 · js/admin-stats.js -->
         <!-- 폴더·참여 링크는 따로 화면을 두지 않는다 — 「회원·결제」 왼쪽 계정란에서 폴더로 묶인다 (2026-09-29 고원빈 결정) -->
       </div>
       <a class="public-library-close" href="app.html" title="에디터로 돌아가기" aria-label="에디터로 돌아가기">×</a>
@@ -714,6 +732,21 @@
           <div id="admMemSet" class="adm-mem-set" hidden></div>
           <div id="admMemDetail"></div>
         </aside>
+      </div>
+    </section>
+
+    <!-- ── 접속자 (2026-10-12) ──────────────────────────────────────────
+         왜 — 고원빈: 하루 접속자 추이를 보고 싶다(오늘 N명 + 그래프), 중복 접속은 빼고.
+         숫자 = 기기당 하루 1명(서울 날짜). 세는 쪽 js/auth.js 「접속자 세기」 · 서버 _ai/sql/2026-10-12_접속자_집계.sql · 그리기 js/admin-stats.js
+         기준 설명은 화면 글자로 두지 않고 「오늘」 말풍선(title)에 둔다. -->
+    <section id="admStats" class="adm-stats" aria-label="접속자" hidden>
+      <div class="adm-batch-bar">
+        <span class="adm-col-stats adm-batch-saved" id="admStatsMsg"></span>
+        <button type="button" class="adm-edit-btn" id="admStatsRefresh" title="서버에서 다시 읽습니다">↻ 새로 읽기</button>
+      </div>
+      <div class="adm-stats-body">
+        <div class="adm-stats-today">오늘 <b id="admStatsToday">–</b>명</div>
+        <svg id="admStatsChart" class="adm-stats-chart" role="img" aria-label="최근 30일 접속자" xmlns="http://www.w3.org/2000/svg"></svg>
       </div>
     </section>
 
@@ -1073,6 +1106,7 @@
   <script src="js/xlsx.js"></script>          <!-- 사용자 부품 통계 엑셀 내보내기 (에디터의 BOM 엑셀과 같은 작성기) -->
   <script src="js/admin-collect.js"></script> <!-- 사용자 부품 (수집). admin-batch 다음 — 「일괄 등록으로 보내기」가 그 API 를 쓴다 -->
   <script src="js/admin-members.js"></script> <!-- 회원·결제·환불 (2026-09-22). 앞의 것들과 독립이지만 순서를 지켜 admin.js 의 esc·msg 관례를 따라 쓴다 -->
+  <script src="js/admin-stats.js"></script>   <!-- 접속자 (2026-10-12). 독립 — 「접속자」 버튼을 누를 때 admin-batch 의 setMode 가 부른다 -->
   <script src="js/invite-mail.js"></script>   <!-- 참여 링크 안내 메일 틀 (2026-09-30). admin-folders 의 [안내 메일] 이 쓴다 — 그보다 앞에 -->
   <script src="js/admin-folders.js"></script> <!-- 폴더 관리 (2026-09-28 · 09-29 회원 화면 오른쪽 칸으로). 계정란(admin-members)이 부른다 -->
 </body>
