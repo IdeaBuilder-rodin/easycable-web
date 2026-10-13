@@ -1307,6 +1307,11 @@ WE.i18nMaps = WE.i18nMaps || {};
     // ===== 도움말(단축키) =====
     "단자명·부품명 이동": "Move terminal/part names",
     "Alt+드래그": "Alt+drag",
+    // 공지 카드(app.html #newsCard) (2026-10-13)
+    "기능 설명": "How to",
+    "부품 이름은 Alt+드래그로 옮길 수 있습니다": "Alt+drag a part name to move it",
+    // 이름표를 Alt 없이 눌렀을 때 안내줄(interactions.js) — 안내줄 폭(약 207px)에 맞춰 짧게
+    "이름 옮기기: Alt+드래그": "Move name: Alt+drag",
     "단자명·부품명 위치 초기화": "Reset terminal/part name position",
     "Alt+더블클릭": "Alt+double-click",
     "배선 라벨 지우기 (양 끝 모두)": "Remove wire label (both ends)",

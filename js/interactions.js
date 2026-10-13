@@ -20,7 +20,7 @@ WE.interactions = (function () {
     window.addEventListener("pointerup", onPointerUp);
     window.addEventListener("keydown", onKeyDown);
     window.addEventListener("keyup", onKeyUp);
-    window.addEventListener("blur", function () { document.body.classList.remove("label-move-ready"); });
+    window.addEventListener("blur", function () { setLabelMoveReady(false); });
     // 배선 작성 중 우클릭은 취소. 그 외에는 부품에서만 ⋯와 같은 메뉴를 열고,
     // 빈 캔버스는 브라우저 기본 메뉴를 그대로 둔다.
     svg.addEventListener("contextmenu", function (e) {
@@ -145,7 +145,39 @@ WE.interactions = (function () {
 
   function onKeyUp(e) {
     if (e.code === "Space") { spaceDown = false; document.body.classList.remove("pan-ready"); }
-    if (e.key === "Alt") document.body.classList.remove("label-move-ready");
+    if (e.key === "Alt") setLabelMoveReady(false);
+  }
+
+  /* Alt 를 누르고 있는 동안 = 「이름 옮기기 준비」.
+     ① body.label-move-ready — 평소 클릭이 통과하던 이름표가 잡히게 된다(styles.css .cmp-label 의 pointer-events).
+     ② 부품 이름표 두 층(layerLabels · layerLabelsTop)을 SVG **맨 위로** 올린다(2026-10-13 고원빈 「모델명을 제일 위로 보내기」).
+        왜: 이름표 층이 배선 층 아래라, 배선이 지나가는 이름표는 Alt 를 눌러도 배선(투명 클릭 폭 14 이상, render.js)이 먼저 잡혔다.
+            불멍 예제에서 이름표를 기본 자리(부품 아래)로 두면 15점 중 1점만 이름표가 잡혔다 — 아래 단자에서 나온 배선이 바로 그 위를 지난다.
+        Alt 를 누른 채 배선을 누르면 원래 아무 일도 안 하므로(onPointerDown 의 Alt 분기) 잃는 기능은 없다.
+        떼면 원래 자리(layerLabels 는 배선 바로 아래, layerLabelsTop 은 배선 라벨 바로 아래 — app.html 순서)로 되돌린다.
+        render.js 는 층을 id 로 한 번 찾아 쥐고 쓰므로 DOM 안에서 자리를 옮겨도 그리기는 그대로다. */
+  // 화면 좌표 (x,y) 가 보이는 부품 이름표 안이면 그 <text> 를 준다. 숨긴 이름(display:none)은 크기가 0 이라 저절로 빠진다
+  function nameLabelAt(x, y) {
+    var list = document.querySelectorAll("#layerLabels text.cmp-label, #layerLabelsTop text.cmp-label");
+    for (var i = 0; i < list.length; i++) {
+      var r = list[i].getBoundingClientRect();
+      if (r.width > 0 && x >= r.left && x <= r.right && y >= r.top && y <= r.bottom) return list[i];
+    }
+    return null;
+  }
+
+  var _labelsRaised = false;
+  function setLabelMoveReady(on) {
+    document.body.classList.toggle("label-move-ready", !!on);
+    if (!!on === _labelsRaised) return;   // 누르고 있으면 keydown 이 계속 들어온다 — 한 번만 옮긴다
+    var a = document.getElementById("layerLabels"), b = document.getElementById("layerLabelsTop");
+    if (!svg || !a || !b) return;
+    if (on) { svg.appendChild(a); svg.appendChild(b); }
+    else {
+      svg.insertBefore(a, document.getElementById("layerWires"));
+      svg.insertBefore(b, document.getElementById("layerWireLabels"));
+    }
+    _labelsRaised = !!on;
   }
 
   // 크기 손잡이 이름 → 방향 (hx, hy). render.js 「크기 손잡이」 가 같은 이름으로 그린다(2026-10-02)
@@ -253,6 +285,15 @@ WE.interactions = (function () {
       if (WE.model.ui.mode === "select") beginAltLabelDrag(e);
       e.preventDefault();
       return;
+    }
+
+    // Alt 없이 부품 이름표를 누르면 툴바 오른쪽 안내줄(#hint)로 방법을 알려 준다(2026-10-13 — 「부품 이름을 옮기게 해 주세요」 피드백).
+    // 이름표는 평소 클릭이 통과하므로(pointer-events:none) e.target 으로는 알 수 없다 — 누른 점이 이름표 사각형 안인지 직접 잰다.
+    // return 하지 않는다: 원래 하던 선택·이동·사각형 선택은 그대로 진행된다.
+    // 문구가 공지 카드(「부품 이름은 Alt+드래그로 옮길 수 있습니다」)보다 짧은 이유: 안내줄 폭이 오른쪽 패널만큼(약 207px)이라
+    // 그 문장은 「…옮길 수 있…」 으로 잘렸다(231px). 단축키 도움말 표와 같은 꼴로 줄였다(verify_newscard 가 잘림을 잰다).
+    if (WE.model.ui.mode === "select" && e.button === 0 && nameLabelAt(e.clientX, e.clientY) && WE.app.setHint) {
+      WE.app.setHint(WE.i18n.t("이름 옮기기: Alt+드래그"));
     }
 
     if (WE.model.ui.mode === "wire") { onWireDown(e); return; }
@@ -1950,7 +1991,7 @@ WE.interactions = (function () {
 
   function onKeyDown(e) {
     if (e.key === "Alt") {
-      if (WE.model.ui.mode === "select") document.body.classList.add("label-move-ready");
+      if (WE.model.ui.mode === "select") setLabelMoveReady(true);
       e.preventDefault();
     }
     // Ctrl/⌘+S → 실제 파일에 저장(Chrome/Edge는 이미 연결된 파일에 조용히 덮어씀, 그 외엔 새로 저장창).

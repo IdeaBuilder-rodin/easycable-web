@@ -62,6 +62,7 @@ WE.app = (function () {
     bindWelcome();
     // (bindLaunchNotice — 정식 출시 안내 모달은 10/11 에 지웠다. 오늘 밤 배포로 「10/12 부터」 를 알릴 일이 끝났다)
     bindLimitModal();   // 무료 한도 창 — 출시 안내 모달의 모양을 물려받았다(2026-10-11)
+    bindNewsCard();     // 오른쪽 아래 공지 카드(2026-10-13) — 보이기는 시작이 끝난 뒤 finish() 에서
     bindFeedback();
     bindQuickColorPicker();
     bindHelp();
@@ -99,6 +100,9 @@ WE.app = (function () {
         WE.store.pruneDrafts(20);         // 문서 슬롯이 무한정 쌓이지 않게 (현재·타 탭 문서는 제외)
         // 쓰이지 않는 첨부물 정리 — 시작 직후 화면을 방해하지 않도록 조금 뒤로 미룬다
         setTimeout(function () { WE.assets.sweepIfDue(); }, 4000);
+        // 공지 카드 — 도면이 화면에 맞춰진 다음에 뜨게 조금 뒤로. 한도 창이 같이 떠도 막지 않는다:
+        // 카드(z 40 묶음 안)는 창 바탕(.modal z 100) 아래에 깔렸다가, 창을 닫으면 그대로 보인다
+        setTimeout(showNewsCard, 1200);
       }
       WE.assets.loadAll(function () {
         WE.library.load(function () {
@@ -246,6 +250,45 @@ WE.app = (function () {
       dismiss();
       document.getElementById("btnLibExport").click();   // 그 자리에서 라이브러리 파일 백업 실행
     });
+  }
+
+  // ---- 오른쪽 아래 공지 카드 (2026-10-13) ----
+  // 피드백 창엔 메일 칸이 없어 답장할 길이 없다 → 이미 있는 기능을 묻는 피드백이 오면 여기로 모두에게 한 번 알린다.
+  // 다음 공지를 낼 때: NEWS_ID 를 새 값으로 바꾸고 app.html #newsCard 의 문구·영상(data-src·data-poster)을 갈아 끼운다.
+  //   ID 가 바뀌면 예전 공지를 닫은 사람에게도 새 공지가 뜬다. 문구는 js/i18n-en.js 에도 같은 키로 넣는다.
+  // 기억은 「마지막으로 닫은 공지 ID」 하나뿐이다(we_newsSeen) — 공지는 한 번에 하나만 띄우므로 목록이 필요 없다.
+  var NEWS_ID = "2026-10-13-labelmove";
+  var NEWS_KEY = "we_newsSeen";
+  function newsSeen() {
+    // 저장소를 못 읽는 환경(사생활 보호 창 등)에서는 「안 봤다」 로 친다 — 카드는 작업을 막지 않으니 한 번 더 떠도 해가 없다
+    try { return localStorage.getItem(NEWS_KEY) === NEWS_ID; } catch (e) { return false; }
+  }
+  // 영상은 **늘 반복 재생**한다(app.html 의 loop) — 10/13 고원빈 「계속 자동반복」.
+  //   처음엔 움직임 줄이기 설정이면 한 번만 재생했는데(랜딩 테스트 페이지 정책), 한 번 돌고 멈추면
+  //   카드가 무엇을 보여 주려는지 놓치기 쉬웠다. 5초짜리 무음 클립이고 ✕ 로 언제든 닫을 수 있다.
+  function showNewsCard() {
+    var card = document.getElementById("newsCard");
+    if (!card || newsSeen()) return;
+    var v = card.querySelector(".news-clip");
+    // 영상·포스터는 보일 때만 붙인다 — 이미 닫은 사람은 아무것도 내려받지 않는다(app.html 주석)
+    if (v && !v.getAttribute("src")) {
+      v.poster = v.getAttribute("data-poster");
+      v.src = v.getAttribute("data-src");
+    }
+    card.hidden = false;
+    if (v) { var p = v.play(); if (p && p.catch) p.catch(function () { /* 자동재생이 막혀도 포스터는 보인다 */ }); }
+  }
+  function bindNewsCard() {
+    var card = document.getElementById("newsCard");
+    if (!card) return;
+    var v = card.querySelector(".news-clip");
+    document.getElementById("newsX").addEventListener("click", function () {
+      try { localStorage.setItem(NEWS_KEY, NEWS_ID); } catch (e) { /* 무시 — 다음에 한 번 더 뜰 뿐 */ }
+      card.hidden = true;
+      // 닫은 뒤에도 영상이 뒤에서 돌며 받지 않게 멈추고 떼어 낸다
+      if (v) { v.pause(); v.removeAttribute("src"); v.load(); }
+    });
+    // (영상을 누르면 처음부터 다시 — 한 번만 재생하던 때의 단추였다. 늘 반복하게 되며 뺐다, 10/13)
   }
 
   // 라이브러리 저장 (이름 중복 시 덮어쓰기/새로 추가 확인). 저장된 부품 반환
