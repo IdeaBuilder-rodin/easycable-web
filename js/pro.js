@@ -30,7 +30,9 @@ WE.pro = (function () {
      ⚠ 제한하는 것은 **도면에 배치한 부품**뿐이다.
         내 부품 라이브러리(WE.library)는 무제한이다 —
         pricing.html 무료 카드에 "내 부품 라이브러리 무제한" 이라고 써 두었다.
-        library.addPart() 에는 절대 한도를 걸지 않는다. */
+        library.addPart() 에는 절대 한도를 걸지 않는다.
+     ⚠ 단, 라이브러리 **파일 불러오기**(.ezclib)만은 Pro 기능이다(2026-10-15 고원빈) — 개수가 아니라
+        「불러오기」 라는 기능 하나를 막는다. 아래 canImportLibrary · denyLibImport 참고. */
   var COMP_LIMIT = 10;
 
   /* 프로젝트당 무료 도면 페이지(시트) 수. (2026-09-06 고원빈 결정)
@@ -362,6 +364,45 @@ WE.pro = (function () {
     return false;
   }
 
+  /* 로그인·요금제 확인이 끝났는가 — 끝나기 전의 isPro() 는 '모름' 인데 false 로 나온다.
+     LAUNCH 가 꺼져 있으면 기다릴 것이 없다(아무도 안 막힌다). 왜 둘 다 봐야 하는지는 checkOpened 안 주석. */
+  function 요금제확인끝() {
+    if (!(WE.flags && WE.flags.LAUNCH && WE.auth)) return true;
+    var 안끝남 = (WE.auth.ready && !WE.auth.ready()) ||
+                 (WE.auth.proState && WE.auth.proState() === "확인중");
+    return !안끝남;
+  }
+
+  /* ── 라이브러리 불러오기 = Pro 기능 (2026-10-15 고원빈) ─────────────────
+     왜 — 무료 한도는 「프로젝트 하나당」 이라, 작은 도면을 많이 그리는 헤비유저는 끝까지 무료다.
+          라이브러리는 프로젝트 수만큼 커지고, 그걸 불러오는 사람(기기 여러 대 · 팀 공유 · AI 로 몰아넣기)이
+          대개 그 헤비유저다. 가볍게 쓰는 사람은 불러올 일이 거의 없다(고원빈 판단).
+     막지 않는 것 — 도면 열기(.ezc 속 부품이 라이브러리에 합쳐지는 것 포함) · 라이브러리 내보내기 ·
+          공용부품 · 예제. 내보내기를 막으면 무료 이용자의 유일한 백업 수단이 사라진다.
+     ⚠ 빈 도면으로 감싼 .ezc 로 우회된다. 알고 받아들였다 — 이 파일 맨 위 「소프트 페이월」 그대로.
+     기준은 다른 한도와 같은 limited() — 심사 기간(FREE_LIMIT=false)에는 풀린다. */
+  function canImportLibrary() { return !limited(); }
+
+  /* 버튼을 누른 순간 막아도 되는가. 확인이 안 끝났으면 **막지 않는다** —
+     페이지를 막 연 Pro 사용자는 그 순간 isPro() 가 false 라 잘못 막힌다(「Pro 인데 무료 안내」, 9/09 신고와 같은 꼴).
+     그때는 파일 선택 창을 열어 두고, 파일을 고른 뒤(change) canImportLibrary 로 다시 본다. */
+  function libImportSettled() { return 요금제확인끝(); }
+
+  /* 막혔을 때 알린다 — 모양은 다른 한도 창과 같고 **머리만 「Pro 기능」**(10/15 고원빈).
+     개수 한도가 아니라 기능 자체가 Pro 라서 「무료 한도 초과」 는 틀린 말이 된다. 숫자 줄도 없다. */
+  function denyLibImport() {
+    if (WE.app && WE.app.setHint) WE.app.setHint(WE.i18n.t("라이브러리 불러오기는 Pro 기능입니다."));
+    var 떠있다 = WE.app && WE.app.isNoticeOpen && WE.app.isNoticeOpen();
+    if (!떠있다 && WE.app && WE.app.notice) {
+      WE.app.notice(
+        WE.i18n.t("라이브러리를 불러올 수 없습니다"),
+        WE.i18n.t("Pro로 업그레이드하면 라이브러리 파일을 불러올 수 있습니다."),
+        결제버튼({ head: WE.i18n.t("Pro 기능") })
+      );
+    }
+    return false;
+  }
+
   /* 한도를 넘는 파일을 열었을 때.
      ⚠ 열기를 막지 않는다 — 막으면 사용자가 자기 도면을 못 여는 데이터 손실이 된다.
         열되 '더 추가'만 막힌다. 삭제·내보내기는 그대로 된다. */
@@ -378,11 +419,7 @@ WE.pro = (function () {
                           조회는 아직 도는 창이 실제로 생긴다(2026-09-09 계측으로 확인).
                           그 창에서 isPro() 는 localStorage 기억에 기대는데,
                           기억이 없으면(새 브라우저·데이터 삭제·7일 경과) 무료로 떨어진다. */
-    if (WE.flags && WE.flags.LAUNCH && WE.auth) {
-      var 안끝남 = (WE.auth.ready && !WE.auth.ready()) ||
-                   (WE.auth.proState && WE.auth.proState() === "확인중");
-      if (안끝남) { _보류중 = true; return; }
-    }
+    if (!요금제확인끝()) { _보류중 = true; return; }
     _보류중 = false;
     if (!limited()) return;
 
@@ -448,6 +485,9 @@ WE.pro = (function () {
     canAddBundle: canAddBundle,  // 배선·부품 동시 (붙여넣기·시트복제)
     canAddSheet: canAddSheet,    // 도면 페이지 n 장
     deny: deny,
+    canImportLibrary: canImportLibrary,  // 라이브러리 파일 불러오기 (Pro 기능, 10/15)
+    libImportSettled: libImportSettled,  // 지금 막아도 되는가 (요금제 확인이 끝났는가)
+    denyLibImport: denyLibImport,
     checkOpened: checkOpened,
     보류였으면다시보기: 보류였으면다시보기,
     projectChanged: projectChanged,

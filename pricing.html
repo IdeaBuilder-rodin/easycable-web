@@ -279,6 +279,7 @@
           <b>계속 무료</b>
           <!-- ⚠ 순서 규칙 (2026-09-07 고원빈): **바뀌는 것을 위로, 같은 것을 아래로.**
                  위 묶음 = 무료↔Pro 가 다른 항목 (개수 → 페이지 → 워터마크) — 무료 카드에선 ✓ 대신 △(li.lim, 2026-10-01)
+                   → 라이브러리 불러오기 — 무료는 아예 없어서 ✕(li.off, 2026-10-15 고원빈 · Pro 기능)
                  아래 묶음 = 양쪽이 같은 항목 (엑셀·CSV 는 2026-09-11 부터 무료도 같아서 이쪽이다 — 그래서 굵게 하지 않는다)
                손님이 보는 첫 줄이 "무엇이 달라지는가" 여야 카드 셋을 비교할 수 있다.
                항목을 새로 더할 때 아무 데나 끼우지 말고 이 두 묶음 중 맞는 쪽에 넣는다.
@@ -291,6 +292,7 @@
             <li class="lim"><span>도면 하나에 <b>부품 10개 · 배선 30개</b></span></li>
             <li class="lim"><span>도면 페이지 <b>1장</b></span></li>
             <li class="lim"><span>PNG · PDF 내보내기 (<b>워터마크 포함</b>)</span></li>
+            <li class="off"><span>라이브러리 불러오기</span></li>
             <li><span>BOM · 결선표 엑셀 · CSV 내보내기</span></li>
             <li><span>부품 사진 올리기 · 배경 자동 제거</span></li>
             <li><span>단자 배치 · 배선 그리기 · 구간 정렬 · 분기</span></li>
@@ -326,12 +328,14 @@
                PG 심사에서도 걸린다. 무료와 다른 아래 둘은 코드에 게이트가 있다 —
                  개수·페이지 무제한   js/pro.js  canAddBundle · canAddSheet
                  워터마크 없음        js/pro.js  watermark() → render.js · app.js · styles.css
+                 라이브러리 불러오기  js/pro.js  canImportLibrary() → app.js 불러오기 버튼 (2026-10-15)
                엑셀·CSV 내보내기는 무료와 같다(2026-10-11 고원빈 — 게이트를 지웠다).
                '회사 양식 표제란 · 이전 버전 복구' 는 아직 없어서 안 적는다. -->
           <ul>
             <li><span>부품 · 배선 <b>무제한</b></span></li>
             <li><span>도면 페이지 <b>무제한</b></span></li>
             <li><span>PNG · PDF 내보내기 (<b>워터마크 없음</b>)</span></li>
+            <li><span>라이브러리 불러오기</span></li>
             <li><span>BOM · 결선표 엑셀 · CSV 내보내기</span></li>
             <li><span>부품 사진 올리기 · 배경 자동 제거</span></li>
             <li><span>단자 배치 · 배선 그리기 · 구간 정렬 · 분기</span></li>
@@ -375,6 +379,7 @@
             <li><span>부품 · 배선 <b>무제한</b></span></li>
             <li><span>도면 페이지 <b>무제한</b></span></li>
             <li><span>PNG · PDF 내보내기 (<b>워터마크 없음</b>)</span></li>
+            <li><span>라이브러리 불러오기</span></li>
             <li><span>BOM · 결선표 엑셀 · CSV 내보내기</span></li>
             <li><span>부품 사진 올리기 · 배경 자동 제거</span></li>
             <li><span>단자 배치 · 배선 그리기 · 구간 정렬 · 분기</span></li>

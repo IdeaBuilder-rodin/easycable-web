@@ -908,11 +908,20 @@ WE.app = (function () {
       document.body.appendChild(a); a.click(); document.body.removeChild(a);
       setTimeout(function () { URL.revokeObjectURL(a.href); }, 1000);
     });
+    /* 라이브러리 불러오기 = Pro 기능 (2026-10-15 고원빈 — 이유는 js/pro.js canImportLibrary 위 주석).
+       ⚠ WE.library.importJson 안이 아니라 **여기(화면 쪽)** 에서 막는다 — importJson 은 검사(verify_partsame)가
+          라이브러리를 비우는 데도 쓰고, 이 버튼 말고는 부르는 곳이 없다. 도면 열기·공용부품은 다른 길(addPart)이다.
+       두 번 본다:
+         ① 누를 때 — 무료로 **확정**됐으면 파일 선택 창을 열지 않고 바로 알린다(고른 뒤에 막히면 헛수고다).
+            로그인 확인이 안 끝났으면 막지 않는다 — 막 연 Pro 사용자가 잘못 막히지 않게.
+         ② 고른 뒤 — ①을 그냥 지나온 경우를 여기서 잡는다. 라이브러리는 건드리지 않는다. */
     document.getElementById("btnLibImport").addEventListener("click", function () {
+      if (WE.pro && WE.pro.libImportSettled() && !WE.pro.canImportLibrary()) { WE.pro.denyLibImport(); return; }
       document.getElementById("fileLibImport").click();
     });
     document.getElementById("fileLibImport").addEventListener("change", function (e) {
       var file = e.target.files && e.target.files[0]; if (!file) return;
+      if (WE.pro && !WE.pro.canImportLibrary()) { e.target.value = ""; WE.pro.denyLibImport(); return; }
       var reader = new FileReader();
       reader.onload = function (ev) {
         try {
@@ -3630,8 +3639,11 @@ WE.app = (function () {
   function limitNotice(title, text, opts) {
     var modal = document.getElementById("limitModal");
     var L = opts.limit || {};
-    // 큰 글자 「무료 한도 초과」 는 마크업에 고정 — 여기는 그 아래 작은 줄 「배선 30 / 30」 만 채운다(10/11 고원빈).
-    // 문장은 js/pro.js 사용량() 이 번역까지 끝내서 준다(이름·숫자 한 문장 키)
+    // 큰 글자는 보통 「무료 한도 초과」(10/11 고원빈). 라이브러리 불러오기만 「Pro 기능」 을 넘긴다(10/15 —
+    // 개수 한도가 아니라 기능 자체가 Pro 라서). ⚠ **매번 다시 쓴다** — 안 그러면 불러오기 창을 본 뒤
+    // 배선 한도 창에도 「Pro 기능」 이 남는다(verify_libimport ⑥).
+    document.getElementById("limitHead").textContent = L.head || WE.i18n.t("무료 한도 초과");
+    // 그 아래 작은 줄 「배선 30 / 30」 — 문장은 js/pro.js 사용량() 이 번역까지 끝내서 준다(이름·숫자 한 문장 키)
     document.getElementById("limitCount").textContent = L.count || "";
     document.getElementById("limitTitle").textContent = title;
     document.getElementById("limitText").textContent = text || "";

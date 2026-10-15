@@ -892,6 +892,11 @@ WE.i18nMaps = WE.i18nMaps || {};
     "Pro로 업그레이드하면 부품을 무제한으로 놓을 수 있습니다.": "Upgrade to Pro for unlimited components.",
     "Pro로 업그레이드하면 배선과 부품을 무제한으로 쓸 수 있습니다.": "Upgrade to Pro for unlimited wires and components.",
     "Pro로 업그레이드하면 페이지를 무제한으로 만들 수 있습니다.": "Upgrade to Pro for unlimited pages.",
+    // 라이브러리 불러오기 = Pro 기능(2026-10-15) — 같은 창, 머리만 「Pro 기능」(개수 한도가 아니라서)
+    "Pro 기능": "Pro feature",
+    "라이브러리를 불러올 수 없습니다": "You can't import a library",
+    "Pro로 업그레이드하면 라이브러리 파일을 불러올 수 있습니다.": "Upgrade to Pro to import library files.",
+    "라이브러리 불러오기는 Pro 기능입니다.": "Importing a library is a Pro feature.",
     "이 작업에는 배선 {w}개가 필요합니다.": "This action needs {w} wires.",
     "이 작업에는 부품 {c}개가 필요합니다.": "This action needs {c} components.",
     // 다른 탭에서 결제하고 돌아왔을 때 Pro 적용 알림 — 2026-09-28 (pro.js)
@@ -1435,6 +1440,8 @@ WE.i18nMaps = WE.i18nMaps || {};
     "1장": "1 page",
     "PNG · PDF 내보내기 (": "PNG · PDF export (",
     "워터마크 포함": "with watermark",
+    // 무료 ✕ · Pro ✓ (2026-10-15 — 라이브러리 불러오기 = Pro 기능)
+    "라이브러리 불러오기": "Library import",
     // 요금제 4번째 줄 — 세 카드가 같아서 굵게를 뺐다(2026-10-01). <b> 가 없어지며 조각 두 개(「BOM · 결선표」·「엑셀 · CSV 내보내기」)가 한 문장이 됐다
     "BOM · 결선표 엑셀 · CSV 내보내기": "BOM · wire list Excel · CSV export",
     "부품 사진 올리기 · 배경 자동 제거": "Upload part photos · automatic background removal",
