@@ -277,16 +277,24 @@
     /* ── 접속자 (2026-10-12) — js/admin-stats.js. 색은 변수만: 지난날 막대는 회색, 오늘만 주색 ── */
     .adm-stats { flex: 1; min-height: 0; display: flex; flex-direction: column; }
     .adm-stats-body { flex: 1; min-height: 0; overflow: auto; padding: 18px 24px; display: flex; flex-direction: column; gap: 14px; }
-    .adm-stats-today { display: flex; align-items: baseline; gap: 6px; color: var(--tx2); font-size: var(--fs); }
+    .adm-stats-today { display: flex; align-items: baseline; gap: 28px; flex-wrap: wrap; color: var(--tx2); font-size: var(--fs); }
+    .adm-stats-num { display: inline-flex; align-items: baseline; gap: 6px; }
     .adm-stats-today b { color: var(--tx); font-size: 32px; font-weight: 700; line-height: 1; }
+    /* 범례 네모 — 막대 색과 같은 변수(전체 --bd · 에디터 --tx2). 2026-10-16 */
+    /* 줄맞춤은 기준선(baseline) — 빈 inline-block 의 기준선은 아래 끝이라 네모 바닥이 「오늘」 글자 바닥에 앉는다(center 는 32px 숫자 기준이라 떠 보였다) */
+    .adm-stats-key { display: inline-block; width: 10px; height: 10px; border-radius: 2px; background: var(--bd); }
+    .adm-stats-key.ed { background: var(--tx2); }
     .adm-stats-chart { display: block; width: 100%; max-width: 960px; height: auto; }
     .adm-stats-err { color: var(--danger); }
     .adm-stats-grid { stroke: var(--bd2); stroke-width: 1; stroke-dasharray: 3 3; }
     .adm-stats-axis { stroke: var(--bd); stroke-width: 1; }
     .adm-stats-hit { fill: transparent; }
-    .adm-stats-bar { fill: var(--tx3); }
-    .adm-stats-bar.today { fill: var(--primary-d); }
-    .adm-stats-day:hover .adm-stats-bar:not(.today) { fill: var(--tx2); }
+    /* 2026-10-16 — 전체 막대는 연한 회색, 그 위에 겹친 에디터 막대는 진한 회색(오늘만 주색). 에디터는 전체의 일부라
+       「연한 전체 · 진한 일부」 로 읽힌다. 마우스를 올리면 전체 막대만 한 단계 진해진다(에디터와는 계속 구분된다) */
+    .adm-stats-bar, .adm-stats-bar.today { fill: var(--bd); }
+    .adm-stats-day:hover .adm-stats-bar { fill: var(--tx3); }
+    .adm-stats-ed { fill: var(--tx2); }
+    .adm-stats-ed.today { fill: var(--primary-d); }
     .adm-stats-ylab, .adm-stats-xlab { fill: var(--tx3); font-size: 12px; }
     .adm-stats-xlab.today { fill: var(--primary-d); font-weight: 600; }
     .adm-stats-val { fill: var(--primary-d); font-size: 13px; font-weight: 700; }
@@ -738,14 +746,19 @@
     <!-- ── 접속자 (2026-10-12) ──────────────────────────────────────────
          왜 — 고원빈: 하루 접속자 추이를 보고 싶다(오늘 N명 + 그래프), 중복 접속은 빼고.
          숫자 = 기기당 하루 1명(서울 날짜). 세는 쪽 js/auth.js 「접속자 세기」 · 서버 _ai/sql/2026-10-12_접속자_집계.sql · 그리기 js/admin-stats.js
-         기준 설명은 화면 글자로 두지 않고 「오늘」 말풍선(title)에 둔다. -->
+         기준 설명은 화면 글자로 두지 않고 「오늘」 말풍선(title)에 둔다.
+         에디터 (2026-10-16 고원빈) — 「에디터」 = 그날 에디터를 연 기기 수. 세는 쪽 js/auth.js 「에디터 접속자」 · 서버 _ai/sql/2026-10-16_에디터_접속자.sql.
+         숫자 앞 작은 네모는 그래프 색(연한 회색 = 전체 · 진한 회색 = 에디터)을 알려 주는 범례다 — 글자 설명 대신. -->
     <section id="admStats" class="adm-stats" aria-label="접속자" hidden>
       <div class="adm-batch-bar">
         <span class="adm-col-stats adm-batch-saved" id="admStatsMsg"></span>
         <button type="button" class="adm-edit-btn" id="admStatsRefresh" title="서버에서 다시 읽습니다">↻ 새로 읽기</button>
       </div>
       <div class="adm-stats-body">
-        <div class="adm-stats-today">오늘 <b id="admStatsToday">–</b>명</div>
+        <div class="adm-stats-today">
+          <span class="adm-stats-num"><i class="adm-stats-key"></i>오늘 <b id="admStatsToday">–</b>명</span>
+          <span class="adm-stats-num"><i class="adm-stats-key ed"></i>에디터 <b id="admStatsEditor">–</b>명</span>
+        </div>
         <svg id="admStatsChart" class="adm-stats-chart" role="img" aria-label="최근 30일 접속자" xmlns="http://www.w3.org/2000/svg"></svg>
       </div>
     </section>

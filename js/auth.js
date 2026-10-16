@@ -205,8 +205,16 @@ WE.auth = (function () {
        · 서버로는 **아무 값도 안 보낸다** — 서버 표엔 날짜·숫자만 남는다(_ai/sql/2026-10-12_접속자_집계.sql)
        · SDK 없이 fetch 한 번 — 랜딩의 「SDK 늦게 받기」(위) 를 깨지 않는다
      왜 직접 세나: Cloudflare 방문 통계는 쿠키를 안 써서 같은 사람이 다시 오면 또 센다(중복 제외 불가).
+
+     에디터 접속자 (2026-10-16) — 같은 방식으로 숫자를 하나 더 센다: **그날 에디터(app.html)를 연 기기 수.**
+       왜: 10/16 접속자 40명 중 부품을 만든 기기는 3대였는데, 나머지가 랜딩에서 나갔는지 에디터까지 왔는지
+           알 길이 없었다(고원빈 「너무 딥하게는 말고 숫자 하나만」).
+       · 날짜 표시는 **다른 키**(we_editor_day)에 적는다 — 랜딩을 먼저 본 사람도 에디터는 따로 1번 센다
+       · 서버 함수 count_editor_visit · 표 daily_editor_visits(_ai/sql/2026-10-16_에디터_접속자.sql)
+       · 기기당 하루 요청은 많아야 2번(전체 1 + 에디터 1)
      검사: tests/verify_adminstats.mjs */
   var 방문키 = "we_visit_day";
+  var 에디터키 = "we_editor_day";
   var 로봇들 = /bot|crawl|spider|slurp|headless|lighthouse|externalhit/i;
 
   /* 서울 날짜(yyyy-mm-dd). 서버 count_visit 도 서울 날짜로 센다 — 기준이 다르면 자정 무렵 두 번 센다 */
@@ -224,20 +232,21 @@ WE.auth = (function () {
     return 저장날 !== 오늘;
   }
 
-  /* host·ua·webdriver 를 인자로 받는 건 검사가 본 서비스 조건을 흉내 내기 위해서다(실제로는 아래 init 이 진짜 값을 넘긴다).
+  /* 세기 — 전체 접속자·에디터 접속자가 같이 쓰는 몸통. 다른 건 날짜 표시 키와 서버 함수 이름뿐이다.
+     host·ua·webdriver 를 인자로 받는 건 검사가 본 서비스 조건을 흉내 내기 위해서다(실제로는 아래 init 이 진짜 값을 넘긴다).
      돌려줌: 요청을 보냈으면 true */
-  function 방문세기(host, ua, webdriver) {
+  function 세기(키, 함수, host, ua, webdriver) {
     try {
       var 오늘 = 서울오늘(), 저장날 = null;
       // 저장소를 못 쓰면 **안 센다** — 날짜를 못 적으면 열 때마다 +1 이 된다. 덜 세는 쪽이 낫다
-      try { 저장날 = localStorage.getItem(방문키); } catch (e) { return false; }
+      try { 저장날 = localStorage.getItem(키); } catch (e) { return false; }
       if (!셀까(host, ua, webdriver, 저장날, 오늘)) return false;
       // 날짜를 **먼저** 적는다 — 탭 두 개를 동시에 열어도 한 번만 나간다. 요청이 실패하면 그날은 안 세진다(덜 세는 쪽)
-      try { localStorage.setItem(방문키, 오늘); } catch (e) { return false; }
+      try { localStorage.setItem(키, 오늘); } catch (e) { return false; }
       // keepalive 는 일부러 안 쓴다 — 이 요청은 apikey 헤더 때문에 사전 확인(preflight)이 붙는데,
       // keepalive 와 사전 확인을 같이 못 하는 브라우저가 있다(그 브라우저 손님은 아예 안 세진다).
       // 안 쓸 때의 손해는 「열자마자 0.1초 안에 다른 페이지로 넘어간 사람」 정도라 이쪽이 작다
-      fetch(URL + "/rest/v1/rpc/count_visit", {
+      fetch(URL + "/rest/v1/rpc/" + 함수, {
         method: "POST",
         headers: { apikey: KEY, "Content-Type": "application/json" },
         body: "{}"
@@ -245,6 +254,13 @@ WE.auth = (function () {
       return true;
     } catch (e) { return false; }
   }
+  function 방문세기(host, ua, webdriver) { return 세기(방문키, "count_visit", host, ua, webdriver); }
+  function 에디터세기(host, ua, webdriver) { return 세기(에디터키, "count_editor_visit", host, ua, webdriver); }
+
+  /* 에디터 화면인가 — js/app.js(WE.app)를 싣는 페이지는 app.html 하나뿐이다.
+     ⚠ 주소(pathname)로 가르지 않는다 — Cloudflare 가 /app.html 을 /app 으로 바꾸는 등 플랫폼 동작에 따라
+       달라진다(CLAUDE.md §2 「플랫폼 고유 동작에 기대지 않는다」). init 은 DOMContentLoaded 에 돌아 그때는 app.js 가 이미 실려 있다 */
+  function 에디터인가() { try { return !!(WE.app && WE.app.init); } catch (e) { return false; } }
 
   /* ── 로그인 상태 유지 ───────────────────────────────
      세션은 항상 localStorage 에 둔다. 탭마다 따로 놓으면(sessionStorage)
@@ -581,6 +597,7 @@ WE.auth = (function () {
     // 접속자 세기 — 「SDK 늦게 받기」 분기보다 **앞**이라 랜딩 첫 방문자도 SDK 없이 센다(위 「접속자 세기」)
     var 자동화 = false; try { 자동화 = !!navigator.webdriver; } catch (e) { /* 무시 */ }
     방문세기(location.hostname, navigator.userAgent, 자동화);
+    if (에디터인가()) 에디터세기(location.hostname, navigator.userAgent, 자동화);   // 에디터 접속자(2026-10-16)
 
     // 랜딩 첫 방문자 — SDK 없이 '로그아웃' 으로 확정한다. 상태는 SDK 를 받은 뒤의 로그아웃과 같다
     // (applySession(null) → 프로필 없음 → _ready → notify). 위 「SDK 늦게 받기」 참조
@@ -1193,6 +1210,8 @@ WE.auth = (function () {
     _usable: usable,
     _셀까: 셀까,             // 접속자 세기 판정(순수 함수) — tests/verify_adminstats.mjs
     _방문세기: 방문세기,     // 본 서비스 조건을 흉내 내 실제로 보내 본다(검사는 요청을 가로챈다)
+    _에디터세기: 에디터세기, // 위와 같다 — 에디터 접속자(2026-10-16)
+    _에디터인가: 에디터인가,
     _서울오늘: 서울오늘,
   };
 })();
