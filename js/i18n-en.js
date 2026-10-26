@@ -1371,7 +1371,7 @@ WE.i18nMaps = WE.i18nMaps || {};
     "내 계정 — 이지케이블 (EasyCable)": "My account — EasyCable",
     "결제 — 이지케이블": "Checkout — EasyCable",
     "부품 사진을 올리고 단자를 이으면 배선도가 됩니다. 아두이노·ESP32 프로젝트 배선을 실물 사진 그대로. 설치 없이 브라우저에서, 부품 목록과 PDF는 자동으로.": "Upload part photos, connect the terminals, and you have a wiring diagram. Draw Arduino/ESP32 project wiring with real photos — in the browser, no install, with an automatic parts list and PDF.",
-    "이지케이블 요금 안내. 무료로 시작하고, 필요할 때만 이용권을 구매하세요. 1개월 6,900원 · 1년 46,800원(월 3,900원).": "EasyCable pricing. Start free and buy a pass only when you need it. 1 month ₩6,900 · 1 year ₩46,800 (₩3,900/month).",
+    "이지케이블 요금 안내. 무료로 시작하고, 필요할 때만 이용권을 구매하세요. 1개월 6,900원 · 1년 58,800원(월 4,900원).": "EasyCable pricing. Start free and buy a pass only when you need it. 1 month ₩6,900 · 1 year ₩58,800 (₩4,900/month).",   // 10/26 정가 전환
     // ===== 랜딩 =====
     "회로 기호를 몰라도 됩니다. 아두이노·ESP32 프로젝트의 배선을 실물 사진 그대로 그리고, 부품 목록은 자동으로 만들어집니다.": "No circuit symbols needed. Draw your Arduino/ESP32 wiring with real part photos, and the parts list builds itself.",
     "무료로 시작하기": "Start for free",
@@ -1460,12 +1460,10 @@ WE.i18nMaps = WE.i18nMaps || {};
     // ⚠ 「추천」(알약) · 「1개월권을 12번 사는 것보다 36,000원 저렴」 키가 있었다 — 2026-10-01 화면에서 빠져 지웠다
     "Pro · 1년": "Pro · 1 year",
     "/ 1년": "/ 1 year",
-    "출시 기념가": "Launch price",   // 1년권 카드 머리의 띠(.plan-band) (2026-10-01). 정가로 넘기는 날 띠와 함께 뺀다
+    // ⚠ 「출시 기념가」 · 「정가 월 4,900원」 · 「월 3,900원」 키가 있었다 — 2026-10-26 정가 전환으로 화면에서 빠져 지웠다
     "1개월권 12번": "12 monthly passes",   // 1년권 기준가 줄 — 「1개월권 12번 ~~82,800원~~」 (2026-10-01)
     "82,800원": "₩82,800",
-    "정가 월 4,900원": "Regular ₩4,900/month",
-    "월 4,900원": "₩4,900/month",   // 지금은 화면에 없다 — 정가로 넘기는 날 1년권 아래 줄 값이 된다(_ai/배포_체크리스트.md 5-1)
-    "월 3,900원": "₩3,900/month",
+    "월 4,900원": "₩4,900/month",   // 1년권 아래 줄 (10/26 정가 전환부터)
     "배선도 작업이 꾸준히 이어지는 경우에 가장 저렴합니다.": "The best value if you draw diagrams regularly.",
     "12개월 동안": "For 12 months",
     "* VAT가 포함된 가격입니다.": "* Prices include VAT.",
@@ -1533,7 +1531,7 @@ WE.i18nMaps = WE.i18nMaps || {};
     "지금 이용 기간은 그대로 두고": "Your current period stays as is, and",
     "12개월이 더해집니다.": "12 months are added on top.",
     "환불하고 다시 결제하실 필요가 없습니다.": "No need to refund and buy again.",
-    "1년 이용권 · ₩46,800": "1-year pass · ₩46,800",
+    "1년 이용권 · ₩58,800": "1-year pass · ₩58,800",   // checkout.html 업셀 버튼 (10/26 정가 전환)
     "이용 기간이 끝난 뒤에 다시 결제하실 수 있습니다.": "You can buy again after your current period ends.",
     "결제가 완료되었습니다": "Payment complete",
     "내 계정에서 확인": "View in my account",

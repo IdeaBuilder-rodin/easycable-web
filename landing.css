@@ -504,7 +504,8 @@ section > .wrap > h2 {
 /* ⚠ align-items 를 start 로 두면 카드가 저마다 내용 높이만큼만 자라서
    세 장의 아래끝이 들쭉날쭉해진다. stretch(기본값)로 두어 높이를 맞춘다.
    내용이 적은 카드는 아래가 비는데, 그 자리는 아래 .plan-feats 가 채운다. */
-/* row-gap 56px = 1년권 위 「출시 기념가」 띠 36px + 원래 간격 20px — 카드가 줄을 바꿀 때 띠가 윗카드와 안 겹치게 */
+/* row-gap 56px = 1년권 위 「출시 기념가」 띠 36px + 원래 간격 20px — 카드가 줄을 바꿀 때 띠가 윗카드와 안 겹치게
+   ⚠ 띠는 2026-10-26 에 뗐다(정가 전환). 간격은 그대로 두었다 — 줄일지는 따로 정한다(pricing.html 과 같게) */
 .price .plan-grid {
   display: grid; gap: 20px; row-gap: 56px; align-items: stretch;
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
@@ -528,7 +529,7 @@ section > .wrap > h2 {
             display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; }
 
 /* ── 1년권 가격 블록 (2026-10-01 고원빈 — 「안 1 · 파랑 띠」) ── pricing.html 과 **같은 값**.
-   [띠 출시 기념가] · 1개월권 12번 ~~82,800원~~ · 43% ₩46,800 / 1년 · 월 3,900원 · 정가 월 4,900원
+   1개월권 12번 ~~82,800원~~ · 28% ₩58,800 / 1년 · 월 4,900원   (10/26 정가 전환 — 띠 .plan-band 는 지금 안 쓰고 CSS 만 남긴다)
    알약·연한 색 상자를 빼고 띠 · 빨간 숫자 · 굵기로만 강조한 이유, 색 대비, ₩ 를 안 쓰는 이유 등은
    pricing.html <style> 의 「1년권 가격 블록」 주석에 있다(같은 말을 두 곳에 길게 적지 않는다). */
 .price .plan-band { position: absolute; left: -1px; right: -1px; bottom: 100%; height: 36px; margin: 0;

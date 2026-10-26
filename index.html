@@ -22,7 +22,7 @@
        브라우저 탭에서 브랜드가 일정하지 않았다. (2026-08-24 교체) -->
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml" />
   <link rel="apple-touch-icon" href="assets/icon-180.png" />
-  <link rel="stylesheet" href="landing.css?v=9bea02f9" />
+  <link rel="stylesheet" href="landing.css?v=d50ebd92" />
   <!-- 히어로 영상의 정지 그림 = 첫 화면에서 가장 큰 그림(LCP). CSS·스크립트보다 먼저 받게 한다 -->
   <link rel="preload" as="image" href="assets/hero-poster.webp" type="image/webp" fetchpriority="high" />
 <!-- 로그인 창의 겉모습. 에디터와 **같은 파일**을 읽는다(복사본 없음). -->
@@ -371,22 +371,19 @@
            ⚠ 파란 강조(.is-pick)가 여기 있다. 예전에는 1개월권에 있었는데,
               그건 「첫 결제 시 1개월 더」 리본이 붙는 자리였기 때문이다.
               그 혜택을 없앤 뒤로는(2026-09-08) 1개월권을 들어올릴 이유가 남지 않아 1년권으로 옮겼다.
-           ⚠ 2026-10-01 — 「추천」·「출시 기념가」 알약을 빼고 카드 머리의 「출시 기념가」 띠로 바꿨다(고원빈).
-              모양·색·위치의 이유는 pricing.html <style> 의 「1년권 가격 블록」 주석(CSS 값은 landing.css 에 같게). -->
-      <article class="plan is-paid is-pick has-band">
-        <p class="plan-band">출시 기념가</p>
+           ⚠ 2026-10-26 — 출시 기념가(46,800)를 끝내고 정가 58,800 으로 넘기면서 카드 머리의 「출시 기념가」 띠를 뗐다(고원빈).
+              (.has-band 클래스도 같이 뺐다 — 이유는 pricing.html 같은 카드 주석) -->
+      <article class="plan is-paid is-pick">
         <p class="plan-name">Pro · 1년</p>
-        <!-- 1개월권 12번(6,900 × 12 = 82,800) 대비 43% — 지금 실제로 파는 1개월권이 기준이라 취소선의 근거가 떳떳하다.
-             ⚠ 2026-09-22 — 46,800 은 정가가 아니라 **출시 기념가**다(정가 58,800 = 월 4,900원).
-                기한은 적지 않는다. 정가로 넘기는 날 바꿀 자리는 _ai/배포_체크리스트.md 「정가 전환」.
+        <!-- 1개월권 12번(6,900 × 12 = 82,800) 대비 28%(28.99% 내림) — 지금 실제로 파는 1개월권이 기준이라 취소선의 근거가 떳떳하다.
              ⚠ 이 카드는 pricing.html 1년권 카드와 **마크업이 같아야 한다.** -->
         <p class="plan-was"><span class="lbl">1개월권 12번</span><s>82,800원</s></p>
         <p class="plan-price">
-          <span class="pct">43%</span>
-          <span class="num">₩46,800</span>
+          <span class="pct">28%</span>
+          <span class="num">₩58,800</span>
           <span class="per">/ 1년</span>
         </p>
-        <p class="plan-sub"><span class="mo">월 3,900원</span><span class="note">정가 월 4,900원</span></p>
+        <p class="plan-sub"><span class="mo">월 4,900원</span></p>
         <p class="plan-desc">배선도 작업이 꾸준히 이어지는 경우에 가장 저렴합니다.</p>
         <a class="btn btn-main" href="checkout.html?plan=year">결제하기</a>
 
@@ -394,7 +391,7 @@
           <b>12개월 동안</b>
           <!-- 1개월권과 받는 것은 같다. 그래서 목록도 같게 둔다. 목록을 줄이면 또 "1년권이 더 적나?" 가 된다.
                ⚠ 맨 위에 「1개월권을 12번 사는 것보다 36,000원 저렴」 한 줄이 있었다. 2026-10-01 에 뺐다(고원빈) —
-                  같은 비교를 이제 카드 윗부분 「1개월권 12번 ~~82,800원~~ · 43% ₩46,800」 이 맡는다. -->
+                  같은 비교를 이제 카드 윗부분 「1개월권 12번 ~~82,800원~~ · 28% ₩58,800」 이 맡는다. -->
           <ul>
             <li><span>부품 · 배선 <b>무제한</b></span></li>
             <li><span>도면 페이지 <b>무제한</b></span></li>
