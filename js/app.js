@@ -327,6 +327,30 @@ WE.app = (function () {
     return true;
   }
 
+  /* 내 부품을 처음 단자 편집했을 때 라이브러리 원본에도 그 단자를 넣는다 (2026-11-03 고원빈 승인).
+     왜: [＋ 부품 추가]는 단자 없이 라이브러리에 넣고(addImageFileToLibrary 의 terminals: []),
+         단자 편집기는 도면 위 부품만 고친다. 그래서 다음에 라이브러리에서 꺼내면 단자가 0개였고,
+         사용자 부품 수집(libsync — 라이브러리 저장 때만 돈다)에도 단자가 안 갔다.
+     ⚠ 원본에 단자가 **하나도 없을 때만** 한다. 이미 있으면 「라이브러리에 반영」 메뉴로만 바뀐다(9/08 —
+        원본이 몰래 바뀌지 않게). 비어 있던 걸 채우는 것이라 잃는 것이 없다.
+     ⚠ 도면 위에서 그림을 바꾼 부품(applyInstanceImage)은 건너뛴다 — 단자 좌표(rx·ry)가 바뀐 그림 기준이라
+        원본 그림에 얹으면 어긋난다. 크기는 상관없다(그림이 preserveAspectRatio="none" 으로 상자에 늘어나 rx·ry 가 그대로 맞는다).
+     이름·그림·크기는 안 건드린다 — 단자와 배치 큐만. 저장(updatePart → save)이 수집 타이머도 건다. */
+  function fillEmptyLibraryTerminals(c) {
+    var part = c && c.libraryId && WE.library.get(c.libraryId);
+    if (!part || part.publicId) return false;              // 공용 부품은 makeComponentIndependent 가 맡는다
+    if ((part.terminals || []).length) return false;
+    if (!(c.terminals || []).length) return false;
+    if (part.image !== c.image) return false;
+    WE.library.updatePart(part.id, {
+      terminals: c.terminals,
+      terminalPlacementQueue: c.terminalPlacementQueue,
+      terminalPlacementQueueVersion: c.terminalPlacementQueueVersion
+    });
+    renderLibrary();
+    return true;
+  }
+
   function saveToLibrary(name, buildData) {
     var existing = WE.library.findByName(name);
     var part;
@@ -1009,6 +1033,9 @@ WE.app = (function () {
     // 무료 한도에 걸리면 null 이 온다 — 안내는 addComponent 안에서 이미 띄웠다.
     if (!cmp) return null;
     trackOnce("place_component");
+    // 부품 사용 집계(2026-11-06 고원빈 「어떤 부품을 사용하는지」) — 라이브러리와 공용 창이 합쳐지는 여기서 센다.
+    // 샘플·예제 파일을 열 때는 이 함수를 안 지나므로 안 세진다. 수집은 덤이라 무슨 오류가 나도 부품 놓기를 막지 않는다.
+    try { if (WE.libsync && WE.libsync.countPlace) WE.libsync.countPlace(part); } catch (e) { /* 무시 */ }
     WE.model.select("component", cmp.id);
     touchLibRecent(part.id);
     renderLibrary();
@@ -5868,7 +5895,8 @@ WE.app = (function () {
         /* 도면에서 고친 모습을 라이브러리 원본에 반영한다 (2026-09-08 되살림).
            ⚠ 이미 **배치된** 부품들은 안 바뀐다 — 배치하는 순간 자기 사본을 갖기 때문이다.
               바뀌는 건 '앞으로 꺼내 쓸 때' 다. 그래서 되돌리기(Ctrl+Z)로도 안 돌아온다.
-              그러니 자동으로 하지 않고 이 메뉴를 눌렀을 때만 한다. */
+              그러니 자동으로 하지 않고 이 메뉴를 눌렀을 때만 한다.
+              예외 하나(11/03): 원본에 단자가 하나도 없으면 단자 편집기 [완료] 때 채운다 — fillEmptyLibraryTerminals */
         if (c.libraryId && WE.library.get(c.libraryId)) {
           WE.library.updatePart(c.libraryId, 부품자료(c));
           renderLibrary();
@@ -6561,7 +6589,7 @@ WE.app = (function () {
     openComponentMenuAt: openComponentMenuAt,
     openPresetModal: openPresetModal,
     focusAnnoText: focusAnnoText,
-    afterTerminalEdit: afterTerminalEdit, makeComponentIndependent: makeComponentIndependent,
+    afterTerminalEdit: afterTerminalEdit, makeComponentIndependent: makeComponentIndependent, fillEmptyLibraryTerminals: fillEmptyLibraryTerminals,
     buildBOM: buildBOM,
     bomData: bomData,
     bomColumns: visibleCols,

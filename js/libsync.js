@@ -19,19 +19,33 @@
 
    무엇을 보내나 — 부품 정보(이름·스펙·링크·단가·역할·전기값·단자·배치 큐·크기·폴더 이름·링크형 데이터시트·공용 출처)
           + 이미지(data:, 300KB 이하). 파일형 데이터시트(PDF)는 뺀다(고원빈 확정). 이미지는 바뀌었을 때만 다시 보낸다.
-   "같은 부품" 판정은 서버·관리자 화면이 rev(내용 해시)로 한다 — 내용이 하나라도 다르면 다른 부품(고원빈). */
+   "같은 부품" 판정은 서버·관리자 화면이 rev(내용 해시)로 한다 — 내용이 하나라도 다르면 다른 부품(고원빈).
+
+   누락 수정 (2026-11-06) — 고원빈 시크릿 시험 「부품을 추가했는데 관리자 화면에 안 온다」. 라이브 재현: 추가하고 30초 전에 페이지를 떠나면
+     타이머가 사라지고, 돌아와도 「마지막 전송 7일 경과」 때만 다시 봐서 다음 저장 때까지 안 갔다. 그래서:
+     · 열린 뒤 60초 확인을 **늘** 한다 — 보낼 게 없으면 요청이 안 나가므로 비용이 없다
+     · 탭을 벗어나면(visibilitychange hidden · pagehide) 기다리던 전송을 바로 보낸다. 30초 대기 자체는 유지한다(로그 사용량 — _ai/함정.md)
+     · 전송 중에 타이머가 울려 건너뛴 것은 끝난 뒤 한 번 더 돈다
+     ⚠ 창을 닫는 순간의 요청은 브라우저가 끊을 수 있다. 일반 창은 다음 방문 때 가지만 시크릿 창은 자료가 사라져 못 간다(받아들인 한계).
+
+   부품 사용 집계 (2026-11-06) — 고원빈 「어떤 부품을 추가하고 사용하는지」. 라이브러리 저장만 보면 도면에 실제로 쓰는지 모른다.
+     · 도면에 놓을 때 app.js placeLibraryPart 가 countPlace 를 부른다 → 횟수만 localStorage(we_part_use)에 쌓아 위 타이머로 같이 보낸다
+     · 보내는 값은 부품 이름·규격·공용 id·횟수뿐이다. **도면 내용은 안 보낸다**(방침 제2조 「부품 사용 기록」)
+     · 서버가 used:true 라고 답한 만큼만 지운다 — 거절·꺼짐·실패면 남겨 뒀다 다음에 보낸다. 옛 서버(v16)는 used 를 안 주므로 남아 있다가 배포 뒤 간다 */
 var WE = window.WE || {};
 window.WE = WE;
 
 WE.libsync = (function () {
   "use strict";
   var DEVICE_KEY = "we_device_id", STATE_KEY = "we_libsync_state";
-  var DEBOUNCE_MS = 30 * 1000, FIRST_DELAY_MS = 60 * 1000, RECHECK_MS = 7 * 24 * 3600 * 1000;
+  var DEBOUNCE_MS = 30 * 1000, FIRST_DELAY_MS = 60 * 1000;
   var OFF_MS = 24 * 3600 * 1000, RETRY_429_MS = 60 * 1000;
   var MAX_IMAGE_CHARS = 400 * 1024;     // data: 문자열 기준(≈ 300KB 바이트) — 서버 상한과 맞춤
   var BATCH_MAX = 25, BATCH_CHARS = 2.5 * 1024 * 1024;
-  var APP_VERSION = "2026-09-14";
-  var timer = null, running = false, state = null;
+  // 부품 사용 — 새 키(기존 저장 키·형식은 안 바꾼다). 종류 상한은 저장소가 끝없이 안 커지게, 한 번에 100종·횟수 500 은 서버 상한과 맞춘다
+  var USE_KEY = "we_part_use", USE_MAX_KINDS = 200, USE_BATCH = 100, USE_MAX_N = 500;
+  var APP_VERSION = "2026-11-06";       // 서버 기기 행에 남는다 — 새 판이 손님에게 닿았는지 이 값으로 본다
+  var timer = null, running = false, rerun = false, state = null;
 
   function warn() { try { console.warn.apply(console, ["[libsync]"].concat([].slice.call(arguments))); } catch (e) { /* 무시 */ } }
   function enabled() {
@@ -105,6 +119,56 @@ WE.libsync = (function () {
     return { upserts: upserts, deletes: deletes };
   }
 
+  /* 부품 사용 — 저장소에는 { 부품id: { pub, name, spec, n } } 로 둔다. 읽기·쓰기가 실패해도 에디터와 무관하다 */
+  function loadUses() {
+    try {
+      var o = JSON.parse(localStorage.getItem(USE_KEY) || "null");
+      return o && typeof o === "object" && !Array.isArray(o) ? o : {};
+    } catch (e) { return {}; }
+  }
+  function saveUses(o) {
+    try {
+      if (Object.keys(o).length) localStorage.setItem(USE_KEY, JSON.stringify(o));
+      else localStorage.removeItem(USE_KEY);
+    } catch (e) { /* 무시 */ }
+  }
+  /* 부품을 도면에 놓았다 — app.js placeLibraryPart 가 **실제로 놓인 뒤에만** 부른다(무료 한도로 막히면 안 온다).
+     돌려줌: 세었으면 true. 이름은 마지막에 놓을 때 값으로 덮는다 — 그 사이 이름을 고쳤으면 고친 이름이 맞다 */
+  function countPlace(part) {
+    try {
+      if (!enabled() || !part || !part.id || !part.name) return false;
+      var uses = loadUses(), key = String(part.id), u = uses[key];
+      if (!u) {
+        if (Object.keys(uses).length >= USE_MAX_KINDS) return false;   // 오래 못 보낸 기기 — 저장소가 끝없이 안 커지게 새 종류는 그만 센다
+        u = uses[key] = { n: 0 };
+      }
+      u.pub = part.publicId || null;
+      u.name = String(part.name).slice(0, 200);
+      u.spec = String(part.spec || "").slice(0, 200);
+      u.n = (Number(u.n) || 0) + 1;
+      saveUses(uses);
+      touch();
+      return true;
+    } catch (e) { warn("사용 집계 실패", e && e.message); return false; }
+  }
+  /* 이번에 보낼 사용 목록 — 한 번에 100종까지. key 는 지울 때 쓰고 서버로는 안 보낸다(부품 id 는 서버가 쓰지 않는다) */
+  function pendingUses() {
+    var o = loadUses();
+    return Object.keys(o).slice(0, USE_BATCH).map(function (k) {
+      return { key: k, pub: o[k].pub || null, name: o[k].name, spec: o[k].spec || "", n: Math.min(Number(o[k].n) || 0, USE_MAX_N) };
+    }).filter(function (u) { return u.n > 0 && u.name; });
+  }
+  /* 서버가 받은 만큼만 뺀다 — 보내는 사이에 또 놓은 횟수는 남는다 */
+  function subtractUses(sent) {
+    var o = loadUses();
+    sent.forEach(function (s) {
+      var u = o[s.key]; if (!u) return;
+      u.n = (Number(u.n) || 0) - s.n;
+      if (u.n <= 0) delete o[s.key];
+    });
+    saveUses(o);
+  }
+
   /* 한 묶음 보내기. 결과에 따라 상태를 적는다. resolve 값: "ok" | "off" | "rate" | "fail" */
   function send(batch) {
     var c = client(); if (!c || !c.functions) return Promise.resolve("fail");
@@ -112,6 +176,8 @@ WE.libsync = (function () {
     var body = { deviceId: did, appVersion: APP_VERSION,
                  upserts: batch.upserts.map(function (u) { return { id: u.id, rev: u.rev, part: u.part, image: u.image }; }),
                  deletes: batch.deletes };
+    var 사용 = batch.uses || [];
+    if (사용.length) body.uses = 사용.map(function (u) { return { pub: u.pub, name: u.name, spec: u.spec, n: u.n }; });
     return c.functions.invoke("library-sync", { body: body }).then(function (res) {
       if (res && res.error) {
         var status = res.error.context && res.error.context.status;
@@ -128,24 +194,27 @@ WE.libsync = (function () {
       batch.upserts.forEach(function (u) { if (okIds[u.id]) { st.rev[u.id] = u.rev; st.img[u.id] = u._img; } });
       (d.deleted || []).forEach(function (id) { delete st.rev[id]; delete st.img[id]; });
       st.lastRun = Date.now(); saveState();
+      if (사용.length && d.used === true) { subtractUses(사용); 사용보냄 = true; }
       return "ok";
     }).catch(function (e) { warn("전송 실패", e && e.message); return "fail"; });
   }
 
-  /* 전체 실행 — 바뀐 것을 묶음으로 나눠 차례로 보낸다. 겹쳐 돌지 않는다. */
+  /* 전체 실행 — 바뀐 것을 묶음으로 나눠 차례로 보낸다. 겹쳐 돌지 않는다.
+     겹친 요청은 버리지 않고 표시만 해 뒀다가 끝난 뒤 한 번 더 돈다(2026-11-06) — 건너뛰면 다음 저장 때까지 그 변경이 안 간다. */
+  var 사용보냄 = false;
   function run() {
-    if (running) return Promise.resolve("busy");
-    running = true;
+    if (running) { rerun = true; return Promise.resolve("busy"); }
+    running = true; 사용보냄 = false;
     return new Promise(function (resolve) {
       try {
         if (!enabled()) return resolve("disabled");
         if (navigator.onLine === false) return resolve("offline");
         var st = loadState();
         if (st.offUntil && st.offUntil > Date.now()) return resolve("off");
-        var d = diff();
-        if (!d.upserts.length && !d.deletes.length) { st.lastRun = Date.now(); saveState(); return resolve("nothing"); }
-        // 묶음 나누기 — 개수·크기 상한
-        var batches = [], cur = { upserts: [], deletes: d.deletes.slice(0, 200) }, size = 0;
+        var d = diff(), 사용 = pendingUses();
+        if (!d.upserts.length && !d.deletes.length && !사용.length) { st.lastRun = Date.now(); saveState(); return resolve("nothing"); }
+        // 묶음 나누기 — 개수·크기 상한. 사용 목록은 작아서 첫 묶음에 같이 싣는다
+        var batches = [], cur = { upserts: [], deletes: d.deletes.slice(0, 200), uses: 사용 }, size = 0;
         d.upserts.forEach(function (u) {
           var n = JSON.stringify(u.part).length + (u.image ? u.image.length : 0);
           if (cur.upserts.length >= BATCH_MAX || (size + n > BATCH_CHARS && cur.upserts.length)) { batches.push(cur); cur = { upserts: [], deletes: [] }; size = 0; }
@@ -162,7 +231,14 @@ WE.libsync = (function () {
           });
         })();
       } catch (e) { warn("실행 오류", e && e.message); resolve("fail"); }
-    }).then(function (r) { running = false; return r; }, function () { running = false; return "fail"; });
+    }).then(function (r) { 끝난뒤(); return r; }, function () { 끝난뒤(); return "fail"; });
+  }
+  function 끝난뒤() {
+    running = false;
+    // 한 번에 100종을 넘게 쌓였으면 남은 것을 이어 보낸다. 서버가 받았을 때만 — 옛 서버(used 없음)에 끝없이 다시 보내지 않게
+    var 남음 = false;
+    try { 남음 = 사용보냄 && Object.keys(loadUses()).length > 0; } catch (e) { /* 무시 */ }
+    if (rerun || 남음) { rerun = false; touch(1000); }
   }
 
   /* 라이브러리가 저장될 때마다 불린다(library.js). 30초 조용하면 한 번 돈다. */
@@ -178,21 +254,40 @@ WE.libsync = (function () {
     } catch (e) { warn("예약 실패", e && e.message); }
   }
 
-  /* 앱이 다 뜬 뒤 60초 — 7일 넘게 안 보냈으면 한 번 확인(대개 0건) */
+  /* 기다리던 전송을 지금 보낸다 — 탭을 벗어날 때. 기다리는 게 없으면 아무것도 안 한다(요청을 늘리지 않는다).
+     requestIdleCallback 을 안 거치는 까닭: 숨은 탭은 언제 비는지 믿을 수 없고, 사용자는 이미 다른 일을 하고 있다 */
+  function flushNow() {
+    try {
+      if (!timer || !enabled()) return;
+      clearTimeout(timer); timer = null;
+      run();
+    } catch (e) { warn("즉시 전송 실패", e && e.message); }
+  }
+
+  /* 앱이 다 뜬 뒤 60초 — 지난번에 못 보낸 것이 있으면 보낸다. 없으면 요청이 안 나간다(run 의 "nothing").
+     예전엔 마지막 전송이 7일 지났을 때만 봐서, 추가하고 바로 떠난 부품이 다음 저장 때까지 안 갔다(2026-11-06 재현) */
   try {
     document.addEventListener("DOMContentLoaded", function () {
       setTimeout(function () {
-        try { var st = loadState(); if (!st.lastRun || Date.now() - st.lastRun > RECHECK_MS) touch(1000); } catch (e) { /* 무시 */ }
+        try { touch(1000); } catch (e) { /* 무시 */ }
       }, FIRST_DELAY_MS);
     });
+    document.addEventListener("visibilitychange", function () {
+      if (document.visibilityState === "hidden") flushNow();
+    });
+    window.addEventListener("pagehide", flushNow);
   } catch (e) { /* 무시 */ }
 
   return {
     touch: touch,
+    countPlace: countPlace,
     // 검사용 — 디바운스 없이 지금 돌리고 결과("ok"|"nothing"|"off"|"rate"|"fail"|…)를 준다
     _테스트_지금: function () { return run(); },
     _테스트_상태: function () { return JSON.parse(JSON.stringify(loadState())); },
     _테스트_초기화: function () { state = null; try { localStorage.removeItem(STATE_KEY); } catch (e) { /* 무시 */ } },
-    _테스트_차이: diff
+    _테스트_차이: diff,
+    _테스트_사용: function () { return loadUses(); },
+    _테스트_대기중: function () { return !!timer; },
+    _테스트_대기끄기: function () { if (timer) { clearTimeout(timer); timer = null; } }
   };
 })();

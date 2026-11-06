@@ -257,6 +257,39 @@ WE.auth = (function () {
   function 방문세기(host, ua, webdriver) { return 세기(방문키, "count_visit", host, ua, webdriver); }
   function 에디터세기(host, ua, webdriver) { return 세기(에디터키, "count_editor_visit", host, ua, webdriver); }
 
+  /* 회원 에디터 기록 (2026-11-02) — 로그인한 회원이 에디터를 연 날을 남긴다(관리자 「접속자」 의 회원 목록).
+     왜: 고원빈 11/02 「오늘 에디터 작업한 사람이 누군지」. 위 두 숫자는 기기만 세서 누구인지 모른다.
+       · 로그인한 회원만 — 비회원은 위 숫자로만 남는다(고원빈 11/02 「회원만 이메일, 나머지는 숫자」)
+       · 서버로 **아무 값도 안 보낸다** — 누구인지는 서버가 로그인 토큰으로 정한다(남의 이름으로 남길 수 없다)
+       · 그래서 위 세기 의 익명 fetch 가 아니라 SDK(client.rpc)로 보낸다 — 로그인 토큰이 붙어야 한다
+       · 날짜 표시는 또 **다른 키**(we_editor_user_day)에 「날짜|회원 id」 로 적는다 — 같은 기기에서 계정을 바꾸면
+         그 계정도 한 번 센다. 서버도 하루 한 회원 한 줄로 거르므로(on conflict) 이 키는 요청을 아끼는 용도다
+       · 판정은 위 셀까 그대로(본 서비스 주소만 · 로봇·자동화 제외) — 미리보기·검사 서버의 회원은 안 남는다
+       · 서버 함수 count_editor_user · 표 daily_editor_users(_ai/sql/2026-11-02_에디터_회원.sql) · 개인정보처리방침 제2·6조
+     rpc 를 인자로 받는 건 검사가 요청을 가짜로 받기 위해서다(실제로는 회원기록 이 client.rpc 를 넘긴다).
+     돌려줌: 요청을 보냈으면 true */
+  var 회원키 = "we_editor_user_day";
+  function 회원세기(user, host, ua, webdriver, rpc) {
+    try {
+      if (!user || !user.id || typeof rpc !== "function") return false;
+      var 표시 = 서울오늘() + "|" + user.id, 저장 = null;
+      // 저장소를 못 쓰면 안 보낸다 — 위 세기 와 같은 이유(못 적으면 토큰을 갱신할 때마다 보낸다)
+      try { 저장 = localStorage.getItem(회원키); } catch (e) { return false; }
+      // 셀까 의 「저장날 !== 오늘」 자리에 「날짜|회원 id」 를 넣는다 — 날짜가 바뀌거나 계정이 바뀌면 다시 보낸다
+      if (!셀까(host, ua, webdriver, 저장, 표시)) return false;
+      try { localStorage.setItem(회원키, 표시); } catch (e) { return false; }
+      // SDK 의 rpc 는 then 을 불러야 요청이 나간다 — Promise.resolve 가 then 을 부른다. 실패는 조용히(로그인·편집과 무관)
+      Promise.resolve(rpc("count_editor_user")).catch(function () { /* 무시 */ });
+      return true;
+    } catch (e) { return false; }
+  }
+  /* applySession 이 부른다 — 세션이 생길 때마다(열 때 · 로그인할 때 · 토큰 갱신) 오지만, 위 키가 하루 한 번으로 거른다 */
+  function 회원기록() {
+    if (!client) return;
+    var 자동화 = false; try { 자동화 = !!navigator.webdriver; } catch (e) { /* 무시 */ }
+    회원세기(_user, location.hostname, navigator.userAgent, 자동화, function (이름) { return client.rpc(이름); });
+  }
+
   /* 에디터 화면인가 — js/app.js(WE.app)를 싣는 페이지는 app.html 하나뿐이다.
      ⚠ 주소(pathname)로 가르지 않는다 — Cloudflare 가 /app.html 을 /app 으로 바꾸는 등 플랫폼 동작에 따라
        달라진다(CLAUDE.md §2 「플랫폼 고유 동작에 기대지 않는다」). init 은 DOMContentLoaded 에 돌아 그때는 app.js 가 이미 실려 있다 */
@@ -560,6 +593,8 @@ WE.auth = (function () {
     _user = session ? session.user : null;
     _세션 = session || null;
     if (session) _밀려남 = false;                            // 다시 로그인했다 — 이 세션은 새로 지킨다
+    // 회원 에디터 기록(2026-11-02) — 에디터를 열 때 이미 로그인돼 있어도, 연 뒤에 로그인해도 여기를 지난다
+    if (session && 에디터인가()) 회원기록();
     loadProfile(function () { _ready = true; notify(); if (done) done(); 한PC확인(); });
   }
 
@@ -1211,6 +1246,7 @@ WE.auth = (function () {
     _셀까: 셀까,             // 접속자 세기 판정(순수 함수) — tests/verify_adminstats.mjs
     _방문세기: 방문세기,     // 본 서비스 조건을 흉내 내 실제로 보내 본다(검사는 요청을 가로챈다)
     _에디터세기: 에디터세기, // 위와 같다 — 에디터 접속자(2026-10-16)
+    _회원세기: 회원세기,     // 회원 에디터 기록(2026-11-02) — rpc 를 가짜로 넘겨 보낼지만 본다
     _에디터인가: 에디터인가,
     _서울오늘: 서울오늘,
   };

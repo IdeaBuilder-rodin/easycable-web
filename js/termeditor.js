@@ -1197,8 +1197,11 @@ WE.termeditor = (function () {
     }
     _배선따라오기 = null;
     // 열었다 닫기만 한 경우에는 공용 연결을 유지한다. 실제 단자 내용이 달라졌을 때만 분리한다.
-    if (openedDefinition && openedDefinition !== definitionSnap() && WE.app.makeComponentIndependent) {
-      WE.app.makeComponentIndependent(cmp, true);
+    // 공용 부품이 아니면(분리 안 됨) 라이브러리 원본이 비어 있을 때만 단자를 채운다(app.js fillEmptyLibraryTerminals, 11/03).
+    // 관리자 페이지는 WE.app 에 두 함수가 없어 그냥 지나간다.
+    if (openedDefinition && openedDefinition !== definitionSnap()) {
+      var 분리됨 = WE.app.makeComponentIndependent && WE.app.makeComponentIndependent(cmp, true);
+      if (!분리됨 && WE.app.fillEmptyLibraryTerminals) WE.app.fillEmptyLibraryTerminals(cmp);
     }
     openedDefinition = "";
     if (WE.app.afterTerminalEdit) WE.app.afterTerminalEdit(cmp);

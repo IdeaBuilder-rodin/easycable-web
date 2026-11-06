@@ -1594,7 +1594,7 @@
   <!-- 스크립트: file:// 호환 위해 일반 script (모듈 아님), 순서 중요 -->
   <script src="js/authmodal.js?v=2bee75f1"></script>  <!-- 로그인 창 마크업. auth.js 보다 먼저 꽂혀 있어야 한다 -->
   <script src="js/flags.js?v=8ec58a06"></script>   <!-- 맨 앞: 다른 파일이 WE.flags 를 보고 동작을 정한다 -->
-  <script src="js/auth.js?v=c0a38079"></script>    <!-- flags 다음. SDK(js/vendor/supabase.js)는 필요할 때만 스스로 불러온다 -->
+  <script src="js/auth.js?v=8625ef97"></script>    <!-- flags 다음. SDK(js/vendor/supabase.js)는 필요할 때만 스스로 불러온다 -->
   <!-- 「로그인 확인 중」(머리의 data-auth="pending")을 판정이 확정되면 걷는다.
        판정은 pricing.html 계정표시() 의 확정됐나() 와 **같다** — 판정 자체는 auth.js 한 곳에만 있다. -->
   <script>
@@ -1623,7 +1623,7 @@
   <script src="js/render.js?v=b602db6c"></script>
   <script src="js/colorpicker.js?v=1c21e3c5"></script>   <!-- render 다음: 단자 색상 팝오버. termeditor/app 둘 다 이걸 쓴다 -->
   <script src="js/bgremove.js?v=2288d6f3"></script>
-  <script src="js/termeditor.js?v=26f12188"></script>
+  <script src="js/termeditor.js?v=1972d141"></script>
   <script src="js/interactions.js?v=6e62c247"></script>
   <script src="js/store.js?v=694f5aca"></script>
   <script src="js/assets.js?v=6244ecf7"></script>   <!-- store.js 다음: 자산 풀이 store의 IndexedDB를 쓴다 -->
@@ -1640,9 +1640,9 @@
   <script src="js/io.js?v=2600ad33"></script>
   <script src="js/pdf.js?v=e096e886"></script>
   <script src="js/xlsx.js?v=b4f1d49f"></script>
-  <script src="js/app.js?v=50db82e8"></script>
+  <script src="js/app.js?v=0368f997"></script>
   <!-- 라이브러리 부품 자동 수집 — 맨 마지막에 defer. 에디터 로딩에 끼어들지 않는다. 없어도 에디터는 그대로 돈다(library.js 가 있으면 부를 뿐). -->
-  <script src="js/libsync.js?v=4308ef03" defer></script>
+  <script src="js/libsync.js?v=077acd32" defer></script>
   <!-- 인쇄 전용: 페이지 전체를 덮는 워터마크. 도면 칸 안에만 찍히던 것을 종이 전체로 넓혔다.
        position:fixed 라 인쇄 시 '모든 장'에 반복해서 나온다(도면 장 · BOM 장 전부). -->
   <div id="pageWatermark" aria-hidden="true"></div>
